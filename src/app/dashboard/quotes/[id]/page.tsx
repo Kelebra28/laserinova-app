@@ -89,6 +89,9 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
   const effectiveRealUtility = isCancelled ? 0 : (quote.realUtilityTotal || 0);
   const isLoss = !isCancelled && (quote.realUtilityTotal || 0) < 0;
 
+  const parsedImages = quote.images ? (typeof quote.images === 'string' ? JSON.parse(quote.images) : quote.images) : [];
+  const images: string[] = Array.isArray(parsedImages) ? parsedImages : [];
+
   return (
     <div className="space-y-6 max-w-7xl pb-10">
       {/* 1. Ultra Premium Header */}
@@ -281,6 +284,21 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
               </div>
             </form>
           </div>
+
+          {/* Galería de Imágenes */}
+          {images.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 border-b border-gray-50 pb-3">Imágenes de Referencia</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {images.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block group overflow-hidden rounded-xl border border-gray-100 shadow-sm relative">
+                    <img src={url} alt={`Imagen ${i + 1}`} className="w-full h-32 object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Sidebar Area (4/12) */}

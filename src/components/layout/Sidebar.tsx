@@ -12,7 +12,9 @@ import {
   DollarSign,
   Cpu,
   X,
-  CheckSquare
+  CheckSquare,
+  Box,
+  Printer
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 
@@ -22,8 +24,10 @@ const menuItems = [
   { name: "Tareas", href: "/dashboard/tasks", icon: CheckSquare },
   { name: "Clientes", href: "/dashboard/clients", icon: Users },
   { name: "Finanzas", href: "/dashboard/finance", icon: DollarSign, adminOnly: true },
+  { name: "Inventario", href: "/dashboard/inventory", icon: Box },
   { name: "Materiales", href: "/dashboard/materials", icon: Package },
   { name: "Procesos", href: "/dashboard/processes", icon: Cpu },
+  { name: "Etiquetas", href: "/dashboard/labels", icon: Printer },
   { name: "Reportes", href: "/dashboard/reports", icon: PieChart },
   { name: "Configuración", href: "/dashboard/settings", icon: Settings, adminOnly: true },
 ];

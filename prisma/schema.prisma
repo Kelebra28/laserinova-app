@@ -71,6 +71,33 @@ model Material {
   @@index([categoryId], map: "Material_categoryId_fkey")
 }
 
+model ProductCategory {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  active    Boolean   @default(true)
+  products  Product[]
+}
+
+model Product {
+  id            String          @id @default(uuid())
+  categoryId    String
+  name          String
+  model         String?
+  brand         String?
+  color         String?
+  stockQuantity Int             @default(0)
+  unitCost      Float           @default(0)
+  unitPrice     Float           @default(0)
+  notes         String?         @db.Text
+  active        Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  category      ProductCategory @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId], map: "Product_categoryId_fkey")
+}
+
 model CostConfiguration {
   id        String   @id @default(uuid())
   key       String   @unique
@@ -91,6 +118,7 @@ model Quote {
   userId                String
   project               String
   description           String? @db.Text
+  images                Json?
   status                String                 @default("DRAFT")
   paymentStatus         String                 @default("PENDING")
   taxable               Boolean                @default(true)

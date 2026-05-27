@@ -10,6 +10,8 @@ import MaterialSelector from "@/components/quotes/MaterialSelector";
 import ClientSelector from "@/components/quotes/ClientSelector";
 import CalculationAudit from "@/components/quotes/CalculationAudit";
 import ConfirmSaveModal from "@/components/ui/ConfirmSaveModal";
+import { ImageUploadUI } from "@/components/ui/ImageUploadUI";
+import { useImageUpload } from "@/hooks/useImageUpload";
 
 
 interface EditQuoteFormProps {
@@ -29,6 +31,18 @@ export default function EditQuoteForm({ quote, clients, materials, globalCosts }
   const [taxable, setTaxable] = useState(quote.taxable || false);
   const [isWholesale, setIsWholesale] = useState(false); // Podríamos guardarlo en DB pero por ahora default false
   const [margin, setMargin] = useState(globalCosts.margen_default || 35);
+  
+  const parsedImages = quote.images ? (typeof quote.images === 'string' ? JSON.parse(quote.images) : quote.images) : [];
+  const [images, setImages] = useState<string[]>(Array.isArray(parsedImages) ? parsedImages : []);
+  const { isUploading, handleFileChange, uploadImages, deleteImage } = useImageUpload();
+
+  const handleRemoveImage = async (index: number) => {
+    const urlToRemove = images[index];
+    setImages(prev => prev.filter((_, i) => i !== index));
+    if (urlToRemove) {
+      await deleteImage(urlToRemove);
+    }
+  };
 
   // Mapear conceptos de DB a estado del form
   const [concepts, setConcepts] = useState<any[]>(
@@ -227,6 +241,7 @@ export default function EditQuoteForm({ quote, clients, materials, globalCosts }
       <input type="hidden" name="estimatedUtility" value={utilidad} />
       <input type="hidden" name="taxable" value={taxable ? "true" : "false"} />
       <input type="hidden" name="concepts" value={JSON.stringify(concepts)} />
+      <input type="hidden" name="images" value={JSON.stringify(images)} />
 
       {/* 1. Información General */}
       <div className="bg-white shadow-sm border border-gray-100 rounded-lg p-6">
@@ -272,6 +287,19 @@ export default function EditQuoteForm({ quote, clients, materials, globalCosts }
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Ej: Servicio de personalización..."
               className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all outline-none text-gray-900 shadow-sm"
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <ImageUploadUI
+              imageUrls={images}
+              isUploading={isUploading}
+              onFileChange={(e) => handleFileChange(e, (newUrls) => setImages(prev => [...prev, ...newUrls]))}
+              onFilesDropped={async (files) => {
+                const uploadedUrls = await uploadImages(files);
+                if (uploadedUrls.length > 0) setImages(prev => [...prev, ...uploadedUrls]);
+              }}
+              onRemoveImage={handleRemoveImage}
             />
           </div>
 

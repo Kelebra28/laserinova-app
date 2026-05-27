@@ -5,8 +5,49 @@ import { redirect } from "next/navigation";
 import { updateCostConfigurations } from "./actions";
 import { ProfileForm } from "@/components/settings/ProfileForm";
 import { UsersPanel } from "@/components/settings/UsersPanel";
-import { Save, Settings2, User, Users, SlidersHorizontal } from "lucide-react";
+import { Save, Settings2, User, Users, SlidersHorizontal, Database, HardDrive } from "lucide-react";
 import { SettingsTabs } from "@/components/settings/SettingsTabs";
+import fs from "fs";
+import path from "path";
+
+async function getUploadsSizeMB() {
+  const uploadsPath = path.join(process.cwd(), "public", "uploads");
+  let totalSize = 0;
+  async function calculateSize(dirPath: string) {
+    try {
+      const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) {
+          await calculateSize(fullPath);
+        } else {
+          const stats = await fs.promises.stat(fullPath);
+          totalSize += stats.size;
+        }
+      }
+    } catch (e) {
+      // Ignorar si no existe
+    }
+  }
+  await calculateSize(uploadsPath);
+  return (totalSize / (1024 * 1024)).toFixed(2);
+}
+
+async function getDbSizeMB() {
+  try {
+    const result = await prisma.$queryRawUnsafe<any[]>(`
+      SELECT sum(data_length + index_length) / 1024 / 1024 AS "size"
+      FROM information_schema.TABLES
+      WHERE table_schema = DATABASE();
+    `);
+    if (result && result[0] && result[0].size) {
+      return Number(result[0].size).toFixed(2);
+    }
+    return "0.00";
+  } catch (e) {
+    return "N/A";
+  }
+}
 
 const DEFAULT_CONFIGS = [
   { key: "costo_minuto_mayoreo",      name: "Costo por minuto (Mayoreo)",          default: 8.5,    unit: "$"    },
@@ -31,7 +72,7 @@ export default async function SettingsPage() {
   const isAdmin = currentUser.role === "ADMIN";
   if (!isAdmin) redirect("/dashboard");
 
-  const [savedConfigs, users, me] = await Promise.all([
+  const [savedConfigs, users, me, dbSize, uploadsSize] = await Promise.all([
     prisma.costConfiguration.findMany(),
     prisma.user.findMany({
       select: { id: true, name: true, email: true, role: true, active: true },
@@ -41,6 +82,8 @@ export default async function SettingsPage() {
       where: { id: currentUser.id },
       select: { id: true, name: true, email: true, role: true },
     }),
+    getDbSizeMB(),
+    getUploadsSizeMB(),
   ]);
 
   const configMap = new Map(savedConfigs.map((c) => [c.key, c.value]));
@@ -117,6 +160,79 @@ export default async function SettingsPage() {
     </div>
   );
 
+  const dbLimitMB = 3000;
+  const filesLimitMB = 204800; // 200 GB reales del plan Hostinger
+  const dbPercent = Math.min((Number(dbSize) / dbLimitMB) * 100, 100);
+  const filesPercent = Math.min((Number(uploadsSize) / filesLimitMB) * 100, 100);
+
+  const getDbColor = (p: number) => p > 90 ? '#ef4444' : p > 75 ? '#f59e0b' : '#6366f1';
+  const getFilesColor = (p: number) => p > 90 ? '#ef4444' : p > 75 ? '#f59e0b' : '#10b981';
+
+  const dbColor = getDbColor(dbPercent);
+  const filesColor = getFilesColor(filesPercent);
+
+  const systemContent = (
+    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-blue-50">
+            <HardDrive className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-base font-black text-gray-800 uppercase tracking-widest">Almacenamiento (Hostinger)</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Monitor de espacio ocupado por la BD y archivos</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+        
+        {/* Gráfico BD */}
+        <div className="bg-white border border-gray-100 rounded-3xl p-8 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] relative overflow-hidden group hover:border-indigo-100 transition-colors">
+          <div className="relative w-36 h-36 flex items-center justify-center mb-6">
+            <div 
+              className="absolute inset-0 rounded-full transition-all duration-1000 ease-out" 
+              style={{ background: `conic-gradient(${dbColor} ${dbPercent}%, #f3f4f6 0)` }} 
+            />
+            <div className="absolute inset-2 bg-white rounded-full flex flex-col items-center justify-center shadow-[inset_0_2px_10px_-3px_rgba(0,0,0,0.05)]">
+              <Database className="h-6 w-6 mb-1" style={{ color: dbColor }} />
+              <span className="text-xl font-black text-gray-900 leading-none">{dbPercent.toFixed(1)}%</span>
+            </div>
+          </div>
+          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-widest mb-1">Base de Datos</h3>
+          <p className="text-2xl font-black text-gray-900 flex items-baseline justify-center gap-1">
+            {dbSize} <span className="text-sm font-bold text-gray-400">MB</span>
+          </p>
+          <p className="text-[10px] text-gray-400 mt-3 font-bold uppercase tracking-widest bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+            Límite: ~3 GB (MySQL)
+          </p>
+        </div>
+
+        {/* Gráfico Archivos */}
+        <div className="bg-white border border-gray-100 rounded-3xl p-8 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] relative overflow-hidden group hover:border-emerald-100 transition-colors">
+          <div className="relative w-36 h-36 flex items-center justify-center mb-6">
+            <div 
+              className="absolute inset-0 rounded-full transition-all duration-1000 ease-out" 
+              style={{ background: `conic-gradient(${filesColor} ${filesPercent}%, #f3f4f6 0)` }} 
+            />
+            <div className="absolute inset-2 bg-white rounded-full flex flex-col items-center justify-center shadow-[inset_0_2px_10px_-3px_rgba(0,0,0,0.05)]">
+              <HardDrive className="h-6 w-6 mb-1" style={{ color: filesColor }} />
+              <span className="text-xl font-black text-gray-900 leading-none">{filesPercent.toFixed(1)}%</span>
+            </div>
+          </div>
+          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-widest mb-1">Archivos e Imágenes</h3>
+          <p className="text-2xl font-black text-gray-900 flex items-baseline justify-center gap-1">
+            {uploadsSize} <span className="text-sm font-bold text-gray-400">MB</span>
+          </p>
+          <p className="text-[10px] text-gray-400 mt-3 font-bold uppercase tracking-widest bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+            Límite: 200 GB (Disco)
+          </p>
+        </div>
+
+      </div>
+    </div>
+  );
+
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
       {/* Page header */}
@@ -155,7 +271,7 @@ export default async function SettingsPage() {
 
         {/* ── RIGHT COLUMN: Config Tabs ─────────────────────────────── */}
         <div className="lg:col-span-2">
-          <SettingsTabs costsContent={costsContent} usersContent={usersContent} />
+          <SettingsTabs costsContent={costsContent} usersContent={usersContent} systemContent={systemContent} />
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import fs from "fs";
 import path from "path";
+import sharp from "sharp";
 
 export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buffer> {
   const doc = new jsPDF();
@@ -43,11 +44,12 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
     d.text("info@laserinova.com", pageWidth - 14, footerY + 6, { align: "right" });
   };
 
-  quotes.forEach((quote, qIndex) => {
+  for (let qIndex = 0; qIndex < quotes.length; qIndex++) {
+    const quote = quotes[qIndex];
     if (qIndex > 0) {
       doc.addPage();
     }
-    
+
     // Initial header for this quote
     drawHeader(doc, qIndex === 0);
 
@@ -56,7 +58,7 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
     doc.setFontSize(10);
     const formattedDate = new Date(quote.createdAt).toLocaleDateString("es-MX");
     doc.text(`Fecha:   ${formattedDate}`, pageWidth - 14, 38, { align: "right" });
-    
+
     let folioText = quote.folio;
     if (quotes.length > 1 && quote.versionName) {
       folioText += ` (${quote.versionName})`;
@@ -173,7 +175,7 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
     // Totals Section (Right aligned)
     const totalsY = finalY + 10;
     doc.setFontSize(11);
-    
+
     doc.setFont("helvetica", "bold");
     doc.text("Subtotal:", pageWidth - 45, totalsY, { align: "right" });
     doc.text(fmt(quote.subtotal), pageWidth - 14, totalsY, { align: "right" });
@@ -188,8 +190,8 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(0);
-    
-    const rawConsiderations = quote.visibleConsiderations || 
+
+    const rawConsiderations = quote.visibleConsiderations ||
       "- Tiempo de entrega: de 1 a 3 días hábiles.\n- 50% anticipo, 50% al programar envío o entrega.\n- El costo puede variar si hay cambios en medidas o diseño.\n- Vigencia de cotización 20 días.";
 
     const considerationsLines = [
@@ -226,7 +228,7 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
         drawFooter(doc);
         currentTextY = 40;
       }
-      
+
       if (line.includes("- Consideraciones:")) {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(10);
@@ -239,7 +241,100 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
       }
       currentTextY += 5;
     });
-  });
+
+    // Anexo de Imágenes en Grid
+    const parsedImages = quote.images ? (typeof quote.images === 'string' ? JSON.parse(quote.images) : quote.images) : [];
+    const images: string[] = Array.isArray(parsedImages) ? parsedImages : [];
+
+    if (images.length > 0) {
+      currentTextY += 10;
+
+      if (currentTextY > pageHeight - 40) {
+        doc.addPage();
+        drawHeader(doc);
+        drawFooter(doc);
+        currentTextY = 40;
+      }
+
+
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text("* Imágenes de referencia con fines ilustrativos", 68, currentTextY);
+
+      doc.setTextColor(0); // Restaurar color
+      currentTextY += 5;
+
+      const columns = 4;
+      const gap = 4;
+      const marginX = 14;
+      const usableWidth = pageWidth - (marginX * 2);
+      const imgW_single = (usableWidth - (gap * (columns - 1))) / columns;
+
+      let currentCol = 0;
+      let maxRowH = 0;
+
+      for (let i = 0; i < images.length; i++) {
+        try {
+          const imgUrl = images[i];
+          const imgPath = path.join(process.cwd(), "public", imgUrl);
+          if (fs.existsSync(imgPath)) {
+            const metadata = await sharp(imgPath).metadata();
+            const originalWidth = metadata.width || 1;
+            const originalHeight = metadata.height || 1;
+            const aspectRatio = originalWidth / originalHeight;
+
+            let span = 1;
+            if (aspectRatio > 1.25 && aspectRatio <= 2.25) {
+              span = 2;
+            } else if (aspectRatio > 2.25 && aspectRatio <= 3.25) {
+              span = 3;
+            } else if (aspectRatio > 3.25) {
+              span = 4;
+            }
+
+            const renderW = (imgW_single * span) + (gap * (span - 1));
+            const renderH = renderW / aspectRatio;
+
+            if (currentCol + span > 4) {
+              currentTextY += maxRowH + gap;
+              currentCol = 0;
+              maxRowH = 0;
+            }
+
+            if (currentTextY + renderH > pageHeight - 30) {
+              doc.addPage();
+              drawHeader(doc);
+              drawFooter(doc);
+              currentTextY = 40;
+              currentCol = 0;
+              maxRowH = 0;
+            }
+
+            const pngBuffer = await sharp(imgPath)
+              .resize(Math.round(renderW * 3), Math.round(renderH * 3), { fit: "inside" })
+              .png()
+              .toBuffer();
+            const base64 = `data:image/png;base64,${pngBuffer.toString("base64")}`;
+
+            const currentX = marginX + currentCol * (imgW_single + gap);
+            doc.addImage(base64, "PNG", currentX, currentTextY, renderW, renderH);
+
+            currentCol += span;
+            maxRowH = Math.max(maxRowH, renderH);
+
+            if (currentCol >= 4) {
+              currentCol = 0;
+              currentTextY += maxRowH + gap;
+              maxRowH = 0;
+            }
+          }
+        } catch (err) {
+          console.error("Error rendering quote image in PDF:", err);
+        }
+      }
+    }
+  }
 
   const buffer = Buffer.from(doc.output("arraybuffer"));
   return buffer;
@@ -249,7 +344,7 @@ export async function generateMonthlyReportPDF(quotes: any[], month: number, yea
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
   const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-  
+
   // Header
   try {
     const logoPath = path.join(process.cwd(), "public", "logo_pdf.png");

@@ -46,6 +46,8 @@ export async function createQuoteAction(formData: FormData) {
   const prospectName = (formData.get("prospectName") as string) || null;
   const project = formData.get("project") as string;
   const description = formData.get("description") as string;
+  const imagesStr = formData.get("images") as string;
+  const images = imagesStr ? JSON.parse(imagesStr) : [];
   
   const subtotal = parseFloat(formData.get("subtotal") as string) || 0;
   const tax = parseFloat(formData.get("iva") as string) || 0;
@@ -93,6 +95,7 @@ export async function createQuoteAction(formData: FormData) {
       userId,
       project,
       description,
+      images,
       visibleConsiderations,
       status: "CALCULATED",
       taxable,
@@ -156,6 +159,8 @@ export async function updateQuoteAction(formData: FormData) {
   const saveAsClient = formData.get("saveAsClient") === "true";
   const project = formData.get("project") as string;
   const description = formData.get("description") as string;
+  const imagesStr = formData.get("images") as string;
+  const images = imagesStr ? JSON.parse(imagesStr) : [];
   const subtotal = parseFloat(formData.get("subtotal") as string);
   const tax = parseFloat(formData.get("tax") as string);
   const total = parseFloat(formData.get("total") as string);
@@ -186,6 +191,7 @@ export async function updateQuoteAction(formData: FormData) {
       userId,
       project,
       description,
+      images,
       subtotal,
       tax,
       total,
