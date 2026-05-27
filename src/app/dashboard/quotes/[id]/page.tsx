@@ -51,7 +51,7 @@ const statusColors: Record<string, string> = {
 export default async function QuoteDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const quoteId = params.id;
-  
+
   const quote = await prisma.quote.findUnique({
     where: { id: quoteId },
     include: {
@@ -83,7 +83,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
     }) as any;
   }
 
-  const defaultConsiderations = "- Tiempo de entrega: de 1 a 3 días hábiles.\n- 50% anticipo, 50% al programar envío o entrega.\n- El costo puede variar si hay cambios en medidas o diseño.\n- Vigencia de cotización 20 días.";
+  const defaultConsiderations = "- Tiempo de entrega: de 1 a 3 días hábiles.\n- 50% anticipo, 50% al programar envío o entrega.\n- El costo puede variar si hay cambios en medidas o diseño.\n- Vigencia de cotización 7 días.";
 
   const isCancelled = quote.status === "CANCELLED" || quote.status === "REJECTED";
   const effectiveRealUtility = isCancelled ? 0 : (quote.realUtilityTotal || 0);
@@ -120,7 +120,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
             <p className="text-sm font-medium text-gray-400 mt-0.5">{quote.project}</p>
           </div>
         </div>
-        
+
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100">
             <Link
@@ -133,7 +133,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
             <CloneQuoteButton quoteId={quote.id} clients={clients} />
             <DeleteQuoteButton quoteId={quote.id} />
           </div>
-          
+
           <a
             href={`/api/quotes/${quote.id}/pdf`}
             target="_blank"
@@ -157,17 +157,17 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
         </div>
       </div>
 
-      <QuoteVersionTabs 
-        versions={versions} 
-        currentQuoteId={quote.id} 
-        versionGroupId={quote.versionGroupId} 
+      <QuoteVersionTabs
+        versions={versions}
+        currentQuoteId={quote.id}
+        versionGroupId={quote.versionGroupId}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
+
         {/* Main Content Area (8/12) */}
         <div className="lg:col-span-8 space-y-6">
-          
+
           {/* Bento Financial Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
@@ -215,10 +215,10 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
                     // Si la suma de conceptos es igual al total (y taxable es true), significa que se guardó en el formato anterior (con IVA incluido)
                     const isOldFormat = quote.taxable && Math.abs(conceptsSum - quote.total) < 0.05;
                     const taxFactor = isOldFormat && quote.subtotal > 0 ? (quote.total / quote.subtotal) : 1;
-                    
+
                     const netUnitPrice = concept.finalUnitPrice / taxFactor;
                     const netTotal = concept.totalAmount / taxFactor;
-                    
+
                     return (
                       <tr key={concept.id} className="hover:bg-gray-50/50 transition-colors">
                         <td className="px-6 py-4 text-sm text-gray-600 font-bold">{concept.quantity}</td>
@@ -240,20 +240,20 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
               </table>
             </div>
             <div className="bg-gray-50/50 p-6 border-t border-gray-100">
-               <div className="flex flex-col items-end space-y-2">
-                  <div className="flex justify-between w-full max-w-[240px]">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtotal</span>
-                    <span className="text-sm font-bold text-gray-900 font-mono">${quote.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="flex justify-between w-full max-w-[240px]">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">IVA (16%)</span>
-                    <span className="text-sm font-bold text-gray-900 font-mono">${quote.tax.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="flex justify-between w-full max-w-[240px] pt-3 border-t border-gray-200 mt-2">
-                    <span className="text-sm font-black text-gray-900 uppercase tracking-tight">Total Final</span>
-                    <span className="text-xl font-black text-red-600 font-mono">${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-               </div>
+              <div className="flex flex-col items-end space-y-2">
+                <div className="flex justify-between w-full max-w-[240px]">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtotal</span>
+                  <span className="text-sm font-bold text-gray-900 font-mono">${quote.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between w-full max-w-[240px]">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">IVA (16%)</span>
+                  <span className="text-sm font-bold text-gray-900 font-mono">${quote.tax.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between w-full max-w-[240px] pt-3 border-t border-gray-200 mt-2">
+                  <span className="text-sm font-black text-gray-900 uppercase tracking-tight">Total Final</span>
+                  <span className="text-xl font-black text-red-600 font-mono">${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -303,7 +303,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
 
         {/* Sidebar Area (4/12) */}
         <div className="lg:col-span-4 space-y-6">
-          
+
           {/* 1. Client Card (Primary Context) */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center gap-2 mb-6 border-b border-gray-50 pb-4">
@@ -389,10 +389,10 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
                 <form key={key} action={updateQuoteStatus} className="w-full">
                   <input type="hidden" name="quoteId" value={quote.id} />
                   <input type="hidden" name="status" value={key} />
-                  <StatusGridButton 
-                    label={label} 
-                    isActive={quote.status === key} 
-                    colorClass={statusColors[key]} 
+                  <StatusGridButton
+                    label={label}
+                    isActive={quote.status === key}
+                    colorClass={statusColors[key]}
                   />
                 </form>
               ))}
@@ -400,17 +400,17 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
           </div>
 
           {/* 4. Payment Control (Finance) */}
-          <PaymentStatusForm 
-            quoteId={quote.id} 
-            currentStatus={quote.paymentStatus || "PENDING"} 
+          <PaymentStatusForm
+            quoteId={quote.id}
+            currentStatus={quote.paymentStatus || "PENDING"}
             currentAmount={quote.realAmountCollected || 0}
             totalAmount={quote.total}
           />
 
           {/* 5. Auditoría de Fórmulas */}
-          <CalculationAudit 
-            concepts={quote.concepts} 
-            margin={Number(quote.subtotal > 0 ? (((quote.subtotal - quote.realCostTotal) / quote.subtotal) * 100).toFixed(0) : 35)} 
+          <CalculationAudit
+            concepts={quote.concepts}
+            margin={Number(quote.subtotal > 0 ? (((quote.subtotal - quote.realCostTotal) / quote.subtotal) * 100).toFixed(0) : 35)}
           />
         </div>
       </div>

@@ -15,29 +15,20 @@ export async function POST(req: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const uploadDir = join(process.cwd(), 'public', 'uploads');
-    
-    // Crear el directorio si no existe (silenciosamente si ya existe)
-    try {
-      await mkdir(uploadDir, { recursive: true });
-    } catch (err) {
-      // ignore
-    }
-
-    const filename = `${Date.now()}-${Math.round(Math.random() * 1000)}.webp`;
-    const filepath = join(uploadDir, filename);
-
-    await sharp(buffer)
+    const optimizedBuffer = await sharp(buffer)
       .resize({
-        width: 1000,
-        height: 1000,
+        width: 800,
+        height: 800,
         fit: 'inside',
         withoutEnlargement: true
       })
-      .webp({ quality: 80 })
-      .toFile(filepath);
+      .webp({ quality: 75 })
+      .toBuffer();
 
-    return NextResponse.json({ url: `/uploads/${filename}` });
+    const base64 = optimizedBuffer.toString('base64');
+    const dataUrl = `data:image/webp;base64,${base64}`;
+
+    return NextResponse.json({ url: dataUrl });
   } catch (error) {
     console.error('Error uploading image:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

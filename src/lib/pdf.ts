@@ -192,7 +192,7 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
     doc.setTextColor(0);
 
     const rawConsiderations = quote.visibleConsiderations ||
-      "- Tiempo de entrega: de 1 a 3 días hábiles.\n- 50% anticipo, 50% al programar envío o entrega.\n- El costo puede variar si hay cambios en medidas o diseño.\n- Vigencia de cotización 20 días.";
+      "- Tiempo de entrega: de 1 a 3 días hábiles.\n- 50% anticipo, 50% al programar envío o entrega.\n- El costo puede variar si hay cambios en medidas o diseño.\n- Vigencia de cotización 7 días.";
 
     const considerationsLines = [
       "- Consideraciones:",
@@ -277,9 +277,20 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
       for (let i = 0; i < images.length; i++) {
         try {
           const imgUrl = images[i];
-          const imgPath = path.join(process.cwd(), "public", imgUrl);
-          if (fs.existsSync(imgPath)) {
-            const metadata = await sharp(imgPath).metadata();
+          let imageBuffer: Buffer | null = null;
+
+          if (imgUrl.startsWith("data:image/")) {
+            const base64Data = imgUrl.split(",")[1];
+            imageBuffer = Buffer.from(base64Data, "base64");
+          } else {
+            const imgPath = path.join(process.cwd(), "public", imgUrl);
+            if (fs.existsSync(imgPath)) {
+              imageBuffer = fs.readFileSync(imgPath);
+            }
+          }
+
+          if (imageBuffer) {
+            const metadata = await sharp(imageBuffer).metadata();
             const originalWidth = metadata.width || 1;
             const originalHeight = metadata.height || 1;
             const aspectRatio = originalWidth / originalHeight;
@@ -311,7 +322,7 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
               maxRowH = 0;
             }
 
-            const pngBuffer = await sharp(imgPath)
+            const pngBuffer = await sharp(imageBuffer)
               .resize(Math.round(renderW * 3), Math.round(renderH * 3), { fit: "inside" })
               .png()
               .toBuffer();

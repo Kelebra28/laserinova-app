@@ -6,7 +6,15 @@ export async function POST(req: Request) {
   try {
     const { url } = await req.json();
 
-    if (!url || typeof url !== 'string' || !url.startsWith('/uploads/')) {
+    if (!url || typeof url !== 'string') {
+      return NextResponse.json({ error: 'URL inválida' }, { status: 400 });
+    }
+
+    if (url.startsWith('data:image/')) {
+      return NextResponse.json({ success: true });
+    }
+
+    if (!url.startsWith('/uploads/')) {
       return NextResponse.json({ error: 'URL inválida' }, { status: 400 });
     }
 
