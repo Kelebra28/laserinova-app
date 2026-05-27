@@ -89,6 +89,7 @@ model Product {
   stockQuantity Int             @default(0)
   unitCost      Float           @default(0)
   unitPrice     Float           @default(0)
+  image         String?         @db.Text
   notes         String?         @db.Text
   active        Boolean         @default(true)
   createdAt     DateTime        @default(now())

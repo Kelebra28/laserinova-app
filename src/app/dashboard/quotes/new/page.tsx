@@ -15,6 +15,11 @@ export default async function NewQuotePage() {
     orderBy: { name: "asc" },
   });
 
+  const products = await prisma.product.findMany({
+    where: { active: true },
+    orderBy: { name: "asc" },
+  });
+
   const costConfigs = await prisma.costConfiguration.findMany();
   const globalCosts: Record<string, number> = {};
   costConfigs.forEach(c => {
@@ -40,6 +45,7 @@ export default async function NewQuotePage() {
       <NewQuoteForm 
         clients={clients} 
         materials={materials} 
+        products={products}
         globalCosts={safeGlobals} 
         userId={(session?.user as any)?.id} 
       />

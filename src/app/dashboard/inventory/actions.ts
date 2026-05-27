@@ -37,6 +37,7 @@ export async function createProduct(formData: FormData) {
   const stockQuantity = Number(formData.get("stockQuantity")) || 0;
   const unitCost = Number(formData.get("unitCost")) || 0;
   const unitPrice = Number(formData.get("unitPrice")) || 0;
+  const image = formData.get("image") as string || null;
   
   if (!categoryId || !name) return { error: "Categoría y nombre son requeridos" };
   
@@ -50,7 +51,8 @@ export async function createProduct(formData: FormData) {
         color,
         stockQuantity,
         unitCost,
-        unitPrice
+        unitPrice,
+        image
       }
     });
     revalidatePath("/dashboard/inventory");

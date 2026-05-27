@@ -18,10 +18,11 @@ interface EditQuoteFormProps {
   quote: any;
   clients: any[];
   materials: any[];
+  products?: any[];
   globalCosts: GlobalCosts;
 }
 
-export default function EditQuoteForm({ quote, clients, materials, globalCosts }: EditQuoteFormProps) {
+export default function EditQuoteForm({ quote, clients, materials, products = [], globalCosts }: EditQuoteFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [clientId, setClientId] = useState(quote.clientId || "");
@@ -404,27 +405,80 @@ export default function EditQuoteForm({ quote, clients, materials, globalCosts }
               </div>
 
               <div className="grid grid-cols-1 gap-y-6 gap-x-6 sm:grid-cols-12">
-                <div className="sm:col-span-4">
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Descripción</label>
-                  <input
-                    type="text"
-                    value={concept.description}
-                    onChange={e => updateConcept(concept.id, "description", e.target.value)}
-                    placeholder="Ej. Letrero de acrílico..."
-                    className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-3 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all outline-none text-gray-900 shadow-sm"
-                  />
-                </div>
-
-                <div className="sm:col-span-8">
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Detalles (para el PDF - Opcional)</label>
-                  <textarea 
-                    value={concept.details || ""} 
-                    onChange={e => updateConcept(concept.id, "details", e.target.value)}
-                    className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-3 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all outline-none text-gray-900 shadow-sm min-h-[46px]"
-                    placeholder="Ej. Grabado profundo, limpieza de bordes, etc."
-                    rows={1}
-                  />
-                </div>
+                {(concept.type === "RESALE" || concept.type === "PRODUCTO") && products.length > 0 ? (
+                  <>
+                    <div className="sm:col-span-4">
+                      <label className="block text-[10px] font-bold text-indigo-700 uppercase tracking-widest mb-2 ml-1">Seleccionar del Inventario</label>
+                      <select
+                        onChange={(e) => {
+                          const prodId = e.target.value;
+                          const selectedProd = products.find(p => p.id === prodId);
+                          if (selectedProd) {
+                            const desc = `${selectedProd.name}${selectedProd.model ? ` (${selectedProd.model})` : ""}${selectedProd.color ? ` - ${selectedProd.color}` : ""}`;
+                            updateConcept(concept.id, "description", desc);
+                            updateConcept(concept.id, "manualUnitPrice", selectedProd.unitPrice);
+                            updateConcept(concept.id, "manualUnitCost", selectedProd.unitCost);
+                            
+                            if (selectedProd.image && !images.includes(selectedProd.image)) {
+                              setImages(prev => [...prev, selectedProd.image]);
+                            }
+                          }
+                        }}
+                        className="w-full text-sm font-bold border-indigo-200 rounded-xl px-4 py-3 bg-indigo-50/50 focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600 transition-all outline-none text-indigo-900 shadow-sm"
+                      >
+                        <option value="">-- Buscar en almacén --</option>
+                        {products.map((p: any) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} {p.model ? `(${p.model})` : ""} - {p.color || "Sin color"} (${p.unitPrice} MXN)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="sm:col-span-4">
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Descripción</label>
+                      <input
+                        type="text"
+                        value={concept.description}
+                        onChange={e => updateConcept(concept.id, "description", e.target.value)}
+                        placeholder="Ej. Letrero de acrílico..."
+                        className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-3 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all outline-none text-gray-900 shadow-sm"
+                      />
+                    </div>
+                    <div className="sm:col-span-4">
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Detalles (para el PDF - Opcional)</label>
+                      <textarea 
+                        value={concept.details || ""} 
+                        onChange={e => updateConcept(concept.id, "details", e.target.value)}
+                        className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-3 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all outline-none text-gray-900 shadow-sm min-h-[46px]"
+                        placeholder="Ej. Grabado profundo, limpieza de bordes, etc."
+                        rows={1}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="sm:col-span-4">
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Descripción</label>
+                      <input
+                        type="text"
+                        value={concept.description}
+                        onChange={e => updateConcept(concept.id, "description", e.target.value)}
+                        placeholder="Ej. Letrero de acrílico..."
+                        className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-3 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all outline-none text-gray-900 shadow-sm"
+                      />
+                    </div>
+                    <div className="sm:col-span-8">
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Detalles (para el PDF - Opcional)</label>
+                      <textarea 
+                        value={concept.details || ""} 
+                        onChange={e => updateConcept(concept.id, "details", e.target.value)}
+                        className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-3 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all outline-none text-gray-900 shadow-sm min-h-[46px]"
+                        placeholder="Ej. Grabado profundo, limpieza de bordes, etc."
+                        rows={1}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="sm:col-span-3">
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Cantidad</label>

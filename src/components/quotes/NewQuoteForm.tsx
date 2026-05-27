@@ -16,11 +16,12 @@ import { useImageUpload } from "@/hooks/useImageUpload";
 interface NewQuoteFormProps {
   clients: any[];
   materials: any[];
+  products?: any[];
   globalCosts: GlobalCosts;
   userId: string;
 }
 
-export default function NewQuoteForm({ clients, materials, globalCosts, userId }: NewQuoteFormProps) {
+export default function NewQuoteForm({ clients, materials, products = [], globalCosts, userId }: NewQuoteFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [clientId, setClientId] = useState("");
@@ -335,6 +336,36 @@ export default function NewQuoteForm({ clients, materials, globalCosts, userId }
                 </div>
 
                 <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-4">
+                  {(concept.type === "RESALE" || concept.type === "PRODUCTO") && products.length > 0 && (
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-indigo-700">Seleccionar del Inventario</label>
+                      <select
+                        onChange={(e) => {
+                          const prodId = e.target.value;
+                          const selectedProd = products.find(p => p.id === prodId);
+                          if (selectedProd) {
+                            const desc = `${selectedProd.name}${selectedProd.model ? ` (${selectedProd.model})` : ""}${selectedProd.color ? ` - ${selectedProd.color}` : ""}`;
+                            updateConcept(concept.id, "description", desc);
+                            updateConcept(concept.id, "manualUnitPrice", selectedProd.unitPrice);
+                            updateConcept(concept.id, "manualUnitCost", selectedProd.unitCost);
+                            
+                            if (selectedProd.image && !images.includes(selectedProd.image)) {
+                              setImages(prev => [...prev, selectedProd.image]);
+                            }
+                          }
+                        }}
+                        className="mt-1 block w-full sm:text-sm border-indigo-300 rounded-md py-1.5 px-2 border bg-indigo-50 text-indigo-900 font-bold focus:ring-indigo-500 focus:border-indigo-500"
+                      >
+                        <option value="">-- Buscar artículo en almacén --</option>
+                        {products.map((p: any) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} {p.model ? `(${p.model})` : ""} - {p.color || "Sin color"} (${p.unitPrice} MXN)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-medium text-gray-700">Descripción</label>
                     <input

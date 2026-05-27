@@ -41,6 +41,11 @@ export default async function EditQuotePage(props: { params: Promise<{ id: strin
     orderBy: { name: "asc" }
   });
 
+  const products = await prisma.product.findMany({
+    where: { active: true },
+    orderBy: { name: "asc" }
+  });
+
   const globalCosts = await prisma.costConfiguration.findMany({
     where: { active: true }
   });
@@ -78,6 +83,7 @@ export default async function EditQuotePage(props: { params: Promise<{ id: strin
         quote={quote} 
         clients={clients} 
         materials={materials} 
+        products={products}
         globalCosts={safeGlobals} 
       />
     </div>
