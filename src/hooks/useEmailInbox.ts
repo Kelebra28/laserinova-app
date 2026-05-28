@@ -8,6 +8,7 @@ export interface Email {
   to: string;
   snippet: string;
   isRead: boolean;
+  isStarred: boolean;
   folder: string;
   receivedAt: string;
   bodyHtml?: string;

@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Mail, Loader2, Paperclip, RefreshCw, Plus, Send, AlertOctagon, Trash2, Inbox, 
-  Search, Star, CheckSquare, Square, ChevronLeft, ChevronRight, PenTool, Sparkles, CheckCircle
+  Search, Star, CheckSquare, Square, ChevronLeft, ChevronRight, PenTool, Sparkles, CheckCircle,
+  Menu, X
 } from 'lucide-react';
 import { Email } from '@/hooks/useEmailInbox';
 import { GlobalLoader } from '@/components/ui/GlobalLoader';
@@ -20,6 +21,7 @@ interface EmailInboxViewProps {
   limit: number;
   onPageChange: (page: number) => void;
   onMoveEmail?: (emailId: string, folder: string) => void;
+  onToggleStar?: (emailId: string, isStarred: boolean) => void;
   userName?: string;
   userEmail?: string;
 }
@@ -38,12 +40,19 @@ export function EmailInboxView({
   limit,
   onPageChange,
   onMoveEmail,
+  onToggleStar,
   userName,
   userEmail
 }: EmailInboxViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [starredEmails, setStarredEmails] = useState<Record<string, boolean>>({});
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
+  const [isMounted, setIsMounted] = useState(false);
+  const [isFolderSidebarOpen, setIsFolderSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Signature States
   const [sigName, setSigName] = useState('Ricardo Basurto');
@@ -72,6 +81,7 @@ export function EmailInboxView({
 
   const folders = [
     { id: 'INBOX', label: 'Recibidos', icon: <Inbox className="w-4 h-4" /> },
+    { id: 'STARRED', label: 'Favoritos', icon: <Star className="w-4 h-4" /> },
     { id: 'SENT', label: 'Enviados', icon: <Send className="w-4 h-4" /> },
     { id: 'SPAM', label: 'Spam', icon: <AlertOctagon className="w-4 h-4" /> },
     { id: 'TRASH', label: 'Papelera', icon: <Trash2 className="w-4 h-4" /> },
@@ -94,9 +104,13 @@ export function EmailInboxView({
     return emails.filter(e => !e.isRead && e.folder === 'INBOX').length;
   }, [emails]);
 
-  const toggleStar = (id: string, e: React.MouseEvent) => {
+  const toggleStar = (id: string, currentStarred: boolean, e: React.MouseEvent) => {
     e.stopPropagation();
-    setStarredEmails(prev => ({ ...prev, [id]: !prev[id] }));
+    const newStarred = !currentStarred;
+    setStarredEmails(prev => ({ ...prev, [id]: newStarred }));
+    if (onToggleStar) {
+      onToggleStar(id, newStarred);
+    }
   };
 
   const toggleSelect = (id: string, e: React.MouseEvent) => {
@@ -131,8 +145,86 @@ export function EmailInboxView({
   return (
     <div className="flex h-full w-full bg-slate-50 border border-slate-200 rounded-2xl shadow-xl overflow-hidden font-sans">
       
+      {/* Mobile Drawer Folders */}
+      {isFolderSidebarOpen && (
+        <div className="fixed inset-0 z-50 flex lg:hidden bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="absolute inset-0" onClick={() => setIsFolderSidebarOpen(false)} />
+          <div className="relative w-64 bg-slate-900 h-full flex flex-col justify-between text-slate-300 shadow-[20px_0_40px_rgba(0,0,0,0.3)] border-r border-slate-800 animate-in slide-in-from-left duration-300">
+            <div>
+              {/* Logo / Header */}
+              <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-red-650 rounded-lg flex items-center justify-center font-bold text-white text-xs uppercase shadow-sm">
+                    {userName ? userName.charAt(0) : 'U'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-bold text-xs text-white leading-tight truncate">{userName || 'LaserInova Mail'}</h2>
+                    <p className="text-[9px] text-slate-400 font-medium truncate mt-0.5">{userEmail || 'Bandeja Profesional'}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsFolderSidebarOpen(false)}
+                  className="p-1 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors"
+                >
+                  <X className="w-4.5 h-4.5" />
+                </button>
+              </div>
+
+              <div className="p-4">
+                <button 
+                  onClick={() => {
+                    setIsFolderSidebarOpen(false);
+                    onCompose();
+                  }}
+                  className="w-full flex justify-center items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-md active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  Redactar Correo
+                </button>
+              </div>
+
+              <nav className="px-3 space-y-1">
+                {folders.map(f => {
+                  const isSelected = currentFolder === f.id;
+                  const hasBadge = isMounted && f.id === 'INBOX' && unreadCount > 0;
+                  return (
+                    <button
+                      key={f.id}
+                      onClick={() => {
+                        setIsFolderSidebarOpen(false);
+                        onFolderChange(f.id);
+                      }}
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${
+                        isSelected 
+                          ? 'bg-slate-800 text-white shadow-sm border border-slate-700' 
+                          : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={isSelected ? 'text-red-500' : ''}>{f.icon}</span>
+                        {f.label}
+                      </div>
+                      {hasBadge && (
+                        <span className="bg-red-500 text-white font-bold text-[10px] px-2 py-0.5 rounded-full">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+            {/* Sync Info Footer */}
+            <div className="p-4 border-t border-slate-800 bg-slate-950/20 text-center">
+              <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Servidor IMAP</p>
+              <p className="text-[10px] text-slate-400 mt-1 truncate">imap.hostinger.com</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar Folders */}
-      <div className="w-64 bg-slate-900 flex flex-col justify-between text-slate-300">
+      <div className="hidden lg:flex w-64 bg-slate-900 flex-col justify-between text-slate-300">
         <div>
           {/* Logo / Header */}
           <div className="p-5 border-b border-slate-800 flex items-center gap-3">
@@ -158,7 +250,7 @@ export function EmailInboxView({
           <nav className="px-3 space-y-1">
             {folders.map(f => {
               const isSelected = currentFolder === f.id;
-              const hasBadge = f.id === 'INBOX' && unreadCount > 0;
+              const hasBadge = isMounted && f.id === 'INBOX' && unreadCount > 0;
               return (
                 <button
                   key={f.id}
@@ -342,6 +434,14 @@ export function EmailInboxView({
           <>
             {/* Topbar Search and Pagination */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4 bg-slate-50/50">
+              <button 
+                onClick={() => setIsFolderSidebarOpen(true)}
+                className="lg:hidden p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 rounded-xl transition-all"
+                title="Abrir Carpetas"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+
               {/* Search Box */}
               <div className="relative flex-1 max-w-lg">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -458,17 +558,17 @@ export function EmailInboxView({
                 <div className="divide-y divide-slate-100">
                   {filteredEmails.map((email) => {
                     const isSelected = !!selectedIds[email.id];
-                    const isStarred = !!starredEmails[email.id];
+                    const isStarredState = starredEmails[email.id] !== undefined ? starredEmails[email.id] : email.isStarred;
                     return (
                       <div 
                         key={email.id} 
                         onClick={() => onSelectEmail(email)}
-                        className={`flex items-center gap-4 px-6 py-3 cursor-pointer transition-all hover:shadow-[inset_3px_0_0_#ef4444] ${
+                        className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition-all hover:bg-slate-50 border-l-4 ${
                           isSelected 
-                            ? 'bg-rose-50/40' 
+                            ? 'bg-rose-50/40 border-l-red-500 shadow-sm' 
                             : email.isRead 
-                              ? 'bg-white hover:bg-slate-50/50' 
-                              : 'bg-red-50/20 font-bold hover:bg-red-50/30'
+                              ? 'bg-slate-100/80 border-l-transparent' 
+                              : 'bg-white shadow-sm border-l-red-600'
                         }`}
                       >
                         {/* Left Actions (Select & Star) */}
@@ -484,9 +584,9 @@ export function EmailInboxView({
                             )}
                           </button>
                           <button 
-                            onClick={e => toggleStar(email.id, e)} 
+                            onClick={e => toggleStar(email.id, email.isStarred, e)} 
                             className={`p-1 hover:bg-slate-100 rounded transition-colors ${
-                              isStarred ? 'text-amber-400' : 'text-slate-350 hover:text-slate-500'
+                              isStarredState ? 'text-amber-400' : 'text-slate-350 hover:text-slate-500'
                             }`}
                           >
                             <Star className="w-4 h-4 fill-current" />
@@ -499,17 +599,17 @@ export function EmailInboxView({
                         </div>
 
                         {/* Sender Name */}
-                        <div className="w-44 flex-shrink-0 truncate text-slate-800 text-xs font-semibold">
+                        <div className={`w-44 flex-shrink-0 truncate text-xs ${email.isRead ? 'text-slate-700 font-semibold' : 'text-slate-950 font-black'}`}>
                           {email.from.split('<')[0].trim() || email.from}
                         </div>
                         
                         {/* Subject & Snippet */}
                         <div className="flex-1 min-w-0 flex items-center gap-2 text-xs">
-                          <span className={`${email.isRead ? 'text-slate-700 font-medium' : 'text-slate-900 font-bold'} truncate`}>
+                          <span className={`truncate ${email.isRead ? 'text-slate-600 font-medium' : 'text-slate-950 font-black'}`}>
                             {email.subject}
                           </span>
                           <span className="text-slate-400 font-normal">-</span>
-                          <span className="truncate text-slate-400 font-normal max-w-md">
+                          <span className={`truncate font-normal max-w-md ${email.isRead ? 'text-slate-400' : 'text-slate-500 font-semibold'}`}>
                             {email.snippet}
                           </span>
                         </div>

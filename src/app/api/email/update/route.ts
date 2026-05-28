@@ -10,7 +10,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { emailId, folder, isRead } = await req.json();
+    const { emailId, folder, isRead, isStarred } = await req.json();
 
     if (!emailId) {
       return NextResponse.json({ error: 'Missing emailId' }, { status: 400 });
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
 
     const updateData: any = {};
     if (folder !== undefined) {
-      const validFolders = ['INBOX', 'SENT', 'SPAM', 'TRASH'];
+      const validFolders = ['INBOX', 'SENT', 'SPAM', 'TRASH', 'STARRED'];
       if (!validFolders.includes(folder)) {
         return NextResponse.json({ error: 'Invalid folder' }, { status: 400 });
       }
@@ -26,6 +26,9 @@ export async function POST(req: Request) {
     }
     if (isRead !== undefined) {
       updateData.isRead = isRead;
+    }
+    if (isStarred !== undefined) {
+      updateData.isStarred = isStarred;
     }
 
     const updatedEmail = await prisma.email.update({

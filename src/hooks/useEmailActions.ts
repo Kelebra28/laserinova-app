@@ -43,7 +43,7 @@ export function useEmailActions() {
     window.open(`/api/email/attachment?messageId=${encodeURIComponent(messageId)}&filename=${encodeURIComponent(filename)}`, '_blank');
   };
 
-  const updateEmail = async (emailId: string, updates: { folder?: string; isRead?: boolean }) => {
+  const updateEmail = async (emailId: string, updates: { folder?: string; isRead?: boolean; isStarred?: boolean }) => {
     try {
       const res = await fetch('/api/email/update', {
         method: 'POST',

@@ -58,6 +58,13 @@ export default function EmailPage() {
     }
   };
 
+  const handleToggleStar = async (emailId: string, isStarred: boolean) => {
+    const success = await updateEmail(emailId, { isStarred });
+    if (success) {
+      fetchEmails(currentFolder, page);
+    }
+  };
+
   const handleReply = (email: Email) => {
     // Extraer dirección limpia de correo del remitente
     const match = email.from.match(/<([^>]+)>/);
@@ -99,6 +106,7 @@ export default function EmailPage() {
             limit={limit}
             onPageChange={changePage}
             onMoveEmail={handleMoveEmail}
+            onToggleStar={handleToggleStar}
             userName={session?.user?.name || ''}
             userEmail={session?.user?.email || ''}
           />

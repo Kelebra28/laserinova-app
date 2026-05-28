@@ -24,6 +24,7 @@ model User {
   deletedTransactions  FinancialTransaction[] @relation("TransactionDeletedBy")
   createdTasks         Task[]                 @relation("TaskCreatedBy")
   taskAssignments      TaskAssignee[]
+  providers            Provider[]
 }
 
 model Client {
@@ -388,3 +389,34 @@ model Attachment {
 
   @@index([emailId])
 }
+
+model Provider {
+  id                      String            @id @default(uuid())
+  companyName             String
+  address                 String?           @db.Text
+  website                 String?
+  portalUsername          String?
+  portalPasswordEncrypted String?          @db.Text
+  active                  Boolean           @default(true)
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  userId                  String
+  user                    User              @relation(fields: [userId], references: [id])
+  contacts                ProviderContact[]
+
+  @@index([userId])
+}
+
+model ProviderContact {
+  id         String   @id @default(uuid())
+  providerId String
+  name       String
+  phone      String?
+  email      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+}
+

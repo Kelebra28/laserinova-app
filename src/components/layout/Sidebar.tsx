@@ -15,7 +15,8 @@ import {
   CheckSquare,
   Box,
   Printer,
-  Mail
+  Mail,
+  Building2
 } from "lucide-react";
 import { useSession } from "next-auth/react";
  
@@ -25,6 +26,7 @@ const menuItems = [
   { name: "Cotizaciones", href: "/dashboard/quotes", icon: FileText },
   { name: "Tareas", href: "/dashboard/tasks", icon: CheckSquare },
   { name: "Clientes", href: "/dashboard/clients", icon: Users },
+  { name: "Proveedores", href: "/dashboard/providers", icon: Building2 },
   { name: "Finanzas", href: "/dashboard/finance", icon: DollarSign, adminOnly: true },
   { name: "Inventario", href: "/dashboard/inventory", icon: Box },
   { name: "Materiales", href: "/dashboard/materials", icon: Package },
