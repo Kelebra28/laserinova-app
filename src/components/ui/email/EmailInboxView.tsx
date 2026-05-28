@@ -4,6 +4,7 @@ import {
   Search, Star, CheckSquare, Square, ChevronLeft, ChevronRight, PenTool, Sparkles, CheckCircle
 } from 'lucide-react';
 import { Email } from '@/hooks/useEmailInbox';
+import { GlobalLoader } from '@/components/ui/GlobalLoader';
 
 interface EmailInboxViewProps {
   emails: Email[];
@@ -447,10 +448,7 @@ export function EmailInboxView({
             {/* Email List Table */}
             <div className="flex-1 overflow-y-auto bg-slate-50/20">
               {isLoading && filteredEmails.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-80 text-slate-400">
-                  <Loader2 className="w-8 h-8 animate-spin mb-3 text-red-500" />
-                  <p className="text-xs font-medium">Buscando correos en el servidor...</p>
-                </div>
+                <GlobalLoader label="Cargando bandeja" subLabel="Laser Inova Mail" minHeight="min-h-[40vh]" />
               ) : filteredEmails.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-80 text-slate-400">
                   <Mail className="w-12 h-12 mb-3 opacity-20" />

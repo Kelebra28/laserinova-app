@@ -11,6 +11,7 @@ import CalculationAudit from "@/components/quotes/CalculationAudit";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import QuoteVersionTabs from "@/components/quotes/QuoteVersionTabs";
 import CloneQuoteButton from "@/components/quotes/CloneQuoteButton";
+import { SendQuoteMailButton } from "@/components/quotes/SendQuoteMailButton";
 
 const statusLabels: Record<string, string> = {
   DRAFT: "Borrador",
@@ -148,12 +149,21 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
               href={`/api/quotes/${quote.id}/pdf?allVersions=true`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center px-6 py-2.5 bg-red-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-red-700 transition-all shadow-lg active:scale-95"
+              className="inline-flex items-center px-6 py-2.5 bg-rose-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-rose-700 transition-all shadow-lg active:scale-95"
             >
               <FileText className="mr-2 h-4 w-4" />
               PDF Comparativo
             </a>
           )}
+          <SendQuoteMailButton 
+            quoteId={quote.id}
+            folio={quote.folio}
+            project={quote.project}
+            clientName={quote.client?.name || quote.prospectName || undefined}
+            clientEmail={quote.client?.email || undefined}
+            hasClientId={!!quote.clientId}
+            userName={quote.user?.name || undefined}
+          />
         </div>
       </div>
 
