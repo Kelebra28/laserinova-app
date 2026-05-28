@@ -5,8 +5,9 @@ import { redirect } from "next/navigation";
 import { updateCostConfigurations } from "./actions";
 import { ProfileForm } from "@/components/settings/ProfileForm";
 import { UsersPanel } from "@/components/settings/UsersPanel";
-import { Save, Settings2, User, Users, SlidersHorizontal, Database, HardDrive } from "lucide-react";
+import { Save, Settings2, User, Users, SlidersHorizontal, Database, HardDrive, Mail } from "lucide-react";
 import { SettingsTabs } from "@/components/settings/SettingsTabs";
+import { EmailConfigForm } from "@/components/settings/EmailConfigForm";
 import fs from "fs";
 import path from "path";
 
@@ -80,7 +81,14 @@ export default async function SettingsPage() {
     }),
     prisma.user.findUnique({
       where: { id: currentUser.id },
-      select: { id: true, name: true, email: true, role: true },
+      select: { 
+        id: true, 
+        name: true, 
+        email: true, 
+        role: true,
+        emailIncomingServer: true,
+        emailOutgoingServer: true,
+      },
     }),
     getDbSizeMB(),
     getUploadsSizeMB(),
@@ -248,8 +256,8 @@ export default async function SettingsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ── LEFT COLUMN: Profile (Fixed) ───────────────────────────── */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden sticky top-6">
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 bg-gray-50/50">
               <div className="p-2 rounded-xl bg-red-50">
                 <User className="w-5 h-5 text-red-600" />
@@ -264,6 +272,28 @@ export default async function SettingsPage() {
                 <ProfileForm user={me} />
               ) : (
                 <p className="text-sm text-gray-400">No se pudo cargar el perfil.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+              <div className="p-2 rounded-xl bg-red-50">
+                <Mail className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-gray-800 uppercase tracking-widest">Correo Hostinger</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Tu cuenta personal para el CRM</p>
+              </div>
+            </div>
+            <div className="p-6">
+              {me ? (
+                <EmailConfigForm 
+                  incomingServer={me.emailIncomingServer} 
+                  outgoingServer={me.emailOutgoingServer} 
+                />
+              ) : (
+                <p className="text-sm text-gray-400">No se pudo cargar el correo.</p>
               )}
             </div>
           </div>

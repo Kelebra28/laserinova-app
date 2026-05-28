@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { encrypt } from "@/lib/encryption";
 
 // ─── Cost configs ─────────────────────────────────────────────────────────────
 
@@ -108,5 +109,33 @@ export async function toggleUserActiveAction(userId: string, active: boolean) {
   if ((session?.user as any)?.role !== "ADMIN") throw new Error("No autorizado");
 
   await prisma.user.update({ where: { id: userId }, data: { active } });
+  revalidatePath("/dashboard/settings");
+}
+
+// ─── Update own email credentials ─────────────────────────────────────────────
+
+export async function updateUserEmailConfigAction(formData: FormData) {
+  const session = await getServerSession(authOptions);
+  const currentUserId = (session?.user as any)?.id;
+  if (!currentUserId) throw new Error("No autenticado");
+
+  const emailPassword = (formData.get("emailPassword") as string)?.trim();
+  const imapServer = (formData.get("imapServer") as string)?.trim() || "imap.hostinger.com";
+  const smtpServer = (formData.get("smtpServer") as string)?.trim() || "smtp.hostinger.com";
+
+  const data: any = {
+    emailIncomingServer: imapServer,
+    emailOutgoingServer: smtpServer,
+  };
+
+  if (emailPassword) {
+    data.emailPasswordEncrypted = encrypt(emailPassword);
+  }
+
+  await prisma.user.update({
+    where: { id: currentUserId },
+    data,
+  });
+
   revalidatePath("/dashboard/settings");
 }

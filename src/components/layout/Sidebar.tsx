@@ -14,12 +14,14 @@ import {
   X,
   CheckSquare,
   Box,
-  Printer
+  Printer,
+  Mail
 } from "lucide-react";
 import { useSession } from "next-auth/react";
-
+ 
 const menuItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Correo", href: "/dashboard/email", icon: Mail },
   { name: "Cotizaciones", href: "/dashboard/quotes", icon: FileText },
   { name: "Tareas", href: "/dashboard/tasks", icon: CheckSquare },
   { name: "Clientes", href: "/dashboard/clients", icon: Users },
