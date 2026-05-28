@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { decrypt } from '@/lib/encryption';
+import { saveEmailToDisk } from '@/lib/emailStorage';
 
 export async function POST(req: Request) {
   try {
@@ -100,8 +101,7 @@ export async function POST(req: Request) {
                   to: (parsed.to as any)?.text || '',
                   cc: (parsed.cc as any)?.text || '',
                   bcc: (parsed.bcc as any)?.text || '',
-                  bodyText: parsed.text || '',
-                  bodyHtml: parsed.html || '',
+                  storagePath: saveEmailToDisk(messageId, parsed.html || '', parsed.text || ''),
                   snippet: parsed.text?.substring(0, 100) || '',
                   receivedAt: parsed.date || new Date(),
                   folder: 'INBOX',
@@ -152,8 +152,7 @@ export async function POST(req: Request) {
                   subject: parsed.subject || '(Sin Asunto)',
                   from: (parsed.from as any)?.text || '',
                   to: (parsed.to as any)?.text || '',
-                  bodyText: parsed.text || '',
-                  bodyHtml: parsed.html || '',
+                  storagePath: saveEmailToDisk(messageId, parsed.html || '', parsed.text || ''),
                   snippet: parsed.text?.substring(0, 100) || '',
                   receivedAt: parsed.date || new Date(),
                   folder: 'SENT',
@@ -296,8 +295,7 @@ async function insertMockEmails() {
         from: emailData.from,
         to: emailData.to,
         snippet: emailData.snippet,
-        bodyText: emailData.bodyText,
-        bodyHtml: `<p>${emailData.bodyText.replace(/\n/g, '<br>')}</p>`,
+        storagePath: saveEmailToDisk(emailData.messageId, `<p>${emailData.bodyText.replace(/\n/g, '<br>')}</p>`, emailData.bodyText),
         folder: emailData.folder,
         receivedAt: emailData.receivedAt,
         isRead: false,

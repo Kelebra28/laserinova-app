@@ -11,10 +11,10 @@ export interface Email {
   isStarred: boolean;
   folder: string;
   receivedAt: string;
-  bodyHtml?: string;
-  bodyText?: string;
+  storagePath?: string;
   attachments: { filename: string, size: number }[];
 }
+
 
 // Memory cache mapping folder IDs to their last synced email lists
 let memoryCache: Record<string, { emails: Email[]; total: number }> = {};

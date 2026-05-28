@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { decrypt } from '@/lib/encryption';
+import { saveEmailToDisk } from '@/lib/emailStorage';
 
 export async function POST(req: Request) {
   try {
@@ -157,9 +158,7 @@ export async function POST(req: Request) {
         subject,
         from: smtpFrom,
         to,
-        bodyText: text,
-        // In the local DB we replace cid with local route for CRM view representation
-        bodyHtml: htmlBody.replace('cid:logo_pdf', '/logo_pdf.png'),
+        storagePath: saveEmailToDisk(messageId, htmlBody.replace('cid:logo_pdf', '/logo_pdf.png'), text),
         snippet: text.substring(0, 100),
         receivedAt: new Date(),
         folder: 'SENT',

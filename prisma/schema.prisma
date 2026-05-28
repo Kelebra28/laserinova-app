@@ -8,38 +8,38 @@ datasource db {
 }
 
 model User {
-  id                   String                 @id @default(uuid())
-  name                 String
-  email                String                 @unique
-  passwordHash         String
-  role                 String                 @default("SELLER")
-  active               Boolean                @default(true)
+  id                     String                 @id @default(uuid())
+  name                   String
+  email                  String                 @unique
+  passwordHash           String
+  role                   String                 @default("SELLER")
+  active                 Boolean                @default(true)
   emailPasswordEncrypted String?
   emailIncomingServer    String?                @default("imap.hostinger.com")
   emailOutgoingServer    String?                @default("smtp.hostinger.com")
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
-  quotes               Quote[]
-  createdTransactions  FinancialTransaction[] @relation("TransactionCreatedBy")
-  deletedTransactions  FinancialTransaction[] @relation("TransactionDeletedBy")
-  createdTasks         Task[]                 @relation("TaskCreatedBy")
-  taskAssignments      TaskAssignee[]
-  providers            Provider[]
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  quotes                 Quote[]
+  createdTransactions    FinancialTransaction[] @relation("TransactionCreatedBy")
+  deletedTransactions    FinancialTransaction[] @relation("TransactionDeletedBy")
+  createdTasks           Task[]                 @relation("TaskCreatedBy")
+  taskAssignments        TaskAssignee[]
+  providers              Provider[]
 }
 
 model Client {
-  id                   String                 @id @default(uuid())
-  name                 String
-  company              String?
-  email                String?
-  phone                String?
-  rfc                  String?
-  address              String?
-  notes                String? @db.Text
-  active               Boolean                @default(true)
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
-  quotes               Quote[]
+  id                    String                 @id @default(uuid())
+  name                  String
+  company               String?
+  email                 String?
+  phone                 String?
+  rfc                   String?
+  address               String?
+  notes                 String?                @db.Text
+  active                Boolean                @default(true)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  quotes                Quote[]
   financialTransactions FinancialTransaction[]
   emails                Email[]
 }
@@ -66,7 +66,7 @@ model Material {
   guardPercentage Float?
   productionPrice Float?
   pricePerCm2     Float?
-  notes           String? @db.Text
+  notes           String?          @db.Text
   active          Boolean          @default(true)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -77,11 +77,11 @@ model Material {
 }
 
 model ProductCategory {
-  id        String    @id @default(uuid())
-  name      String
-  slug      String    @unique
-  active    Boolean   @default(true)
-  products  Product[]
+  id       String    @id @default(uuid())
+  name     String
+  slug     String    @unique
+  active   Boolean   @default(true)
+  products Product[]
 }
 
 model Product {
@@ -123,7 +123,7 @@ model Quote {
   prospectName          String?
   userId                String
   project               String
-  description           String? @db.Text
+  description           String?                @db.Text
   images                Json?
   status                String                 @default("DRAFT")
   paymentStatus         String                 @default("PENDING")
@@ -140,9 +140,9 @@ model Quote {
   closeDate             DateTime?
   deliveryTime          String?
   validityDays          Int?
-  paymentConditions     String? @db.Text
-  internalNotes         String? @db.Text
-  visibleConsiderations String? @db.Text
+  paymentConditions     String?                @db.Text
+  internalNotes         String?                @db.Text
+  visibleConsiderations String?                @db.Text
   versionGroupId        String?
   versionName           String?
   active                Boolean                @default(true)
@@ -163,7 +163,7 @@ model QuoteConcept {
   id                     String    @id @default(uuid())
   quoteId                String
   conceptType            String
-  description            String @db.Text
+  description            String    @db.Text
   quantity               Int       @default(1)
   materialId             String?
   clientProvidesMaterial Boolean   @default(false)
@@ -173,7 +173,7 @@ model QuoteConcept {
   cutTime                Float?
   engraveTime            Float?
   machineType            String?
-  details                String? @db.Text
+  details                String?   @db.Text
   serviceDays            Float?    @default(0)
   serviceHours           Float?    @default(0)
   transportCost          Float?    @default(0)
@@ -222,51 +222,51 @@ model EmailLog {
 // ============================================================
 
 model FinancialTransaction {
-  id            String    @id @default(uuid())
+  id String @id @default(uuid())
 
   // Clasificación principal
   // GASTO_OPERATIVO | GASTO_PROYECTO | INGRESO | ANTICIPO | LIQUIDACION | AJUSTE
-  type          String
+  type String
 
   // Categoría para agrupar y filtrar
-  category      String
+  category String
 
   // Montos
-  amount        Float
-  taxAmount     Float     @default(0)   // IVA separado si aplica
+  amount    Float
+  taxAmount Float @default(0) // IVA separado si aplica
 
   // Descripción y contexto
   description   String
-  notes         String?   @db.Text
+  notes         String?  @db.Text
   date          DateTime
-  paymentMethod String?   // efectivo | transferencia | tarjeta | deposito | otro
-  provider      String?   // Proveedor u origen del movimiento
+  paymentMethod String? // efectivo | transferencia | tarjeta | deposito | otro
+  provider      String? // Proveedor u origen del movimiento
 
   // Relaciones opcionales a proyecto o cliente
-  quoteId       String?
-  clientId      String?
+  quoteId  String?
+  clientId String?
 
   // Auditoría de creación / edición
-  createdById   String?
-  updatedById   String?
+  createdById String?
+  updatedById String?
 
   // Soft delete
-  isDeleted     Boolean   @default(false)
-  deletedAt     DateTime?
-  deletedById   String?
-  deleteReason  String?
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
 
   // Estado: ACTIVO | ANULADO
-  status        String    @default("ACTIVO")
+  status String @default("ACTIVO")
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relaciones
-  quote         Quote?    @relation(fields: [quoteId], references: [id])
-  client        Client?   @relation(fields: [clientId], references: [id])
-  createdBy     User?     @relation("TransactionCreatedBy", fields: [createdById], references: [id])
-  deletedBy     User?     @relation("TransactionDeletedBy", fields: [deletedById], references: [id])
+  quote     Quote?  @relation(fields: [quoteId], references: [id])
+  client    Client? @relation(fields: [clientId], references: [id])
+  createdBy User?   @relation("TransactionCreatedBy", fields: [createdById], references: [id])
+  deletedBy User?   @relation("TransactionDeletedBy", fields: [deletedById], references: [id])
 
   @@index([quoteId])
   @@index([clientId])
@@ -286,10 +286,10 @@ model Task {
   title         String
   description   String?        @db.Text
   status        String         @default("PENDING") // BACKLOG | PENDING | IN_PROGRESS | BLOCKED | DONE
-  priority      String         @default("NORMAL")  // LOW | NORMAL | HIGH
-  points        Int            @default(0)          // 1 punto = 1 hora
-  progress      Int            @default(0)          // 0-100 — activo solo en IN_PROGRESS y BLOCKED
-  blockerReason String?        @db.Text             // Obligatorio cuando status = BLOCKED
+  priority      String         @default("NORMAL") // LOW | NORMAL | HIGH
+  points        Int            @default(0) // 1 punto = 1 hora
+  progress      Int            @default(0) // 0-100 — activo solo en IN_PROGRESS y BLOCKED
+  blockerReason String?        @db.Text // Obligatorio cuando status = BLOCKED
   dueDate       DateTime?
   order         Int            @default(0)
   createdById   String?
@@ -358,8 +358,6 @@ model Email {
   to          String       @db.Text
   cc          String?      @db.Text
   bcc         String?      @db.Text
-  bodyText    String?      @db.LongText
-  bodyHtml    String?      @db.LongText
   snippet     String?      @db.Text
   isRead      Boolean      @default(false)
   isStarred   Boolean      @default(false)
@@ -368,6 +366,7 @@ model Email {
   clientId    String?
   client      Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
   attachments Attachment[]
+  storagePath String?      
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -383,7 +382,8 @@ model Attachment {
   filename    String   @db.Text
   mimeType    String
   size        Int
-  contentId   String?  
+  contentId   String?
+  storagePath String?
   email       Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
 
@@ -396,7 +396,7 @@ model Provider {
   address                 String?           @db.Text
   website                 String?
   portalUsername          String?
-  portalPasswordEncrypted String?          @db.Text
+  portalPasswordEncrypted String?           @db.Text
   active                  Boolean           @default(true)
   createdAt               DateTime          @default(now())
   updatedAt               DateTime          @updatedAt
@@ -419,4 +419,3 @@ model ProviderContact {
 
   @@index([providerId])
 }
-

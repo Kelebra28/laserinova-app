@@ -28,10 +28,26 @@ export default function EmailPage() {
   
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+  const [activeEmailBody, setActiveEmailBody] = useState<{html: string, text: string} | null>(null);
   const [replyData, setReplyData] = useState<{ to: string; subject: string; text: string } | null>(null);
 
   const handleSelectEmail = async (email: Email) => {
     setSelectedEmail(email);
+    setActiveEmailBody(null);
+
+    // Fetch body from hybrid storage API
+    try {
+      const res = await fetch(`/api/email/${email.id}/body`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setActiveEmailBody({ html: data.html, text: data.text });
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching email body:', e);
+    }
+
     // Marcar como leído automáticamente en DB
     if (!email.isRead) {
       const success = await updateEmail(email.id, { isRead: true });
@@ -218,7 +234,10 @@ export default function EmailPage() {
             {/* Email Body Content */}
             <div className="p-6 overflow-y-auto flex-1 bg-white">
               {/* Elegant Sandboxed Frame to prevent visual deformation or style escaping */}
-              <EmailBodyViewer html={selectedEmail.bodyHtml} text={selectedEmail.bodyText || selectedEmail.snippet} />
+              <EmailBodyViewer 
+                html={activeEmailBody ? activeEmailBody.html : '<div style="display:flex;justify-content:center;padding:20px;color:#cbd5e1;"><p>Cargando contenido...</p></div>'} 
+                text={activeEmailBody ? activeEmailBody.text : selectedEmail.snippet} 
+              />
               
               {/* Attachments Display */}
               {selectedEmail.attachments && selectedEmail.attachments.length > 0 && (

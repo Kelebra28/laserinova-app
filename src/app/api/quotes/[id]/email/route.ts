@@ -7,6 +7,7 @@ import nodemailer from "nodemailer";
 import { decrypt } from "@/lib/encryption";
 import path from "path";
 import fs from "fs";
+import { saveEmailToDisk } from '@/lib/emailStorage';
 
 export async function POST(
   request: Request,
@@ -191,8 +192,7 @@ export async function POST(
         subject,
         from: smtpFrom,
         to: toEmail || quote.client?.email || "",
-        bodyText,
-        bodyHtml: bodyHtml.replace('cid:logo_pdf', '/logo_pdf.png'),
+        storagePath: saveEmailToDisk(isMock ? `mock-quote-${quote.id}` : info.messageId, bodyHtml.replace('cid:logo_pdf', '/logo_pdf.png'), bodyText),
         snippet: bodyText.substring(0, 100),
         receivedAt: new Date(),
         folder: 'SENT',
