@@ -22,16 +22,27 @@ export async function POST(req: Request) {
     let imapPass = '';
     let imapHost = dbUser?.emailIncomingServer || 'imap.hostinger.com';
 
+    let decryptionFailed = false;
+    let decryptionError = '';
+
     if (dbUser?.emailPasswordEncrypted) {
       try {
         imapPass = decrypt(dbUser.emailPasswordEncrypted);
-      } catch (e) {
+        if (!imapPass) {
+          decryptionFailed = true;
+          decryptionError = 'Decrypted password is empty';
+        }
+      } catch (e: any) {
+        decryptionFailed = true;
+        decryptionError = e.message || 'Decryption threw an error';
         console.error("Failed to decrypt user email password, falling back to global", e);
       }
     }
 
     // Fallback to global env
+    let usedFallback = false;
     if (!imapPass) {
+      usedFallback = true;
       imapUser = process.env.SMTP_USER || '';
       imapPass = process.env.SMTP_PASS || '';
       imapHost = process.env.SMTP_HOST?.replace('smtp', 'imap') || 'imap.hostinger.com';
@@ -184,6 +195,10 @@ export async function POST(req: Request) {
         success: false, 
         message: 'Sync failed to connect to IMAP server', 
         errorDetail: connectionError.message,
+        decryptionFailed,
+        decryptionError,
+        usedFallback,
+        imapUserUsed: imapUser,
         mock: false 
       }, { status: 500 });
     }
