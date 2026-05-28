@@ -148,7 +148,7 @@ export function EmailInboxView({
           <div className="p-4">
             <button 
               onClick={onCompose}
-              className="w-full flex justify-center items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 rounded-xl transition-all shadow-md active:scale-95"
+              className="w-full flex justify-center items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white bg-red-600 hover:bg-red-700 rounded-xl transition-all shadow-md active:scale-95"
             >
               <Plus className="w-4 h-4" />
               Redactar Correo
@@ -264,7 +264,7 @@ export function EmailInboxView({
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
                   <button 
                     onClick={handleSaveSignature}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-red-650 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-95"
+                    className="flex items-center gap-2 px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-95"
                   >
                     {isSigSaved ? (
                       <>

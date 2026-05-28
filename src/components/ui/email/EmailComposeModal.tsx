@@ -118,7 +118,7 @@ export function EmailComposeModal({
         {/* Templates Panel (Opens alongside) */}
         {showTemplates && (
           <div className="w-[320px] h-[550px] bg-white rounded-2xl shadow-[0_15px_35px_-5px_rgba(0,0,0,0.15)] border border-gray-200/80 flex flex-col overflow-hidden animate-in slide-in-from-right-4 duration-200">
-            <div className="px-4 py-3 bg-gradient-to-r from-red-600 to-rose-700 text-white flex justify-between items-center">
+            <div className="px-4 py-3 bg-red-600 text-white flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-rose-200 animate-pulse" />
                 <h4 className="font-semibold text-xs uppercase tracking-wider">Plantillas Profesionales</h4>
@@ -268,7 +268,7 @@ export function EmailComposeModal({
               <button 
                 type="submit" 
                 disabled={isSending || !to || !subject || !text}
-                className="flex items-center gap-1.5 px-5 py-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white text-xs font-semibold rounded-full shadow-md hover:shadow-lg transition-all disabled:opacity-40 active:scale-95"
+                className="flex items-center gap-1.5 px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-full shadow-md hover:shadow-lg transition-all disabled:opacity-40 active:scale-95"
               >
                 {isSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                 {isSending ? 'Enviando...' : 'Enviar Correo'}
