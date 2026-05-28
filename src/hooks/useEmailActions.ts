@@ -10,6 +10,15 @@ export function useEmailActions() {
       formData.append('to', to);
       formData.append('subject', subject);
       formData.append('text', text);
+      
+      // Append signature fields dynamically from localStorage
+      if (typeof window !== 'undefined') {
+        formData.append('sigName', localStorage.getItem('sig_name') || 'Ricardo Basurto');
+        formData.append('sigTitle', localStorage.getItem('sig_title') || 'Director General');
+        formData.append('sigPhone', localStorage.getItem('sig_phone') || '+52 1 55 1234 5678');
+        formData.append('sigWeb', localStorage.getItem('sig_web') || 'www.laserinova.com');
+      }
+
       attachments.forEach(file => {
         formData.append('attachments', file);
       });

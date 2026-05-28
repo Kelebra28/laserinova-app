@@ -122,7 +122,7 @@ export default function PaymentBoard({
           <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Pendientes (0%)</span>
           <span className="text-[10px] font-black bg-white px-2 py-1 rounded-lg shadow-sm border border-gray-100 text-gray-500">{unpaid.length}</span>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-3 overflow-y-auto max-h-[360px] 2xl:max-h-[500px] pr-1.5 scrollbar-thin">
           {unpaid.map(quote => {
             const isDragging = draggingId === quote.id;
             return (
@@ -163,7 +163,7 @@ export default function PaymentBoard({
           <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">En Abono (Anticipos)</span>
           <span className="text-[10px] font-black bg-white px-2 py-1 rounded-lg shadow-sm border border-gray-100 text-gray-500">{partial.length}</span>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-3 overflow-y-auto max-h-[360px] 2xl:max-h-[500px] pr-1.5 scrollbar-thin">
           {partial.map(quote => {
             const isDragging = draggingId === quote.id;
             return (
@@ -200,7 +200,7 @@ export default function PaymentBoard({
           <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Liquidadas (Mes)</span>
           <span className="text-[10px] font-black bg-white px-2 py-1 rounded-lg shadow-sm border border-gray-100 text-gray-500">{paidThisMonth.length}</span>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-3 overflow-y-auto max-h-[360px] 2xl:max-h-[500px] pr-1.5 scrollbar-thin">
           {paidThisMonth.map(quote => {
             const isDragging = draggingId === quote.id;
             return (

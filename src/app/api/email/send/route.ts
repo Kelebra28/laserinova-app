@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/prisma';
+import path from 'path';
+import fs from 'fs';
 // @ts-ignore
 import { v4 as uuidv4 } from 'uuid';
 import { getServerSession } from 'next-auth/next';
@@ -40,12 +42,18 @@ export async function POST(req: Request) {
       smtpPort = parseInt(process.env.SMTP_PORT || '465', 10);
     }
 
-    const smtpFrom = smtpUser;
+    const smtpFrom = `"Laser Inova - Ricardo Basurto" <${smtpUser}>`;
 
     const data = await req.formData();
     const to = data.get('to') as string;
     const subject = data.get('subject') as string;
     const text = data.get('text') as string;
+
+    // Read customized signature inputs from frontend request
+    const sigName = data.get('sigName') as string || 'Ricardo Basurto';
+    const sigTitle = data.get('sigTitle') as string || 'Director General';
+    const sigPhone = data.get('sigPhone') as string || '+52 1 55 1234 5678';
+    const sigWeb = data.get('sigWeb') as string || 'www.laserinova.com';
 
     const transporter = nodemailer.createTransport({
       host: smtpHost,
@@ -69,9 +77,61 @@ export async function POST(req: Request) {
       });
     }
 
+    // Attach inline corporate logo signature image for SMTP email using fs buffer to guarantee delivery
+    const isMock = process.env.EMAIL_MOCK === 'true';
+    if (!isMock) {
+      try {
+        const logoPath = path.join(process.cwd(), 'public', 'logo_pdf.png');
+        const logoBuffer = fs.readFileSync(logoPath);
+        attachments.push({
+          filename: 'logo_pdf.png',
+          content: logoBuffer,
+          contentType: 'image/png',
+          cid: 'logo_pdf'
+        } as any);
+      } catch (err) {
+        console.error("Failed to read logo_pdf.png for inline signature attachment:", err);
+      }
+    }
+
+    const cleanPhone = sigPhone.replace(/\D/g, ''); // Extract only digits for whatsapp deep-link
+
+    const signatureHtml = `
+      <br><br>
+      <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+      <table style="font-family: Arial, sans-serif; font-size: 13px; color: #1e293b; line-height: 1.5; border-collapse: collapse;">
+        <tr>
+          <td colspan="2" style="padding-bottom: 12px;">
+            <img src="cid:logo_pdf" alt="Laser Inova" style="height: 42px; display: block;">
+          </td>
+        </tr>
+        <tr>
+          <td style="vertical-align: middle; padding-right: 15px; border-right: 2px solid #ef4444;">
+            <div style="font-weight: bold; font-size: 15px; color: #0f172a;">${sigName}</div>
+            <div style="color: #64748b; font-size: 11px; margin-top: 2px;">${sigTitle}</div>
+          </td>
+          <td style="vertical-align: middle; padding-left: 15px;">
+            <div style="margin-bottom: 4px;">
+              <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">WhatsApp:</span> 
+              <a href="https://wa.me/${cleanPhone}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${sigPhone}</a>
+            </div>
+            <div style="margin-bottom: 4px;">
+              <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">Email:</span> 
+              <a href="mailto:${smtpUser}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${smtpUser}</a>
+            </div>
+            <div>
+              <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">Web:</span> 
+              <a href="https://${sigWeb.replace(/https?:\/\//, '')}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${sigWeb}</a>
+            </div>
+          </td>
+        </tr>
+      </table>
+    `;
+
+    const htmlBody = `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #1e293b; line-height: 1.6;">${text.replace(/\n/g, '<br>')}</div>` + signatureHtml;
+
     // Send the email (or mock it)
     let messageId = uuidv4();
-    const isMock = process.env.EMAIL_MOCK === 'true';
 
     if (!isMock) {
       try {
@@ -80,6 +140,7 @@ export async function POST(req: Request) {
           to,
           subject,
           text,
+          html: htmlBody,
           attachments,
         });
         messageId = info.messageId || messageId;
@@ -97,6 +158,8 @@ export async function POST(req: Request) {
         from: smtpFrom,
         to,
         bodyText: text,
+        // In the local DB we replace cid with local route for CRM view representation
+        bodyHtml: htmlBody.replace('cid:logo_pdf', '/logo_pdf.png'),
         snippet: text.substring(0, 100),
         receivedAt: new Date(),
         folder: 'SENT',
@@ -104,13 +167,14 @@ export async function POST(req: Request) {
       }
     });
 
-    if (attachments.length > 0) {
+    const activeAttachments = attachments.filter(att => att.filename !== 'logo_pdf.png');
+    if (activeAttachments.length > 0) {
       await prisma.attachment.createMany({
-        data: attachments.map(att => ({
+        data: activeAttachments.map(att => ({
           emailId: created.id,
           filename: att.filename,
           mimeType: att.contentType,
-          size: att.content.length,
+          size: att.content ? att.content.length : 0,
         })),
       });
     }

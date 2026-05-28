@@ -133,7 +133,7 @@ export default function KanbanBoard({
                   {columnQuotes.length}
                 </span>
               </div>
-              <div className="space-y-4 flex-1 overflow-y-auto max-h-[520px] pr-1.5 scrollbar-thin">
+              <div className="space-y-4 flex-1 overflow-y-auto max-h-[360px] 2xl:max-h-[500px] pr-1.5 scrollbar-thin">
                 {columnQuotes.map(quote => {
                   const isDragging = draggingId === quote.id;
                   return (
