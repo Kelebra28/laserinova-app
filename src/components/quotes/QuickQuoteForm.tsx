@@ -156,7 +156,7 @@ export default function QuickQuoteForm({ defaultMargin, clients }: QuickQuoteFor
           type: "success"
         });
         setTimeout(() => {
-          router.push(`/dashboard/quotes/${result.quoteId}`);
+          window.location.href = `/dashboard/quotes/${result.quoteId}`;
         }, 1500);
       }
     } catch (error) {
