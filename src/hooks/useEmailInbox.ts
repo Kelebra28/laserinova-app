@@ -39,10 +39,9 @@ function getInitialData(folder: string): { emails: Email[]; total: number } {
 }
 
 export function useEmailInbox(initialFolder: string = 'INBOX') {
-  const initialData = getInitialData(initialFolder);
-  const [emails, setEmails] = useState<Email[]>(initialData.emails);
-  const [totalEmails, setTotalEmails] = useState(initialData.total);
-  const [isLoading, setIsLoading] = useState(initialData.emails.length === 0);
+  const [emails, setEmails] = useState<Email[]>([]);
+  const [totalEmails, setTotalEmails] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [currentFolder, setCurrentFolder] = useState(initialFolder);
   const [page, setPage] = useState(1);
