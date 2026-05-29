@@ -21,28 +21,20 @@ export function EmailBodyViewer({ html, text }: EmailBodyViewerProps) {
       content = `<div style="white-space: pre-wrap; word-break: break-word;">${text || ''}</div>`;
     }
 
-    // Inject base styles to avoid light gray text or tiny font-size deforming the layout
+    // Inject base styles to avoid tiny font-size deforming the layout, while preserving signature/email colors
     const baseStyles = `
       <style>
         body {
           font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
           font-size: 14px;
           line-height: 1.6;
-          color: #1e293b !important; /* Dark Slate to ensure high contrast */
-          background-color: #ffffff !important;
+          color: #1e293b;
+          background-color: #ffffff;
           margin: 0;
-          padding: 8px;
+          padding: 12px;
           word-break: break-word;
           overflow-wrap: break-word;
           max-width: 100%;
-        }
-        /* Override light gray text colors inside parsed emails */
-        p, span, div, td, h1, h2, h3, h4, h5, h6, a {
-          color: #1e293b !important; /* Force dark text for readability */
-        }
-        a {
-          color: #ef4444 !important; /* Red links to match brand */
-          text-decoration: underline;
         }
         img {
           max-width: 100% !important;
@@ -50,8 +42,6 @@ export function EmailBodyViewer({ html, text }: EmailBodyViewerProps) {
         }
         table {
           max-width: 100% !important;
-          width: 100% !important;
-          border-collapse: collapse !important;
         }
       </style>
     `;
@@ -88,7 +78,7 @@ export function EmailBodyViewer({ html, text }: EmailBodyViewerProps) {
           htmlElement.scrollHeight,
           htmlElement.offsetHeight
         );
-        iframe.style.height = `${height + 20}px`;
+        iframe.style.height = `${height + 25}px`;
       }
     };
 
@@ -110,7 +100,7 @@ export function EmailBodyViewer({ html, text }: EmailBodyViewerProps) {
         ref={iframeRef}
         title="Contenido del Correo"
         className="w-full min-h-[250px] border-none block bg-white"
-        sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+        sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
       />
     </div>
   );
