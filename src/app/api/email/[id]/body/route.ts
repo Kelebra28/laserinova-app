@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { loadEmailFromDisk, saveEmailToDisk } from '@/lib/emailStorage';
+import { loadEmailFromDisk, saveEmailToDisk, getStorageBasePath } from '@/lib/emailStorage';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { decrypt } from '@/lib/encryption';
 import fs from 'fs';
+import path from 'path';
 
 export async function GET(
   request: Request,
@@ -28,8 +29,9 @@ export async function GET(
     // 1. Try to load from disk first
     if (email.storagePath) {
       try {
-        const htmlPath = `${email.storagePath}/body.html`;
-        const txtPath = `${email.storagePath}/body.txt`;
+        const basePath = getStorageBasePath();
+        const htmlPath = path.join(basePath, email.storagePath, 'body.html');
+        const txtPath = path.join(basePath, email.storagePath, 'body.txt');
         if (fs.existsSync(htmlPath) && fs.existsSync(txtPath)) {
           const { html, text } = loadEmailFromDisk(email.storagePath);
           return NextResponse.json({ success: true, html, text });

@@ -1,12 +1,33 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
-const getStorageBasePath = () => {
-  const dir = path.join(process.cwd(), 'storage', 'emails');
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+let cachedStoragePath: string | null = null;
+
+export const getStorageBasePath = () => {
+  if (cachedStoragePath) return cachedStoragePath;
+
+  const primaryDir = path.join(process.cwd(), 'storage', 'emails');
+  try {
+    if (!fs.existsSync(primaryDir)) {
+      fs.mkdirSync(primaryDir, { recursive: true });
+    }
+    // Test if directory is actually writable (handles read-only filesystems)
+    const testFile = path.join(primaryDir, '.write-test');
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
+    
+    cachedStoragePath = primaryDir;
+    return primaryDir;
+  } catch (error) {
+    console.warn(`Primary storage path ${primaryDir} not writable. Falling back to temporary storage.`, error);
+    const fallbackDir = path.join(os.tmpdir(), 'crm-emails');
+    if (!fs.existsSync(fallbackDir)) {
+      fs.mkdirSync(fallbackDir, { recursive: true });
+    }
+    cachedStoragePath = fallbackDir;
+    return fallbackDir;
   }
-  return dir;
 };
 
 export const saveEmailToDisk = (messageId: string, html: string = '', text: string = '') => {
