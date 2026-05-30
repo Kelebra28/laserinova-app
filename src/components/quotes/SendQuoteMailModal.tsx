@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, X, Loader2, Check, FileText } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { EmailInput } from '@/components/ui/EmailInput';
 
 interface SendQuoteMailModalProps {
   isOpen: boolean;
@@ -135,27 +136,23 @@ export function SendQuoteMailModal({
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-4 flex flex-col">
             {/* Destinatario Email */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Correo del Destinatario (Para)</label>
-              <input 
-                type="text"
-                required
-                value={toEmail}
-                onChange={e => setToEmail(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-red-500 focus:bg-white px-3.5 py-2.5 rounded-xl text-xs text-slate-800 font-semibold outline-none transition-all"
-                placeholder="cliente@correo.com, otro@correo.com"
+            <div className="pb-1">
+              <EmailInput 
+                label="Correo del Destinatario (Para)" 
+                placeholder="cliente@correo.com" 
+                emails={toEmail.split(',').filter(Boolean).map(e => e.trim())} 
+                onChange={(emails) => setToEmail(emails.join(','))} 
+                required 
               />
             </div>
 
             {/* CC Email */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">CC (Con Copia)</label>
-              <input 
-                type="text"
-                value={ccEmail}
-                onChange={e => setCcEmail(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-red-500 focus:bg-white px-3.5 py-2.5 rounded-xl text-xs text-slate-800 font-semibold outline-none transition-all"
-                placeholder="copia1@correo.com, copia2@correo.com"
+            <div className="pb-1">
+              <EmailInput 
+                label="CC (Con Copia)" 
+                placeholder="copia@correo.com" 
+                emails={ccEmail.split(',').filter(Boolean).map(e => e.trim())} 
+                onChange={(emails) => setCcEmail(emails.join(','))} 
               />
             </div>
 

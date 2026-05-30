@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { X, Send, Paperclip, Loader2, Trash2, Sparkles, FileText, ChevronRight } from 'lucide-react';
+import { EmailInput } from '@/components/ui/EmailInput';
 
 interface EmailComposeModalProps {
   isOpen: boolean;
@@ -198,27 +199,23 @@ export function EmailComposeModal({
           {/* Form */}
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 p-4 space-y-3 bg-gray-50/10">
             {/* Para (To) */}
-            <div className="flex items-center border-b border-gray-150/70 pb-2">
-              <span className="text-xs font-medium text-gray-400 w-12">Para:</span>
-              <input 
-                type="text" 
-                value={to}
-                onChange={e => setTo(e.target.value)}
-                required
-                placeholder="ejemplo@correo.com, otro@correo.com"
-                className="flex-1 bg-transparent outline-none text-xs text-gray-700 placeholder-gray-400"
+            <div className="pb-1">
+              <EmailInput 
+                label="Para:" 
+                placeholder="ejemplo@correo.com" 
+                emails={to.split(',').filter(Boolean).map(e => e.trim())} 
+                onChange={(emails) => setTo(emails.join(','))} 
+                required 
               />
             </div>
 
             {/* CC */}
-            <div className="flex items-center border-b border-gray-150/70 pb-2">
-              <span className="text-xs font-medium text-gray-400 w-12">CC:</span>
-              <input 
-                type="text" 
-                value={cc}
-                onChange={e => setCc(e.target.value)}
-                placeholder="copia@correo.com"
-                className="flex-1 bg-transparent outline-none text-xs text-gray-700 placeholder-gray-400"
+            <div className="pb-2">
+              <EmailInput 
+                label="CC (Con Copia):" 
+                placeholder="copia@correo.com" 
+                emails={cc.split(',').filter(Boolean).map(e => e.trim())} 
+                onChange={(emails) => setCc(emails.join(','))} 
               />
             </div>
 
