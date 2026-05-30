@@ -84,7 +84,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
     }) as any;
   }
 
-  const defaultConsiderations = "- Tiempo de entrega: de 1 a 3 días hábiles.\n- 50% anticipo, 50% al programar envío o entrega.\n- El costo puede variar si hay cambios en medidas o diseño.\n- Vigencia de cotización 7 días.";
+  const defaultConsiderations = "- Tiempo de entrega: de 4 a 5 días hábiles.\n- Formato de diseño: Se solicita que el cliente proporcione los diseños en formato vectorial (AI, CDR, SVG, PDF), o en alta resolución (JPG, PNG) si no es vectorial, para garantizar la calidad del grabado, corte e impresión.\n- 50% anticipo, 50% al programar envío o entrega.\n- El costo puede variar si hay cambios en medidas o diseño.\n- No incluye gastos de envío.\n- Vigencia de cotización 7 días.";
 
   const isCancelled = quote.status === "CANCELLED" || quote.status === "REJECTED";
   const effectiveRealUtility = isCancelled ? 0 : (quote.realUtilityTotal || 0);

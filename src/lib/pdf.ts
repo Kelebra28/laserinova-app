@@ -192,7 +192,7 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
     doc.setTextColor(0);
 
     const rawConsiderations = quote.visibleConsiderations ||
-      "- Tiempo de entrega: de 1 a 3 días hábiles.\n- 50% anticipo, 50% al programar envío o entrega.\n- El costo puede variar si hay cambios en medidas o diseño.\n- Vigencia de cotización 7 días.";
+      "- Tiempo de entrega: de 4 a 5 días hábiles.\n- Formato de diseño: Se solicita que el cliente proporcione los diseños en formato vectorial (AI, CDR, SVG, PDF), o en alta resolución (JPG, PNG) si no es vectorial, para garantizar la calidad del grabado, corte e impresión.\n- 50% anticipo, 50% al programar envío o entrega.\n- El costo puede variar si hay cambios en medidas o diseño.\n- No incluye gastos de envío.\n- Vigencia de cotización 7 días.";
 
     const considerationsLines = [
       "- Consideraciones:",
@@ -256,13 +256,15 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
         currentTextY = 40;
       }
 
+      const drawImageNote = (y: number) => {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text("* Imágenes de referencia con fines ilustrativos", 68, y);
+        doc.setTextColor(0);
+      };
 
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
-      doc.text("* Imágenes de referencia con fines ilustrativos", 68, currentTextY);
-
-      doc.setTextColor(0); // Restaurar color
+      drawImageNote(currentTextY);
       currentTextY += 5;
 
       const columns = 4;
@@ -320,6 +322,9 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
               currentTextY = 40;
               currentCol = 0;
               maxRowH = 0;
+              
+              drawImageNote(currentTextY);
+              currentTextY += 5;
             }
 
             const pngBuffer = await sharp(imageBuffer)
