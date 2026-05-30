@@ -29,6 +29,7 @@ export function SendQuoteMailModal({
 }: SendQuoteMailModalProps) {
   const router = useRouter();
   const [toEmail, setToEmail] = useState(clientEmail);
+  const [ccEmail, setCcEmail] = useState('');
   const [message, setMessage] = useState('');
   const [saveToClient, setSaveToClient] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -41,6 +42,7 @@ export function SendQuoteMailModal({
       const defaultText = `Estimado/a ${clientName},\n\nEs un gusto saludarle de parte de Laser Inova.\n\nEn respuesta a su solicitud, le adjuntamos la cotización formal de su proyecto: "${project}" (Folio: ${folio}).\n\nPor favor revise el archivo PDF adjunto para el desglose detallado de conceptos, precios y condiciones comerciales.\n\nQuedamos a sus enteras órdenes para cualquier duda técnica o comercial.\n\nAtentamente,\n${userName}\nLaser Inova`;
       setMessage(defaultText);
       setToEmail(clientEmail);
+      setCcEmail('');
       setSaveToClient(false);
       setIsSuccess(false);
       setErrorMessage('');
@@ -64,11 +66,13 @@ export function SendQuoteMailModal({
         },
         body: JSON.stringify({
           toEmail,
+          ccEmail,
           message,
           saveToClient,
           sigName: typeof window !== 'undefined' ? localStorage.getItem('sig_name') : '',
           sigTitle: typeof window !== 'undefined' ? localStorage.getItem('sig_title') : '',
           sigPhone: typeof window !== 'undefined' ? localStorage.getItem('sig_phone') : '',
+          sigEmail: typeof window !== 'undefined' ? localStorage.getItem('sig_email') : '',
           sigWeb: typeof window !== 'undefined' ? localStorage.getItem('sig_web') : ''
         }),
       });
@@ -91,7 +95,7 @@ export function SendQuoteMailModal({
     }
   };
 
-  const showSaveCheckbox = hasClientId && (!clientEmail || clientEmail.trim().toLowerCase() !== toEmail.trim().toLowerCase());
+  const showSaveCheckbox = hasClientId && (!clientEmail || clientEmail.trim().toLowerCase() !== toEmail.split(',')[0].trim().toLowerCase());
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -134,12 +138,24 @@ export function SendQuoteMailModal({
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Correo del Destinatario (Para)</label>
               <input 
-                type="email"
+                type="text"
                 required
                 value={toEmail}
                 onChange={e => setToEmail(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-red-500 focus:bg-white px-3.5 py-2.5 rounded-xl text-xs text-slate-800 font-semibold outline-none transition-all"
-                placeholder="cliente@correo.com"
+                placeholder="cliente@correo.com, otro@correo.com"
+              />
+            </div>
+
+            {/* CC Email */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">CC (Con Copia)</label>
+              <input 
+                type="text"
+                value={ccEmail}
+                onChange={e => setCcEmail(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-red-500 focus:bg-white px-3.5 py-2.5 rounded-xl text-xs text-slate-800 font-semibold outline-none transition-all"
+                placeholder="copia1@correo.com, copia2@correo.com"
               />
             </div>
 

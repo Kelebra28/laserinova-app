@@ -3,11 +3,12 @@ import { useState } from 'react';
 export function useEmailActions() {
   const [isSending, setIsSending] = useState(false);
 
-  const sendEmail = async (to: string, subject: string, text: string, attachments: File[]) => {
+  const sendEmail = async (to: string, cc: string, subject: string, text: string, attachments: File[]) => {
     setIsSending(true);
     try {
       const formData = new FormData();
       formData.append('to', to);
+      formData.append('cc', cc);
       formData.append('subject', subject);
       formData.append('text', text);
       
@@ -16,6 +17,7 @@ export function useEmailActions() {
         formData.append('sigName', localStorage.getItem('sig_name') || 'Ricardo Basurto');
         formData.append('sigTitle', localStorage.getItem('sig_title') || 'Director General');
         formData.append('sigPhone', localStorage.getItem('sig_phone') || '+52 1 55 1234 5678');
+        formData.append('sigEmail', localStorage.getItem('sig_email') || 'info@laserinova.com');
         formData.append('sigWeb', localStorage.getItem('sig_web') || 'www.laserinova.com');
       }
 

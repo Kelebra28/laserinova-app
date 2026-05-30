@@ -21,7 +21,7 @@ export async function POST(
   }
 
   const quoteId = params.id;
-  const { toEmail, message, saveToClient, sigName, sigTitle, sigPhone, sigWeb } = await request.json();
+  const { toEmail, ccEmail, message, saveToClient, sigName, sigTitle, sigPhone, sigWeb, sigEmail } = await request.json();
 
   const quote = await prisma.quote.findUnique({
     where: { id: quoteId },
@@ -65,9 +65,11 @@ export async function POST(
 
     // Save manual email to client profile if checked
     if (saveToClient && quote.clientId && toEmail) {
+      // Usar solo el primer email si hay varios para guardar en el cliente
+      const primaryEmail = toEmail.split(',')[0].trim();
       await prisma.client.update({
         where: { id: quote.clientId },
-        data: { email: toEmail }
+        data: { email: primaryEmail }
       });
     }
 
@@ -105,6 +107,7 @@ export async function POST(
     const signatureTitle = sigTitle || 'Director General';
     const signaturePhone = sigPhone || '+52 1 55 1234 5678';
     const signatureWeb = sigWeb || 'www.laserinova.com';
+    const signatureEmail = sigEmail || smtpUser;
     const cleanPhone = signaturePhone.replace(/\D/g, '');
 
     // Attach signature image inline
@@ -145,7 +148,7 @@ export async function POST(
             </div>
             <div style="margin-bottom: 4px;">
               <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">Email:</span> 
-              <a href="mailto:${smtpUser}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${smtpUser}</a>
+              <a href="mailto:${signatureEmail}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${signatureEmail}</a>
             </div>
             <div>
               <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">Web:</span> 
@@ -165,6 +168,7 @@ export async function POST(
       info = await transporter.sendMail({
         from: smtpFrom,
         to: toEmail || quote.client?.email || "",
+        cc: ccEmail || "",
         subject,
         text: bodyText,
         html: bodyHtml,

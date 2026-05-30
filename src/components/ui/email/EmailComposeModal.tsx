@@ -4,7 +4,7 @@ import { X, Send, Paperclip, Loader2, Trash2, Sparkles, FileText, ChevronRight }
 interface EmailComposeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSend: (to: string, subject: string, text: string, files: File[]) => Promise<boolean>;
+  onSend: (to: string, cc: string, subject: string, text: string, files: File[]) => Promise<boolean>;
   isSending: boolean;
   initialTo?: string;
   initialSubject?: string;
@@ -21,6 +21,7 @@ export function EmailComposeModal({
   initialText = ''
 }: EmailComposeModalProps) {
   const [to, setTo] = useState(initialTo);
+  const [cc, setCc] = useState('');
   const [subject, setSubject] = useState(initialSubject);
   const [text, setText] = useState(initialText);
   const [files, setFiles] = useState<File[]>([]);
@@ -31,6 +32,7 @@ export function EmailComposeModal({
   useEffect(() => {
     if (isOpen) {
       setTo(initialTo);
+      setCc('');
       setSubject(initialSubject);
       setText(initialText);
     }
@@ -100,9 +102,10 @@ export function EmailComposeModal({
     e.preventDefault();
     if (!to || !subject || !text) return;
     
-    const success = await onSend(to, subject, text, files);
+    const success = await onSend(to, cc, subject, text, files);
     if (success) {
       setTo('');
+      setCc('');
       setSubject('');
       setText('');
       setFiles([]);
@@ -198,11 +201,23 @@ export function EmailComposeModal({
             <div className="flex items-center border-b border-gray-150/70 pb-2">
               <span className="text-xs font-medium text-gray-400 w-12">Para:</span>
               <input 
-                type="email" 
+                type="text" 
                 value={to}
                 onChange={e => setTo(e.target.value)}
                 required
-                placeholder="ejemplo@correo.com"
+                placeholder="ejemplo@correo.com, otro@correo.com"
+                className="flex-1 bg-transparent outline-none text-xs text-gray-700 placeholder-gray-400"
+              />
+            </div>
+
+            {/* CC */}
+            <div className="flex items-center border-b border-gray-150/70 pb-2">
+              <span className="text-xs font-medium text-gray-400 w-12">CC:</span>
+              <input 
+                type="text" 
+                value={cc}
+                onChange={e => setCc(e.target.value)}
+                placeholder="copia@correo.com"
                 className="flex-1 bg-transparent outline-none text-xs text-gray-700 placeholder-gray-400"
               />
             </div>

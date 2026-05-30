@@ -58,6 +58,7 @@ export function EmailInboxView({
   const [sigName, setSigName] = useState(userName || 'Ricardo Basurto');
   const [sigTitle, setSigTitle] = useState('Director General');
   const [sigPhone, setSigPhone] = useState('+52 1 55 1234 5678');
+  const [sigEmail, setSigEmail] = useState(userEmail || 'info@laserinova.com');
   const [sigWeb, setSigWeb] = useState('www.laserinova.com');
   const [isSigSaved, setIsSigSaved] = useState(false);
 
@@ -68,6 +69,7 @@ export function EmailInboxView({
       setSigName(localStorage.getItem(getStorageKey('sig_name')) || userName || 'Ricardo Basurto');
       setSigTitle(localStorage.getItem(getStorageKey('sig_title')) || 'Director General');
       setSigPhone(localStorage.getItem(getStorageKey('sig_phone')) || '+52 1 55 1234 5678');
+      setSigEmail(localStorage.getItem(getStorageKey('sig_email')) || userEmail || 'info@laserinova.com');
       setSigWeb(localStorage.getItem(getStorageKey('sig_web')) || 'www.laserinova.com');
     }
   }, [currentFolder, userEmail, userName]);
@@ -76,6 +78,7 @@ export function EmailInboxView({
     localStorage.setItem(getStorageKey('sig_name'), sigName);
     localStorage.setItem(getStorageKey('sig_title'), sigTitle);
     localStorage.setItem(getStorageKey('sig_phone'), sigPhone);
+    localStorage.setItem(getStorageKey('sig_email'), sigEmail);
     localStorage.setItem(getStorageKey('sig_web'), sigWeb);
     setIsSigSaved(true);
     setTimeout(() => setIsSigSaved(false), 3000);
@@ -343,6 +346,18 @@ export function EmailInboxView({
                   />
                 </div>
 
+                {/* Correo */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Correo Electrónico</label>
+                  <input 
+                    type="email"
+                    value={sigEmail}
+                    onChange={e => setSigEmail(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-red-500 focus:bg-white px-3.5 py-2.5 rounded-xl text-xs text-slate-800 outline-none transition-all"
+                    placeholder="tucorreo@laserinova.com"
+                  />
+                </div>
+
                 {/* Web */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Sitio Web</label>
@@ -416,7 +431,7 @@ export function EmailInboxView({
                               </div>
                               <div style={{ marginBottom: '4px' }}>
                                 <span style={{ fontWeight: 'bold', color: '#ef4444', fontSize: '11px', textTransform: 'uppercase' }}>Email:</span>&nbsp;
-                                <span style={{ color: '#1e293b', fontWeight: '500' }}>{userEmail || 'ricardob@laserinova.com'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '500' }}>{sigEmail}</span>
                               </div>
                               <div>
                                 <span style={{ fontWeight: 'bold', color: '#ef4444', fontSize: '11px', textTransform: 'uppercase' }}>Web:</span>&nbsp;

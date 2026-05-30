@@ -47,6 +47,7 @@ export async function POST(req: Request) {
 
     const data = await req.formData();
     const to = data.get('to') as string;
+    const cc = data.get('cc') as string;
     const subject = data.get('subject') as string;
     const text = data.get('text') as string;
 
@@ -54,6 +55,7 @@ export async function POST(req: Request) {
     const sigName = data.get('sigName') as string || 'Ricardo Basurto';
     const sigTitle = data.get('sigTitle') as string || 'Director General';
     const sigPhone = data.get('sigPhone') as string || '+52 1 55 1234 5678';
+    const sigEmail = data.get('sigEmail') as string || smtpUser;
     const sigWeb = data.get('sigWeb') as string || 'www.laserinova.com';
 
     const transporter = nodemailer.createTransport({
@@ -118,7 +120,7 @@ export async function POST(req: Request) {
             </div>
             <div style="margin-bottom: 4px;">
               <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">Email:</span> 
-              <a href="mailto:${smtpUser}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${smtpUser}</a>
+              <a href="mailto:${sigEmail}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${sigEmail}</a>
             </div>
             <div>
               <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">Web:</span> 
@@ -139,6 +141,7 @@ export async function POST(req: Request) {
         const info = await transporter.sendMail({
           from: smtpFrom,
           to,
+          cc,
           subject,
           text,
           html: htmlBody,
