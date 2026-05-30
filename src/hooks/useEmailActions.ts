@@ -1,7 +1,12 @@
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 
 export function useEmailActions() {
   const [isSending, setIsSending] = useState(false);
+  const { data: session } = useSession();
+  const userEmail = session?.user?.email;
+
+  const getStorageKey = (key: string) => `${key}${userEmail ? `_${userEmail}` : ''}`;
 
   const sendEmail = async (to: string, cc: string, subject: string, text: string, attachments: File[]) => {
     setIsSending(true);
@@ -12,13 +17,19 @@ export function useEmailActions() {
       formData.append('subject', subject);
       formData.append('text', text);
       
-      // Append signature fields dynamically from localStorage
+      // Append signature fields dynamically from localStorage using user-specific keys
       if (typeof window !== 'undefined') {
-        formData.append('sigName', localStorage.getItem('sig_name') || 'Ricardo Basurto');
-        formData.append('sigTitle', localStorage.getItem('sig_title') || 'Director General');
-        formData.append('sigPhone', localStorage.getItem('sig_phone') || '+52 1 55 1234 5678');
-        formData.append('sigEmail', localStorage.getItem('sig_email') || 'info@laserinova.com');
-        formData.append('sigWeb', localStorage.getItem('sig_web') || 'www.laserinova.com');
+        const nameKey = getStorageKey('sig_name');
+        const titleKey = getStorageKey('sig_title');
+        const phoneKey = getStorageKey('sig_phone');
+        const emailKey = getStorageKey('sig_email');
+        const webKey = getStorageKey('sig_web');
+
+        formData.append('sigName', localStorage.getItem(nameKey) || localStorage.getItem('sig_name') || 'Ricardo Basurto');
+        formData.append('sigTitle', localStorage.getItem(titleKey) || localStorage.getItem('sig_title') || 'Director General');
+        formData.append('sigPhone', localStorage.getItem(phoneKey) || localStorage.getItem('sig_phone') || '+52 1 55 1234 5678');
+        formData.append('sigEmail', localStorage.getItem(emailKey) || localStorage.getItem('sig_email') || 'info@laserinova.com');
+        formData.append('sigWeb', localStorage.getItem(webKey) || localStorage.getItem('sig_web') || 'www.laserinova.com');
       }
 
       attachments.forEach(file => {
