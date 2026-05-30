@@ -35,15 +35,19 @@ export async function POST(req: Request) {
       }
     }
 
-    // Fallback to global env
+    // Fallback to global env ONLY if the user is the main admin (email matches SMTP_USER)
     if (!smtpPass) {
+      if (dbUser?.email && dbUser.email !== process.env.SMTP_USER) {
+        return NextResponse.json(
+          { success: false, error: 'No has configurado tu contraseña de correo. Por favor, ve a Configuración de Perfil y establécela para poder enviar correos.' },
+          { status: 400 }
+        );
+      }
       smtpUser = process.env.SMTP_USER || '';
       smtpPass = process.env.SMTP_PASS || '';
       smtpHost = process.env.SMTP_HOST || 'smtp.hostinger.com';
       smtpPort = parseInt(process.env.SMTP_PORT || '465', 10);
     }
-
-    const smtpFrom = `"Laser Inova - Ricardo Basurto" <${smtpUser}>`;
 
     const data = await req.formData();
     const to = data.get('to') as string;
@@ -51,12 +55,14 @@ export async function POST(req: Request) {
     const subject = data.get('subject') as string;
     const text = data.get('text') as string;
 
-    // Read customized signature inputs from frontend request
+    // Read customized signature inputs from frontend request BEFORE creating smtpFrom
     const sigName = data.get('sigName') as string || 'Ricardo Basurto';
     const sigTitle = data.get('sigTitle') as string || 'Director General';
     const sigPhone = data.get('sigPhone') as string || '+52 1 55 1234 5678';
     const sigEmail = data.get('sigEmail') as string || smtpUser;
     const sigWeb = data.get('sigWeb') as string || 'www.laserinova.com';
+
+    const smtpFrom = `"${sigName}" <${smtpUser}>`;
 
     const transporter = nodemailer.createTransport({
       host: smtpHost,
@@ -149,7 +155,8 @@ export async function POST(req: Request) {
         });
         messageId = info.messageId || messageId;
       } catch (smtpError: any) {
-        console.warn("SMTP send failed, falling back to local simulation.", smtpError.message);
+        console.error("SMTP send failed:", smtpError.message);
+        throw new Error("SMTP: " + smtpError.message); // Force throw so frontend sees the error
       }
     } else {
       console.log("Mock Mode: Simulating SMTP email sending to:", to);

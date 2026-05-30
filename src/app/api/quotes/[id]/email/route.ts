@@ -55,8 +55,11 @@ export async function POST(
       }
     }
 
-    // Fallback to global env
+    // Fallback to global env ONLY if user is admin
     if (!smtpPass) {
+      if (dbUser?.email && dbUser.email !== process.env.SMTP_USER) {
+        return new NextResponse('No has configurado tu contraseña de correo en tu perfil. Ve a Configuración para establecerla.', { status: 400 });
+      }
       smtpUser = process.env.SMTP_USER || '';
       smtpPass = process.env.SMTP_PASS || '';
       smtpHost = process.env.SMTP_HOST || 'smtp.hostinger.com';
@@ -73,8 +76,7 @@ export async function POST(
       });
     }
 
-    const senderDisplayName = `Laser Inova - ${dbUser?.name || 'Ricardo Basurto'}`;
-    const smtpFrom = `"${senderDisplayName}" <${smtpUser}>`;
+
 
     // Generate PDF buffer
     const pdfBuffer = await generateQuotePDF(quote);
@@ -104,6 +106,7 @@ export async function POST(
 
     // Signature logic
     const signatureName = sigName || dbUser?.name || 'Ricardo Basurto';
+    const smtpFrom = `"${signatureName}" <${smtpUser}>`;
     const signatureTitle = sigTitle || 'Director General';
     const signaturePhone = sigPhone || '+52 1 55 1234 5678';
     const signatureWeb = sigWeb || 'www.laserinova.com';

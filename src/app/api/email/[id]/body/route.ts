@@ -97,38 +97,44 @@ export async function GET(
 
     await client.connect();
 
-    // Map CRM folder to IMAP folder names
-    const imapFolder = email.folder === 'SENT' ? 'INBOX.Sent' : 'INBOX';
-    const lock = await client.getMailboxLock(imapFolder);
-    let html = '';
-    let text = '';
-
     try {
-      // Search for the message by messageId
-      const searchCriteria = { header: { 'message-id': email.messageId } };
-      const messageIds = await client.search(searchCriteria);
+      // Map CRM folder to IMAP folder names
+      const imapFolder = email.folder === 'SENT' ? 'INBOX.Sent' : 'INBOX';
+      
+      try {
+        const lock = await client.getMailboxLock(imapFolder);
+        try {
+          // Search for the message by messageId
+          const searchCriteria = { header: { 'message-id': email.messageId } };
+          const messageIds = await client.search(searchCriteria);
 
-      if (messageIds && messageIds.length > 0) {
-        const fetchResult = await client.fetchOne(messageIds[0], { source: true });
-        if (fetchResult && fetchResult.source) {
-          const parsed = await simpleParser(fetchResult.source);
-          html = parsed.html || `<p>${parsed.text?.replace(/\n/g, '<br>') || ''}</p>`;
-          text = parsed.text || '';
+          if (messageIds && messageIds.length > 0) {
+            const fetchResult = await client.fetchOne(messageIds[0], { source: true });
+            if (fetchResult && fetchResult.source) {
+              const parsed = await simpleParser(fetchResult.source);
+              html = parsed.html || `<p>${parsed.text?.replace(/\n/g, '<br>') || ''}</p>`;
+              text = parsed.text || '';
 
-          // Save back to disk asynchronously (silently ignoring storage errors on serverless Vercel)
-          try {
-            const savedPath = saveEmailToDisk(email.messageId, html, text);
-            await prisma.email.update({
-              where: { id: email.id },
-              data: { storagePath: savedPath }
-            });
-          } catch (writeErr) {
-            console.warn('Could not persist fetched email body to server disk (normal on serverless Vercel):', writeErr);
+              // Save back to disk asynchronously (silently ignoring storage errors on serverless Vercel)
+              try {
+                const savedPath = saveEmailToDisk(email.messageId, html, text);
+                await prisma.email.update({
+                  where: { id: email.id },
+                  data: { storagePath: savedPath }
+                });
+              } catch (writeErr) {
+                console.warn('Could not persist fetched email body to server disk (normal on serverless Vercel):', writeErr);
+              }
+            }
           }
+        } finally {
+          lock.release();
         }
+      } catch (imapErr: any) {
+        console.warn('IMAP Search/Fetch failed for folder', imapFolder, ':', imapErr.message);
       }
-    } finally {
-      lock.release();
+    } catch (err: any) {
+      console.warn('IMAP connection or lock failed:', err.message);
     }
 
     await client.logout();

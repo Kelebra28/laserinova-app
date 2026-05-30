@@ -52,6 +52,18 @@ export function EmailConfigForm({ incomingServer, outgoingServer }: EmailConfigF
         </div>
       )}
 
+      <div className="bg-red-50/50 border border-red-100 rounded-2xl p-4 mb-4">
+        <div className="flex gap-3">
+          <Mail className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold text-red-800">Vincula tu Correo Profesional</h4>
+            <p className="text-[11px] text-red-600/90 font-medium leading-relaxed">
+              Para poder enviar correos y cotizaciones directamente desde tu propia dirección (en lugar del administrador), necesitas autorizar la conexión con tu contraseña de Hostinger.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-2">
         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">
           Servidor Entrante (IMAP)
@@ -77,17 +89,18 @@ export function EmailConfigForm({ incomingServer, outgoingServer }: EmailConfigF
       </div>
 
       <div className="space-y-2">
-        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">
-          Contraseña de Correo (Hostinger)
+        <label className="flex items-center justify-between">
+          <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Contraseña de tu Correo</span>
+          <span className="text-[9px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-full uppercase tracking-wider">Requerido para enviar</span>
         </label>
         <input
           type="password"
           name="emailPassword"
-          placeholder="••••••••••••"
-          className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-sm text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition-all font-medium"
+          placeholder="Tu contraseña de Hostinger..."
+          className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-sm text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition-all font-medium placeholder-gray-300"
         />
-        <p className="text-[10px] text-gray-400 font-medium">
-          Tu correo de Hostinger debe ser el mismo de tu perfil. Se guardará de forma encriptada.
+        <p className="text-[10px] text-gray-400 font-medium mt-1">
+          Nota: El correo base debe ser el mismo configurado en tu perfil. Esta contraseña se guarda con encriptación de nivel bancario y no es visible para nadie.
         </p>
       </div>
 
