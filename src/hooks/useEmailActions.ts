@@ -41,14 +41,17 @@ export function useEmailActions() {
         body: formData,
       });
 
-      if (!res.ok) throw new Error('Error enviando correo');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.error || 'Error enviando correo');
+      }
       
       setIsSending(false);
-      return true;
-    } catch (error) {
+      return { success: true };
+    } catch (error: any) {
       console.error(error);
       setIsSending(false);
-      return false;
+      return { success: false, error: error.message };
     }
   };
 

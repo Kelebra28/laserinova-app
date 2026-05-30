@@ -5,7 +5,7 @@ import { EmailInput } from '@/components/ui/EmailInput';
 interface EmailComposeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSend: (to: string, cc: string, subject: string, text: string, files: File[]) => Promise<boolean>;
+  onSend: (to: string, cc: string, subject: string, text: string, files: File[]) => Promise<{ success: boolean; error?: string }>;
   isSending: boolean;
   initialTo?: string;
   initialSubject?: string;
@@ -28,6 +28,7 @@ export function EmailComposeModal({
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   // Synchronize state when initial values are supplied or modal opens
   useEffect(() => {
@@ -36,6 +37,7 @@ export function EmailComposeModal({
       setCc('');
       setSubject(initialSubject);
       setText(initialText);
+      setErrorMsg('');
     }
   }, [isOpen, initialTo, initialSubject, initialText]);
 
@@ -103,14 +105,17 @@ export function EmailComposeModal({
     e.preventDefault();
     if (!to || !subject || !text) return;
     
-    const success = await onSend(to, cc, subject, text, files);
-    if (success) {
+    setErrorMsg('');
+    const result = await onSend(to, cc, subject, text, files);
+    if (result.success) {
       setTo('');
       setCc('');
       setSubject('');
       setText('');
       setFiles([]);
       onClose();
+    } else {
+      setErrorMsg(result.error || 'Ocurrió un error inesperado al enviar el correo.');
     }
   };
 
@@ -197,7 +202,15 @@ export function EmailComposeModal({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="flex flex-col flex-1 p-4 space-y-3 bg-gray-50/10">
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 p-4 space-y-3 bg-gray-50/10 relative">
+            
+            {/* Error Banner */}
+            {errorMsg && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-lg text-xs font-semibold mb-2 animate-in fade-in slide-in-from-top-1 flex items-start gap-2">
+                <span className="mt-0.5 block flex-shrink-0">⚠️</span>
+                <span>{errorMsg}</span>
+              </div>
+            )}
             {/* Para (To) */}
             <div className="pb-1">
               <EmailInput 
