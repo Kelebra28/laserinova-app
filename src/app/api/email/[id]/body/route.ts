@@ -97,6 +97,9 @@ export async function GET(
 
     await client.connect();
 
+    let html = '';
+    let text = '';
+
     try {
       // Map CRM folder to IMAP folder names
       const imapFolder = email.folder === 'SENT' ? 'INBOX.Sent' : 'INBOX';
