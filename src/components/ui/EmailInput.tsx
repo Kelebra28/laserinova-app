@@ -29,9 +29,6 @@ export function EmailInput({ label, placeholder, emails, onChange, required = fa
     if (trimmed && isValidEmail(trimmed) && !emails.includes(trimmed)) {
       onChange([...emails, trimmed]);
       setInputValue('');
-    } else if (trimmed && !isValidEmail(trimmed)) {
-      // You could add some visual feedback here for invalid emails
-      setInputValue('');
     }
   };
 
