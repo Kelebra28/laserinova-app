@@ -55,26 +55,28 @@ export function EmailInboxView({
   }, []);
 
   // Signature States
-  const [sigName, setSigName] = useState('Ricardo Basurto');
+  const [sigName, setSigName] = useState(userName || 'Ricardo Basurto');
   const [sigTitle, setSigTitle] = useState('Director General');
   const [sigPhone, setSigPhone] = useState('+52 1 55 1234 5678');
   const [sigWeb, setSigWeb] = useState('www.laserinova.com');
   const [isSigSaved, setIsSigSaved] = useState(false);
 
+  const getStorageKey = (key: string) => `${key}${userEmail ? `_${userEmail}` : ''}`;
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setSigName(localStorage.getItem('sig_name') || 'Ricardo Basurto');
-      setSigTitle(localStorage.getItem('sig_title') || 'Director General');
-      setSigPhone(localStorage.getItem('sig_phone') || '+52 1 55 1234 5678');
-      setSigWeb(localStorage.getItem('sig_web') || 'www.laserinova.com');
+      setSigName(localStorage.getItem(getStorageKey('sig_name')) || userName || 'Ricardo Basurto');
+      setSigTitle(localStorage.getItem(getStorageKey('sig_title')) || 'Director General');
+      setSigPhone(localStorage.getItem(getStorageKey('sig_phone')) || '+52 1 55 1234 5678');
+      setSigWeb(localStorage.getItem(getStorageKey('sig_web')) || 'www.laserinova.com');
     }
-  }, [currentFolder]);
+  }, [currentFolder, userEmail, userName]);
 
   const handleSaveSignature = () => {
-    localStorage.setItem('sig_name', sigName);
-    localStorage.setItem('sig_title', sigTitle);
-    localStorage.setItem('sig_phone', sigPhone);
-    localStorage.setItem('sig_web', sigWeb);
+    localStorage.setItem(getStorageKey('sig_name'), sigName);
+    localStorage.setItem(getStorageKey('sig_title'), sigTitle);
+    localStorage.setItem(getStorageKey('sig_phone'), sigPhone);
+    localStorage.setItem(getStorageKey('sig_web'), sigWeb);
     setIsSigSaved(true);
     setTimeout(() => setIsSigSaved(false), 3000);
   };

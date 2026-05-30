@@ -66,7 +66,13 @@ export default function TransactionTable({ transactions, quotes = [], clients = 
         t.provider?.toLowerCase().includes(search.toLowerCase()) ||
         t.quote?.folio.toLowerCase().includes(search.toLowerCase()) ||
         t.client?.name.toLowerCase().includes(search.toLowerCase());
-      const matchType = filterType === "all" || t.type === filterType;
+      
+      const matchType = 
+        filterType === "all" ? true :
+        filterType === "ALL_INCOME" ? INCOME_TYPES.includes(t.type) :
+        filterType === "ALL_EXPENSE" ? (!INCOME_TYPES.includes(t.type) && t.type !== "AJUSTE") :
+        t.type === filterType;
+
       const matchCategory = filterCategory === "all" || t.category === filterCategory;
       return matchSearch && matchType && matchCategory;
     });
@@ -139,6 +145,9 @@ export default function TransactionTable({ transactions, quotes = [], clients = 
             className="text-[10px] font-black uppercase tracking-wide py-3 px-4 bg-white border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-gray-900 shadow-sm appearance-none cursor-pointer min-w-[160px]"
           >
             <option value="all">Todos los tipos</option>
+            <option value="ALL_INCOME">Solo Ingresos (Verdes)</option>
+            <option value="ALL_EXPENSE">Solo Gastos (Rojos)</option>
+            <option disabled>──────────</option>
             <option value="GASTO_OPERATIVO">Gasto Operativo</option>
             <option value="GASTO_PROYECTO">Gasto Proyecto</option>
             <option value="INGRESO">Ingreso</option>
@@ -168,9 +177,9 @@ export default function TransactionTable({ transactions, quotes = [], clients = 
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[600px] custom-scrollbar">
             <table className="min-w-full">
-              <thead>
+              <thead className="sticky top-0 bg-white z-10 shadow-sm">
                 <tr className="border-b border-gray-50">
                   <th className="px-5 py-4 text-left text-[9px] font-black text-gray-400 uppercase tracking-[0.15em]">Fecha</th>
                   <th className="px-5 py-4 text-left text-[9px] font-black text-gray-400 uppercase tracking-[0.15em]">Tipo</th>
