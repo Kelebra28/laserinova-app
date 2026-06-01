@@ -45,7 +45,7 @@ export default async function FinancePage({
   const paidQuotesThisMonth = await prisma.quote.findMany({
     where: {
       active: true,
-      updatedAt: { gte: startDate, lte: endDate },
+      closeDate: { gte: startDate, lte: endDate },
       realAmountCollected: { gt: 0 },
       paymentStatus: { in: ["PARTIAL", "PAID"] }, // ← solo si hay anticipo o liquidación
     },
@@ -111,7 +111,7 @@ export default async function FinancePage({
     amount: q.realAmountCollected || 0,
     taxAmount: q.taxable ? (q.total > 0 ? (q.realAmountCollected || 0) * (q.tax / q.total) : 0) : 0,
     description: `Pago registrado: ${q.project}`,
-    date: q.updatedAt,
+    date: q.closeDate || q.updatedAt,
     status: "ACTIVO",
     isVirtual: true,
     quote: { folio: q.folio, project: q.project },

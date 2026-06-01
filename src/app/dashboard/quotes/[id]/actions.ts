@@ -51,12 +51,15 @@ export async function updateQuotePayment(formData: FormData) {
   const netCollected = realAmountCollected - taxPortion;
   const realUtilityTotal = netCollected - quote.realCostTotal;
 
+  const isPaidOrPartial = ["PARTIAL", "PAID"].includes(paymentStatus);
+
   await prisma.quote.update({
     where: { id: quoteId },
     data: { 
       realAmountCollected,
       paymentStatus,
       realUtilityTotal,
+      closeDate: isPaidOrPartial ? new Date() : null,
     },
   });
 
