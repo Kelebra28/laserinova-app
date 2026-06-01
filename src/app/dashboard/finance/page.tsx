@@ -8,14 +8,23 @@ import Link from "next/link";
 import TransactionForm from "@/components/finance/TransactionForm";
 import TransactionTable from "@/components/finance/TransactionTable";
 import PaymentBoard from "@/components/finance/PaymentBoard";
+import { HistoryFilter } from "@/components/finance/HistoryFilter";
 
 // Prevent static prerender — data is always live
 export const dynamic = 'force-dynamic';
 
-export default async function FinancePage() {
+export default async function FinancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string; year?: string }>;
+}) {
+  const resolvedParams = await searchParams;
   const now = new Date();
-  const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endDate   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  const currentMonth = resolvedParams.month ? parseInt(resolvedParams.month, 10) : now.getMonth();
+  const currentYear = resolvedParams.year ? parseInt(resolvedParams.year, 10) : now.getFullYear();
+
+  const startDate = new Date(currentYear, currentMonth, 1);
+  const endDate   = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
 
   // ── FinancialTransaction KPIs ────────────────────────────
   const transactions = await prisma.financialTransaction.findMany({
@@ -92,7 +101,7 @@ export default async function FinancePage() {
     orderBy: { name: "asc" },
   });
 
-  const monthName = now.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+  const monthName = startDate.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
 
   // ── Combined Transactions for Table ───────────────────────
   const virtualTransactions = paidQuotesThisMonth.map(q => ({
@@ -136,7 +145,8 @@ export default async function FinancePage() {
           </div>
 
           <div className="flex flex-col items-end gap-4">
-            <div className="text-right">
+            <HistoryFilter basePath="/dashboard/finance" currentMonth={currentMonth} currentYear={currentYear} variant="dark" />
+            <div className="text-right mt-2">
               <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">Utilidad Neta del Mes</p>
               <p className={`text-4xl md:text-5xl font-black ${netProfit >= 0 ? "text-white" : "text-red-500"}`}>
                 ${netProfit.toLocaleString("es-MX", { minimumFractionDigits: 2 })}

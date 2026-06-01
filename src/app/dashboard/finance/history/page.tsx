@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
 export default async function FinanceHistoryPage({
   searchParams,
 }: {
-  searchParams: { month?: string; year?: string };
+  searchParams: Promise<{ month?: string; year?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   const currentUser = session?.user as any;
@@ -28,8 +28,9 @@ export default async function FinanceHistoryPage({
   if (!isAdmin) redirect("/dashboard");
 
   const now = new Date();
-  const currentMonth = searchParams.month ? parseInt(searchParams.month, 10) : now.getMonth();
-  const currentYear = searchParams.year ? parseInt(searchParams.year, 10) : now.getFullYear();
+  const resolvedParams = await searchParams;
+  const currentMonth = resolvedParams.month ? parseInt(resolvedParams.month, 10) : now.getMonth();
+  const currentYear = resolvedParams.year ? parseInt(resolvedParams.year, 10) : now.getFullYear();
 
   const startDate = new Date(currentYear, currentMonth, 1);
   const endDate = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
