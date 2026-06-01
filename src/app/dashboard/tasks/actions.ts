@@ -87,55 +87,63 @@ export async function updateTaskAction(
     tagIds?: string[];
   }
 ) {
-  await prisma.$transaction(async (tx) => {
-    await tx.task.update({
-      where: { id: taskId },
-      data: {
-        title: data.title,
-        description: data.description,
-        priority: data.priority,
-        points: data.points,
-        dueDate: data.dueDate ? new Date(data.dueDate) : data.dueDate === null ? null : undefined,
-        blockerReason: data.blockerReason,
-        progress: data.progress,
-        tags: data.tagIds ? { set: data.tagIds.map(id => ({ id })) } : undefined,
-      },
-    });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.task.update({
+        where: { id: taskId },
+        data: {
+          title: data.title,
+          description: data.description,
+          priority: data.priority,
+          points: data.points,
+          dueDate: data.dueDate ? new Date(data.dueDate) : data.dueDate === null ? null : undefined,
+          blockerReason: data.blockerReason,
+          progress: data.progress,
+          tags: data.tagIds ? { set: data.tagIds.map(id => ({ id })) } : undefined,
+        },
+      });
 
-    if (data.assigneeIds !== undefined) {
-      await tx.taskAssignee.deleteMany({ where: { taskId } });
-      if (data.assigneeIds.length > 0) {
-        await tx.taskAssignee.createMany({
-          data: data.assigneeIds.map((userId) => ({ taskId, userId })),
+      if (data.assigneeIds !== undefined) {
+        await tx.taskAssignee.deleteMany({ where: { taskId } });
+        if (data.assigneeIds.length > 0) {
+          await tx.taskAssignee.createMany({
+            data: data.assigneeIds.map((userId) => ({ taskId, userId })),
+          });
+        }
+      }
+
+      if (data.subtasksToDelete && data.subtasksToDelete.length > 0) {
+        await tx.subTask.deleteMany({
+          where: { id: { in: data.subtasksToDelete } },
         });
       }
-    }
 
-    if (data.subtasksToDelete && data.subtasksToDelete.length > 0) {
-      await tx.subTask.deleteMany({
-        where: { id: { in: data.subtasksToDelete } },
-      });
+      if (data.subtasksToCreate && data.subtasksToCreate.length > 0) {
+        const maxOrder = await tx.subTask.aggregate({
+          _max: { order: true },
+          where: { taskId },
+        });
+        let nextOrder = (maxOrder._max.order ?? -1) + 1;
+        
+        await tx.subTask.createMany({
+          data: data.subtasksToCreate.map((title) => ({
+            taskId,
+            title,
+            done: false,
+            order: nextOrder++,
+          })),
+        });
+      }
+    }, {
+      timeout: 20000,
+    });
+  } catch (error: any) {
+    if (error?.code === "P2025" || error?.message?.includes("Record to update not found")) {
+      console.warn(`Task ${taskId} not found for updateTaskAction`);
+      return { success: false, error: "Task not found" };
     }
-
-    if (data.subtasksToCreate && data.subtasksToCreate.length > 0) {
-      const maxOrder = await tx.subTask.aggregate({
-        _max: { order: true },
-        where: { taskId },
-      });
-      let nextOrder = (maxOrder._max.order ?? -1) + 1;
-      
-      await tx.subTask.createMany({
-        data: data.subtasksToCreate.map((title) => ({
-          taskId,
-          title,
-          done: false,
-          order: nextOrder++,
-        })),
-      });
-    }
-  }, {
-    timeout: 20000,
-  });
+    throw error;
+  }
 
   revalidatePath("/dashboard/tasks");
 }
@@ -143,10 +151,18 @@ export async function updateTaskAction(
 // ─── Update progress only ────────────────────────────────────────────────────
 
 export async function updateTaskProgressAction(taskId: string, progress: number) {
-  await prisma.task.update({
-    where: { id: taskId },
-    data: { progress: Math.max(0, Math.min(100, progress)) },
-  });
+  try {
+    await prisma.task.update({
+      where: { id: taskId },
+      data: { progress: Math.max(0, Math.min(100, progress)) },
+    });
+  } catch (error: any) {
+    if (error?.code === "P2025" || error?.message?.includes("Record to update not found")) {
+      console.warn(`Task ${taskId} not found for updateTaskProgressAction`);
+      return { success: false, error: "Task not found" };
+    }
+    throw error;
+  }
   revalidatePath("/dashboard/tasks");
 }
 
@@ -157,15 +173,23 @@ export async function updateTaskStatusAction(
   newStatus: TaskStatus,
   blockerReason?: string
 ) {
-  await prisma.task.update({
-    where: { id: taskId },
-    data: {
-      status: newStatus,
-      blockerReason: newStatus === "BLOCKED" ? blockerReason ?? null : null,
-      // Auto-set progress 100 when DONE
-      progress: newStatus === "DONE" ? 100 : undefined,
-    },
-  });
+  try {
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: newStatus,
+        blockerReason: newStatus === "BLOCKED" ? blockerReason ?? null : null,
+        // Auto-set progress 100 when DONE
+        progress: newStatus === "DONE" ? 100 : undefined,
+      },
+    });
+  } catch (error: any) {
+    if (error?.code === "P2025" || error?.message?.includes("Record to update not found")) {
+      console.warn(`Task ${taskId} not found for updateTaskStatusAction`);
+      return { success: false, error: "Task not found" };
+    }
+    throw error;
+  }
 
   revalidatePath("/dashboard/tasks");
 }
@@ -178,15 +202,23 @@ export async function moveTaskAction(
   newOrder: number,
   blockerReason?: string
 ) {
-  await prisma.task.update({
-    where: { id: taskId },
-    data: {
-      status: newStatus,
-      order: newOrder,
-      blockerReason: newStatus === "BLOCKED" ? blockerReason ?? null : null,
-      progress: newStatus === "DONE" ? 100 : undefined,
-    },
-  });
+  try {
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: newStatus,
+        order: newOrder,
+        blockerReason: newStatus === "BLOCKED" ? blockerReason ?? null : null,
+        progress: newStatus === "DONE" ? 100 : undefined,
+      },
+    });
+  } catch (error: any) {
+    if (error?.code === "P2025" || error?.message?.includes("Record to update not found")) {
+      console.warn(`Task ${taskId} not found for moveTaskAction`);
+      return { success: false, error: "Task not found" };
+    }
+    throw error;
+  }
 
   revalidatePath("/dashboard/tasks");
 }
@@ -196,33 +228,55 @@ export async function moveTaskAction(
 export async function reorderTasksAction(
   items: { id: string; order: number }[]
 ) {
-  await prisma.$transaction(async (tx) => {
-    for (const item of items) {
-      await tx.task.update({
-        where: { id: item.id },
-        data: { order: item.order },
-      });
+  try {
+    await prisma.$transaction(
+      items.map((item) =>
+        prisma.task.update({
+          where: { id: item.id },
+          data: { order: item.order },
+        })
+      )
+    );
+  } catch (error: any) {
+    if (error?.code === "P2025" || error?.message?.includes("Record to update not found")) {
+      console.warn("Some tasks were not found during reorderTasksAction");
+      return { success: false, error: "Some tasks were not found" };
     }
-  }, {
-    timeout: 20000,
-  });
+    throw error;
+  }
   revalidatePath("/dashboard/tasks");
 }
 
 // ─── Delete ──────────────────────────────────────────────────────────────────
 
 export async function deleteTaskAction(taskId: string) {
-  await prisma.task.delete({ where: { id: taskId } });
+  try {
+    await prisma.task.delete({ where: { id: taskId } });
+  } catch (error: any) {
+    if (error?.code === "P2025" || error?.message?.includes("Record to delete not found")) {
+      console.warn(`Task ${taskId} not found for deleteTaskAction`);
+      return { success: false, error: "Task not found" };
+    }
+    throw error;
+  }
   revalidatePath("/dashboard/tasks");
 }
 
 // ─── Update due date (calendar drag) ──────────────────────────────────────────
 
 export async function updateTaskDueDateAction(taskId: string, newDate: string | null) {
-  await prisma.task.update({
-    where: { id: taskId },
-    data: { dueDate: newDate ? new Date(newDate) : null },
-  });
+  try {
+    await prisma.task.update({
+      where: { id: taskId },
+      data: { dueDate: newDate ? new Date(newDate) : null },
+    });
+  } catch (error: any) {
+    if (error?.code === "P2025" || error?.message?.includes("Record to update not found")) {
+      console.warn(`Task ${taskId} not found for updateTaskDueDateAction`);
+      return { success: false, error: "Task not found" };
+    }
+    throw error;
+  }
   revalidatePath("/dashboard/tasks");
   revalidatePath("/dashboard/tasks/calendar");
 }
