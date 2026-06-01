@@ -240,7 +240,7 @@ export default function ProviderDrawer({
                       <button
                         type="button"
                         onClick={() => handleRemoveContact(idx)}
-                        className="p-1 text-slate-300 hover:text-red-650 hover:bg-red-50 rounded-lg transition-colors"
+                        className="p-1 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Eliminar este contacto"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -303,7 +303,7 @@ export default function ProviderDrawer({
             type="button"
             onClick={handleSubmit}
             disabled={isSaving}
-            className="flex items-center gap-1.5 px-6 py-2.5 bg-red-600 hover:bg-red-750 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md transition-all disabled:opacity-50 active:scale-95"
+            className="flex items-center gap-1.5 px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md transition-all disabled:opacity-50 active:scale-95"
           >
             {isSaving ? (
               <>

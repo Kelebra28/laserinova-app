@@ -241,68 +241,74 @@ export default async function SettingsPage() {
     </div>
   );
 
+  const profileContent = (
+    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+        <div className="p-2 rounded-xl bg-red-50">
+          <User className="w-5 h-5 text-red-600" />
+        </div>
+        <div>
+          <h2 className="text-base font-black text-gray-800 uppercase tracking-widest">Mi Perfil</h2>
+          <p className="text-xs text-gray-400 mt-0.5 font-semibold">Tu información personal de acceso al CRM</p>
+        </div>
+      </div>
+      <div className="p-6">
+        {me ? (
+          <ProfileForm user={me} />
+        ) : (
+          <p className="text-sm text-gray-400">No se pudo cargar el perfil.</p>
+        )}
+      </div>
+    </div>
+  );
+
+  const emailContent = (
+    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+        <div className="p-2 rounded-xl bg-teal-50">
+          <Mail className="w-5 h-5 text-teal-650" />
+        </div>
+        <div>
+          <h2 className="text-base font-black text-gray-800 uppercase tracking-widest">Correo Hostinger</h2>
+          <p className="text-xs text-gray-400 mt-0.5 font-semibold">Tu cuenta personal SMTP/IMAP para enviar y recibir correos de cotizaciones</p>
+        </div>
+      </div>
+      <div className="p-6">
+        {me ? (
+          <EmailConfigForm 
+            incomingServer={me.emailIncomingServer} 
+            outgoingServer={me.emailOutgoingServer} 
+          />
+        ) : (
+          <p className="text-sm text-gray-400">No se pudo cargar el correo.</p>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-12">
+    <div className="max-w-5xl mx-auto space-y-8 pb-12">
       {/* Page header */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center shadow-md">
           <Settings2 className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight">Configuración</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Sistema, usuarios y perfil</p>
+          <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Configuración</h1>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
+            Sistema, perfiles de usuario, correos y gastos operativos
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ── LEFT COLUMN: Profile (Fixed) ───────────────────────────── */}
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 bg-gray-50/50">
-              <div className="p-2 rounded-xl bg-red-50">
-                <User className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <h2 className="text-base font-black text-gray-800 uppercase tracking-widest">Mi Perfil</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Tu información personal</p>
-              </div>
-            </div>
-            <div className="p-6">
-              {me ? (
-                <ProfileForm user={me} />
-              ) : (
-                <p className="text-sm text-gray-400">No se pudo cargar el perfil.</p>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 bg-gray-50/50">
-              <div className="p-2 rounded-xl bg-red-50">
-                <Mail className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <h2 className="text-base font-black text-gray-800 uppercase tracking-widest">Correo Hostinger</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Tu cuenta personal para el CRM</p>
-              </div>
-            </div>
-            <div className="p-6">
-              {me ? (
-                <EmailConfigForm 
-                  incomingServer={me.emailIncomingServer} 
-                  outgoingServer={me.emailOutgoingServer} 
-                />
-              ) : (
-                <p className="text-sm text-gray-400">No se pudo cargar el correo.</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ── RIGHT COLUMN: Config Tabs ─────────────────────────────── */}
-        <div className="lg:col-span-2">
-          <SettingsTabs costsContent={costsContent} usersContent={usersContent} systemContent={systemContent} />
-        </div>
+      <div className="bg-transparent">
+        <SettingsTabs 
+          profileContent={profileContent}
+          usersContent={usersContent} 
+          emailContent={emailContent}
+          systemContent={systemContent} 
+          costsContent={costsContent} 
+        />
       </div>
     </div>
   );

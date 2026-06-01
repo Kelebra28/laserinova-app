@@ -99,7 +99,7 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
-            <Building2 className="h-6.5 w-6.5 text-red-650" />
+            <Building2 className="h-6.5 w-6.5 text-red-600" />
             DIRECTORIO DE PROVEEDORES
           </h1>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
@@ -109,7 +109,7 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
 
         <button
           onClick={handleOpenCreate}
-          className="flex items-center justify-center gap-2 px-6 py-3.5 bg-red-600 hover:bg-red-750 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-lg shadow-red-600/15 hover:shadow-red-650/25 hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer self-start sm:self-auto"
+          className="flex items-center justify-center gap-2 px-6 py-3.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-lg shadow-red-600/15 hover:shadow-red-700/25 hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer self-start sm:self-auto"
         >
           <Plus className="w-4.5 h-4.5" />
           Registrar Proveedor
@@ -117,7 +117,7 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
       </div>
 
       {/* Search Input Bar */}
-      <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-150/70 flex items-center gap-3">
+      <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-250 flex items-center gap-3">
         <Search className="w-5 h-5 text-gray-400 ml-2" />
         <input
           type="text"
@@ -145,7 +145,7 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
           {!searchQuery && (
             <button
               onClick={handleOpenCreate}
-              className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all"
+              className="px-5 py-2.5 bg-red-600 hover:bg-red-750 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all"
             >
               Registrar Primer Proveedor
             </button>
@@ -156,7 +156,7 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
           {filteredProviders.map((provider) => (
             <div
               key={provider.id}
-              className="bg-white rounded-3xl border border-gray-150/80 shadow-sm hover:shadow-md hover:border-red-150/60 p-6 flex flex-col justify-between transition-all group overflow-hidden"
+              className="bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-md hover:border-red-300 p-6 flex flex-col justify-between transition-all group overflow-hidden"
             >
               <div>
                 {/* Provider Card Top Bar */}
@@ -171,9 +171,9 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
                         href={provider.website.startsWith("http") ? provider.website : `https://${provider.website}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[10px] font-bold text-red-650 hover:text-red-750 uppercase tracking-widest mt-1 hover:underline"
+                        className="inline-flex items-center gap-1.5 text-[10px] font-black text-red-600 hover:text-red-700 uppercase tracking-widest mt-1.5 hover:underline transition-colors"
                       >
-                        <Globe className="w-3 h-3" />
+                        <Globe className="w-3.5 h-3.5" />
                         Visitar Web
                       </a>
                     )}
@@ -190,7 +190,7 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
                     </button>
                     <button
                       onClick={() => handleDelete(provider.id, provider.companyName)}
-                      className="p-1.5 hover:bg-red-50 text-slate-450 hover:text-red-650 rounded-lg transition-all"
+                      className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-lg transition-all"
                       title="Eliminar proveedor"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -242,7 +242,7 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
                   {provider.contacts?.map((contact: any) => (
                     <div
                       key={contact.id}
-                      className="flex items-center justify-between p-2.5 bg-slate-50/50 hover:bg-slate-50 border border-slate-150/50 rounded-xl transition-all"
+                      className="flex items-center justify-between p-2.5 bg-slate-50/50 hover:bg-slate-50 border border-slate-200/50 rounded-xl transition-all"
                     >
                       <div className="min-w-0 pr-2">
                         <p className="text-xs font-bold text-slate-800 truncate leading-tight">
@@ -282,7 +282,7 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
                         {contact.email && (
                           <a
                             href={`mailto:${contact.email}`}
-                            className="p-2 bg-white text-slate-650 hover:text-slate-900 border border-slate-200 rounded-lg hover:shadow-sm transition-all"
+                            className="p-2 bg-white text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg hover:shadow-sm transition-all"
                             title={`Enviar correo a ${contact.email}`}
                           >
                             <Mail className="w-3.5 h-3.5" />
