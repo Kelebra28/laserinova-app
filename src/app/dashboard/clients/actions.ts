@@ -29,7 +29,7 @@ export async function createClient(formData: FormData) {
     },
   });
 
-  revalidatePath("/dashboard/clients");
+  revalidatePath("/dashboard", "layout");
   redirect("/dashboard/clients");
 }
 
@@ -59,8 +59,7 @@ export async function updateClient(id: string, formData: FormData) {
     },
   });
 
-  revalidatePath("/dashboard/clients");
-  revalidatePath(`/dashboard/clients/${id}/edit`);
+  revalidatePath("/dashboard", "layout");
   redirect("/dashboard/clients");
 }
 
@@ -84,7 +83,7 @@ export async function deleteClient(id: string) {
       });
     }
 
-    revalidatePath("/dashboard/clients");
+    revalidatePath("/dashboard", "layout");
     return { success: true };
   } catch (error) {
     console.error("Error deleting client:", error);

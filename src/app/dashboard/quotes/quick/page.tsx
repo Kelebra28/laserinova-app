@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import QuickQuoteForm from "@/components/quotes/QuickQuoteForm";
 
+export const dynamic = "force-dynamic";
+
 export default async function QuickQuotePage() {
   // Buscar el margen por defecto en la configuración
   const config = await prisma.costConfiguration.findUnique({

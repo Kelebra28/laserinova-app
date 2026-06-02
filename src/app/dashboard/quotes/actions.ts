@@ -147,7 +147,7 @@ export async function createQuoteAction(formData: FormData) {
     }
   }
 
-  revalidatePath("/dashboard/quotes");
+  revalidatePath("/dashboard", "layout");
   redirect(`/dashboard/quotes/${quote!.id}`);
 }
 
@@ -226,8 +226,7 @@ export async function updateQuoteAction(formData: FormData) {
     }
   });
 
-  revalidatePath("/dashboard/quotes");
-  revalidatePath(`/dashboard/quotes/${quoteId}`);
+  revalidatePath("/dashboard", "layout");
   redirect(`/dashboard/quotes/${quoteId}`);
 }
 
@@ -369,8 +368,7 @@ export async function saveQuickQuoteAction(mockQuote: any, saveAsClient: boolean
     }
   }
 
-  revalidatePath("/dashboard/quotes");
-  revalidatePath("/dashboard/finance");
+  revalidatePath("/dashboard", "layout");
   
   return { success: true, quoteId: quote!.id };
 }
@@ -487,7 +485,7 @@ export async function cloneQuoteAction(
     }
   }
 
-  revalidatePath("/dashboard/quotes");
+  revalidatePath("/dashboard", "layout");
   return { success: true, quoteId: newQuote.id };
 }
 
