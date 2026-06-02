@@ -16,6 +16,7 @@ interface SendQuoteMailModalProps {
   clientEmail?: string;
   hasClientId: boolean;
   userName?: string;
+  versions?: any[];
 }
 
 export function SendQuoteMailModal({
@@ -27,7 +28,8 @@ export function SendQuoteMailModal({
   clientName = "Cliente",
   clientEmail = "",
   hasClientId,
-  userName = "Asesor Comercial"
+  userName = "Asesor Comercial",
+  versions = []
 }: SendQuoteMailModalProps) {
   const router = useRouter();
   const { data: session } = useSession();
@@ -39,6 +41,9 @@ export function SendQuoteMailModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  const [attachmentMode, setAttachmentMode] = useState<"current" | "all" | "custom">("current");
+  const [selectedVersions, setSelectedVersions] = useState<Record<string, boolean>>({});
 
   const getSignatureField = (key: string, defaultValue: string) => {
     if (typeof window === 'undefined') return defaultValue;
@@ -65,14 +70,46 @@ export function SendQuoteMailModal({
       setSaveToClient(false);
       setIsSuccess(false);
       setErrorMessage('');
+      
+      if (versions && versions.length > 0) {
+        const initial: Record<string, boolean> = {};
+        versions.forEach(v => {
+          initial[v.id] = v.id === quoteId;
+        });
+        setSelectedVersions(initial);
+      }
+      setAttachmentMode("current");
     }
-  }, [isOpen, clientName, project, folio, clientEmail, userName]);
+  }, [isOpen, clientName, project, folio, clientEmail, userName, versions, quoteId]);
+
+  const selectedVersionIds = React.useMemo(() => {
+    if (attachmentMode === "current") {
+      return [quoteId];
+    } else if (attachmentMode === "all") {
+      return versions.map(v => v.id);
+    } else {
+      return Object.keys(selectedVersions).filter(id => selectedVersions[id]);
+    }
+  }, [attachmentMode, quoteId, versions, selectedVersions]);
+
+  const attachedFilename = React.useMemo(() => {
+    if (selectedVersionIds.length > 1) {
+      return `Opciones_Cotizacion_${folio.split('-OP')[0]}.pdf`;
+    }
+    const matchingQuote = versions.find(v => v.id === selectedVersionIds[0]);
+    const currentFolio = matchingQuote ? matchingQuote.folio : folio;
+    return `Cotizacion_${currentFolio}.pdf`;
+  }, [selectedVersionIds, folio, versions]);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!toEmail) return;
+    if (selectedVersionIds.length === 0) {
+      setErrorMessage('Debes seleccionar al menos una opción para adjuntar al correo.');
+      return;
+    }
 
     setIsLoading(true);
     setErrorMessage('');
@@ -92,7 +129,8 @@ export function SendQuoteMailModal({
           sigTitle: getSignatureField('sig_title', 'Director General'),
           sigPhone: getSignatureField('sig_phone', '+52 1 55 1234 5678'),
           sigEmail: getSignatureField('sig_email', userEmail || 'info@laserinova.com'),
-          sigWeb: getSignatureField('sig_web', 'www.laserinova.com')
+          sigWeb: getSignatureField('sig_web', 'www.laserinova.com'),
+          selectedVersionIds
         }),
       });
 
@@ -152,7 +190,7 @@ export function SendQuoteMailModal({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="p-6 space-y-4 flex flex-col">
+          <form onSubmit={handleSubmit} className="p-6 space-y-4 flex flex-col max-h-[85vh] overflow-y-auto custom-scrollbar">
             {/* Destinatario Email */}
             <div className="pb-1">
               <EmailInput 
@@ -174,9 +212,77 @@ export function SendQuoteMailModal({
               />
             </div>
 
+            {/* Adjuntar Opciones (Sólo si hay más de 1 versión) */}
+            {versions.length > 1 && (
+              <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-100 flex-shrink-0 text-left">
+                <label className="text-[10px] font-black uppercase text-slate-450 tracking-wider block mb-1">
+                  Opciones a Adjuntar (PDF)
+                </label>
+                
+                <div className="flex flex-wrap gap-4 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 select-none">
+                    <input 
+                      type="radio" 
+                      name="attachmentMode" 
+                      value="current" 
+                      checked={attachmentMode === "current"}
+                      onChange={() => setAttachmentMode("current")}
+                      className="text-red-600 focus:ring-red-500 h-4 w-4 border-slate-350"
+                    />
+                    Opción Actual ({folio})
+                  </label>
+                  
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 select-none">
+                    <input 
+                      type="radio" 
+                      name="attachmentMode" 
+                      value="all" 
+                      checked={attachmentMode === "all"}
+                      onChange={() => setAttachmentMode("all")}
+                      className="text-red-600 focus:ring-red-500 h-4 w-4 border-slate-350"
+                    />
+                    Todas ({versions.length})
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 select-none">
+                    <input 
+                      type="radio" 
+                      name="attachmentMode" 
+                      value="custom" 
+                      checked={attachmentMode === "custom"}
+                      onChange={() => setAttachmentMode("custom")}
+                      className="text-red-600 focus:ring-red-500 h-4 w-4 border-slate-350"
+                    />
+                    Selección Personalizada...
+                  </label>
+                </div>
+
+                {attachmentMode === "custom" && (
+                  <div className="mt-3 pt-3 border-t border-slate-200/60 grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in slide-in-from-top-2 duration-200">
+                    {versions.map((v, index) => (
+                      <label key={v.id} className="flex items-center gap-2.5 px-3 py-2 bg-white rounded-xl border border-slate-200 hover:border-red-200 cursor-pointer select-none text-[11px] font-bold text-slate-800">
+                        <input 
+                          type="checkbox"
+                          checked={!!selectedVersions[v.id]}
+                          onChange={(e) => setSelectedVersions(prev => ({ ...prev, [v.id]: e.target.checked }))}
+                          className="rounded text-red-600 focus:ring-red-500 h-4 w-4 border-slate-300"
+                        />
+                        <span className="truncate flex-1">
+                          {v.versionName || `Opción ${index + 1}`} ({v.folio})
+                        </span>
+                        <span className="text-slate-400 font-mono">
+                          ${v.total.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Guardar Correo Checkbox */}
             {showSaveCheckbox && (
-              <label className="flex items-center gap-2.5 p-3.5 bg-red-50/20 border border-red-150/40 rounded-2xl cursor-pointer select-none hover:bg-red-50/40 transition-colors animate-in slide-in-from-top-2">
+              <label className="flex items-center gap-2.5 p-3.5 bg-red-50/20 border border-red-150/40 rounded-2xl cursor-pointer select-none hover:bg-red-50/40 transition-colors animate-in slide-in-from-top-2 flex-shrink-0">
                 <input 
                   type="checkbox"
                   checked={saveToClient}
@@ -191,7 +297,7 @@ export function SendQuoteMailModal({
             )}
 
             {/* Asunto (Visual pre-filled display) */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 flex-shrink-0 text-left">
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Asunto</label>
               <div className="w-full bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs text-slate-500 font-bold tracking-tight">
                 Cotización {folio} - Laser Inova
@@ -199,33 +305,37 @@ export function SendQuoteMailModal({
             </div>
 
             {/* Mensaje Textarea */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 flex-shrink-0 text-left">
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Mensaje Personalizado</label>
               <textarea 
                 required
                 value={message}
                 onChange={e => setMessage(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-red-500 focus:bg-white px-3.5 py-2.5 rounded-xl text-xs text-slate-700 font-medium outline-none transition-all resize-none h-[220px] leading-relaxed"
+                className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-red-500 focus:bg-white px-3.5 py-2.5 rounded-xl text-xs text-slate-700 font-medium outline-none transition-all resize-none h-[180px] leading-relaxed"
                 placeholder="Escribe el mensaje del correo..."
               />
             </div>
 
             {/* Attached PDF Indicator */}
-            <div className="flex items-center justify-between p-3.5 bg-slate-50/60 border border-slate-150/70 rounded-2xl flex-shrink-0">
+            <div className="flex items-center justify-between p-3.5 bg-slate-50/60 border border-slate-150/70 rounded-2xl flex-shrink-0 text-left">
               <div className="flex items-center gap-2 min-w-0">
                 <div className="p-2 bg-red-100 text-red-600 rounded-xl">
                   <FileText className="w-4.5 h-4.5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-800 truncate">Cotizacion_{folio}.pdf</p>
-                  <p className="text-[9px] text-slate-400 mt-0.5">Archivo adjunto en formato PDF formal</p>
+                  <p className="text-xs font-bold text-slate-800 truncate">{attachedFilename}</p>
+                  <p className="text-[9px] text-slate-400 mt-0.5">
+                    {selectedVersionIds.length > 1 
+                      ? `${selectedVersionIds.length} opciones combinadas en este documento` 
+                      : 'Archivo adjunto en formato PDF formal'}
+                  </p>
                 </div>
               </div>
             </div>
 
             {/* Error Message */}
             {errorMessage && (
-              <p className="text-xs font-semibold text-red-600 text-left bg-red-50 p-3 rounded-xl border border-red-150/50">
+              <p className="text-xs font-semibold text-red-600 text-left bg-red-50 p-3 rounded-xl border border-red-150/50 flex-shrink-0">
                 {errorMessage}
               </p>
             )}

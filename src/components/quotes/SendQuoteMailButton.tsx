@@ -12,6 +12,7 @@ interface SendQuoteMailButtonProps {
   clientEmail?: string;
   hasClientId: boolean;
   userName?: string;
+  versions?: any[];
 }
 
 export function SendQuoteMailButton({
@@ -21,7 +22,8 @@ export function SendQuoteMailButton({
   clientName,
   clientEmail,
   hasClientId,
-  userName
+  userName,
+  versions = []
 }: SendQuoteMailButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -45,6 +47,7 @@ export function SendQuoteMailButton({
         clientEmail={clientEmail}
         hasClientId={hasClientId}
         userName={userName}
+        versions={versions}
       />
     </>
   );

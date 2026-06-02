@@ -7,7 +7,6 @@ import { calculateConcept, CalculationInput, GlobalCosts, MaterialData } from "@
 import { createQuoteAction } from "@/app/dashboard/quotes/actions";
 import MaterialSelector from "@/components/quotes/MaterialSelector";
 import ClientSelector from "@/components/quotes/ClientSelector";
-import CalculationAudit from "@/components/quotes/CalculationAudit";
 import ConfirmSaveModal from "@/components/ui/ConfirmSaveModal";
 import { ImageUploadUI } from "@/components/ui/ImageUploadUI";
 import { useImageUpload } from "@/hooks/useImageUpload";
@@ -641,11 +640,6 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                     </span>
                   </div>
                 </div>
-              </div>
-
-              {/* Auditoría de Fórmulas */}
-              <div className="mt-8 pt-6 border-t border-gray-800">
-                <CalculationAudit concepts={concepts} margin={margin} />
               </div>
             </div>
           </div>

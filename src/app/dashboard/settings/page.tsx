@@ -8,6 +8,7 @@ import { UsersPanel } from "@/components/settings/UsersPanel";
 import { Save, Settings2, User, Users, SlidersHorizontal, Database, HardDrive, Mail } from "lucide-react";
 import { SettingsTabs } from "@/components/settings/SettingsTabs";
 import { EmailConfigForm } from "@/components/settings/EmailConfigForm";
+import CalculationAudit from "@/components/quotes/CalculationAudit";
 import fs from "fs";
 import path from "path";
 
@@ -97,57 +98,63 @@ export default async function SettingsPage() {
   const configMap = new Map(savedConfigs.map((c) => [c.key, c.value]));
 
   const costsContent = (
-    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 bg-gray-50/50">
-        <div className="p-2 rounded-xl bg-amber-50">
-          <SlidersHorizontal className="w-5 h-5 text-amber-600" />
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+      <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+          <div className="p-2 rounded-xl bg-amber-50">
+            <SlidersHorizontal className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h2 className="text-base font-black text-gray-800 uppercase tracking-widest">Costos Operativos</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Valores base para el cálculo automático de cotizaciones</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-base font-black text-gray-800 uppercase tracking-widest">Costos Operativos</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Valores base para el cálculo automático de cotizaciones</p>
-        </div>
+
+        <form action={updateCostConfigurations} className="p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {DEFAULT_CONFIGS.map((config) => {
+              const value = configMap.has(config.key) ? configMap.get(config.key) : config.default;
+              return (
+                <div key={config.key} className="space-y-2">
+                  <label
+                    htmlFor={config.key}
+                    className="block text-[11px] font-black text-gray-400 uppercase tracking-widest"
+                  >
+                    {config.name}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      name={config.key}
+                      id={config.key}
+                      defaultValue={value}
+                      className="w-full px-4 py-3 pr-12 rounded-2xl border border-gray-200 text-sm text-gray-900 bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all font-bold"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-400 pointer-events-none uppercase">
+                      {config.unit}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
+            <button
+              type="submit"
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-black shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02] active:scale-95"
+            >
+              <Save className="w-4 h-4" />
+              Guardar configuración
+            </button>
+          </div>
+        </form>
       </div>
 
-      <form action={updateCostConfigurations} className="p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          {DEFAULT_CONFIGS.map((config) => {
-            const value = configMap.has(config.key) ? configMap.get(config.key) : config.default;
-            return (
-              <div key={config.key} className="space-y-2">
-                <label
-                  htmlFor={config.key}
-                  className="block text-[11px] font-black text-gray-400 uppercase tracking-widest"
-                >
-                  {config.name}
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.01"
-                    name={config.key}
-                    id={config.key}
-                    defaultValue={value}
-                    className="w-full px-4 py-3 pr-12 rounded-2xl border border-gray-200 text-sm text-gray-900 bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all font-bold"
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-400 pointer-events-none uppercase">
-                    {config.unit}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
-          <button
-            type="submit"
-            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-black shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02] active:scale-95"
-          >
-            <Save className="w-4 h-4" />
-            Guardar configuración
-          </button>
-        </div>
-      </form>
+      <div className="lg:col-span-1">
+        <CalculationAudit concepts={[]} margin={configMap.get("margen_default") ?? 50} />
+      </div>
     </div>
   );
 

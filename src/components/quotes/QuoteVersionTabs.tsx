@@ -24,6 +24,9 @@ export default function QuoteVersionTabs({
   versionGroupId: string | null
 }) {
   const [isPending, startTransition] = useTransition();
+  const pathname = usePathname();
+  const isEditPage = pathname?.endsWith("/edit");
+  const getHref = (id: string) => isEditPage ? `/dashboard/quotes/${id}/edit` : `/dashboard/quotes/${id}`;
 
   const handleDuplicate = () => {
     startTransition(() => {
@@ -63,7 +66,7 @@ export default function QuoteVersionTabs({
             return (
               <Link
                 key={v.id}
-                href={`/dashboard/quotes/${v.id}/edit`}
+                href={getHref(v.id)}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black transition-all ${
                   isActive 
                     ? "bg-white text-gray-900 shadow-sm" 

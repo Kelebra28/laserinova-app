@@ -8,6 +8,7 @@ import { decrypt } from "@/lib/encryption";
 import path from "path";
 import fs from "fs";
 import { saveEmailToDisk } from '@/lib/emailStorage';
+import { revalidatePath } from "next/cache";
 
 export async function POST(
   request: Request,
@@ -21,7 +22,7 @@ export async function POST(
   }
 
   const quoteId = params.id;
-  const { toEmail, ccEmail, message, saveToClient, sigName, sigTitle, sigPhone, sigWeb, sigEmail } = await request.json();
+  const { toEmail, ccEmail, message, saveToClient, sigName, sigTitle, sigPhone, sigWeb, sigEmail, selectedVersionIds } = await request.json();
 
   const quote = await prisma.quote.findUnique({
     where: { id: quoteId },
@@ -75,11 +76,28 @@ export async function POST(
         data: { email: primaryEmail }
       });
     }
-
-
+    // Load multiple quotes if requested
+    let quotesToRender: any[] = [];
+    if (selectedVersionIds && Array.isArray(selectedVersionIds) && selectedVersionIds.length > 0) {
+      quotesToRender = await prisma.quote.findMany({
+        where: { id: { in: selectedVersionIds } },
+        include: {
+          client: true,
+          concepts: {
+            orderBy: { order: 'asc' },
+            include: { material: true }
+          },
+          user: true,
+        }
+      });
+      // Sort to match requested order
+      quotesToRender.sort((a, b) => selectedVersionIds.indexOf(a.id) - selectedVersionIds.indexOf(b.id));
+    } else {
+      quotesToRender = [quote];
+    }
 
     // Generate PDF buffer
-    const pdfBuffer = await generateQuotePDF(quote);
+    const pdfBuffer = await generateQuotePDF(quotesToRender);
     
     // Configure transporter
     const transporter = nodemailer.createTransport({
@@ -96,9 +114,13 @@ export async function POST(
 
     const subject = `Cotización ${quote.folio} - Laser Inova`;
 
+    const filename = quotesToRender.length > 1
+      ? `Opciones_Cotizacion_${quote.folio.split('-OP')[0]}.pdf`
+      : `Cotizacion_${quote.folio}.pdf`;
+
     const attachments: any[] = [
       {
-        filename: `Cotizacion_${quote.folio}.pdf`,
+        filename,
         content: pdfBuffer,
         contentType: 'application/pdf',
       }
@@ -207,14 +229,16 @@ export async function POST(
       }
     });
 
-    // Update quote status to SENT
-    await prisma.quote.update({
-      where: { id: quote.id },
+    // Update quote status to SENT for all rendered quotes
+    await prisma.quote.updateMany({
+      where: { id: { in: quotesToRender.map(q => q.id) } },
       data: { 
         status: "SENT",
         sentDate: new Date(),
       }
     });
+
+    revalidatePath("/dashboard", "layout");
 
     return NextResponse.json({ success: true, messageId: isMock ? 'mock-id' : info.messageId });
   } catch (error: any) {

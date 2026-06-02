@@ -7,7 +7,6 @@ import SubmitButton from "@/components/ui/SubmitButton";
 import StatusGridButton from "@/components/quotes/StatusGridButton";
 import DeleteQuoteButton from "@/components/quotes/DeleteQuoteButton";
 import PaymentStatusForm from "@/components/quotes/PaymentStatusForm";
-import CalculationAudit from "@/components/quotes/CalculationAudit";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import QuoteVersionTabs from "@/components/quotes/QuoteVersionTabs";
 import CloneQuoteButton from "@/components/quotes/CloneQuoteButton";
@@ -163,6 +162,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
             clientEmail={quote.client?.email || undefined}
             hasClientId={!!quote.clientId}
             userName={quote.user?.name || undefined}
+            versions={versions}
           />
         </div>
       </div>
@@ -415,12 +415,6 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
             currentStatus={quote.paymentStatus || "PENDING"}
             currentAmount={quote.realAmountCollected || 0}
             totalAmount={quote.total}
-          />
-
-          {/* 5. Auditoría de Fórmulas */}
-          <CalculationAudit
-            concepts={quote.concepts}
-            margin={Number(quote.subtotal > 0 ? (((quote.subtotal - quote.realCostTotal) / quote.subtotal) * 100).toFixed(0) : 35)}
           />
         </div>
       </div>
