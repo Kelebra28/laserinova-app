@@ -19,17 +19,25 @@ export function useEmailActions() {
       
       // Append signature fields dynamically from localStorage using user-specific keys
       if (typeof window !== 'undefined') {
-        const nameKey = getStorageKey('sig_name');
-        const titleKey = getStorageKey('sig_title');
-        const phoneKey = getStorageKey('sig_phone');
-        const emailKey = getStorageKey('sig_email');
-        const webKey = getStorageKey('sig_web');
+        const getSignatureField = (key: string, defaultValue: string) => {
+          if (userEmail) {
+            const cleanEmail = userEmail.trim().toLowerCase();
+            const val = localStorage.getItem(`${key}_${cleanEmail}`);
+            if (val) return val;
+            
+            const rawVal = localStorage.getItem(`${key}_${userEmail}`);
+            if (rawVal) return rawVal;
+            
+            return defaultValue; // Prevent profile overlap
+          }
+          return localStorage.getItem(key) || defaultValue;
+        };
 
-        formData.append('sigName', localStorage.getItem(nameKey) || localStorage.getItem('sig_name') || 'Ricardo Basurto');
-        formData.append('sigTitle', localStorage.getItem(titleKey) || localStorage.getItem('sig_title') || 'Director General');
-        formData.append('sigPhone', localStorage.getItem(phoneKey) || localStorage.getItem('sig_phone') || '+52 1 55 1234 5678');
-        formData.append('sigEmail', localStorage.getItem(emailKey) || localStorage.getItem('sig_email') || 'info@laserinova.com');
-        formData.append('sigWeb', localStorage.getItem(webKey) || localStorage.getItem('sig_web') || 'www.laserinova.com');
+        formData.append('sigName', getSignatureField('sig_name', 'Ricardo Basurto'));
+        formData.append('sigTitle', getSignatureField('sig_title', 'Director General'));
+        formData.append('sigPhone', getSignatureField('sig_phone', '+52 1 55 1234 5678'));
+        formData.append('sigEmail', getSignatureField('sig_email', 'info@laserinova.com'));
+        formData.append('sigWeb', getSignatureField('sig_web', 'www.laserinova.com'));
       }
 
       attachments.forEach(file => {

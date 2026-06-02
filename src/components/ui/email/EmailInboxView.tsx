@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Mail, Loader2, Paperclip, RefreshCw, Plus, Send, AlertOctagon, Trash2, Inbox, 
   Search, Star, CheckSquare, Square, ChevronLeft, ChevronRight, PenTool, Sparkles, CheckCircle,
@@ -62,24 +62,48 @@ export function EmailInboxView({
   const [sigWeb, setSigWeb] = useState('www.laserinova.com');
   const [isSigSaved, setIsSigSaved] = useState(false);
 
-  const getStorageKey = (key: string) => `${key}${userEmail ? `_${userEmail}` : ''}`;
+  const getSignatureField = useCallback((key: string, defaultValue: string) => {
+    if (typeof window === 'undefined') return defaultValue;
+    if (userEmail) {
+      const cleanEmail = userEmail.trim().toLowerCase();
+      const val = localStorage.getItem(`${key}_${cleanEmail}`);
+      if (val) return val;
+      
+      const rawVal = localStorage.getItem(`${key}_${userEmail}`);
+      if (rawVal) return rawVal;
+      
+      return defaultValue; // Prevent profile overlap
+    }
+    return localStorage.getItem(key) || defaultValue;
+  }, [userEmail]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setSigName(localStorage.getItem(getStorageKey('sig_name')) || userName || 'Ricardo Basurto');
-      setSigTitle(localStorage.getItem(getStorageKey('sig_title')) || 'Director General');
-      setSigPhone(localStorage.getItem(getStorageKey('sig_phone')) || '+52 1 55 1234 5678');
-      setSigEmail(localStorage.getItem(getStorageKey('sig_email')) || userEmail || 'info@laserinova.com');
-      setSigWeb(localStorage.getItem(getStorageKey('sig_web')) || 'www.laserinova.com');
+      setSigName(getSignatureField('sig_name', userName || 'Ricardo Basurto'));
+      setSigTitle(getSignatureField('sig_title', 'Director General'));
+      setSigPhone(getSignatureField('sig_phone', '+52 1 55 1234 5678'));
+      setSigEmail(getSignatureField('sig_email', userEmail || 'info@laserinova.com'));
+      setSigWeb(getSignatureField('sig_web', 'www.laserinova.com'));
     }
-  }, [currentFolder, userEmail, userName]);
+  }, [currentFolder, userEmail, userName, getSignatureField]);
 
   const handleSaveSignature = () => {
-    localStorage.setItem(getStorageKey('sig_name'), sigName);
-    localStorage.setItem(getStorageKey('sig_title'), sigTitle);
-    localStorage.setItem(getStorageKey('sig_phone'), sigPhone);
-    localStorage.setItem(getStorageKey('sig_email'), sigEmail);
-    localStorage.setItem(getStorageKey('sig_web'), sigWeb);
+    if (typeof window !== 'undefined') {
+      if (userEmail) {
+        const emailSuffix = `_${userEmail.trim().toLowerCase()}`;
+        localStorage.setItem(`sig_name${emailSuffix}`, sigName);
+        localStorage.setItem(`sig_title${emailSuffix}`, sigTitle);
+        localStorage.setItem(`sig_phone${emailSuffix}`, sigPhone);
+        localStorage.setItem(`sig_email${emailSuffix}`, sigEmail);
+        localStorage.setItem(`sig_web${emailSuffix}`, sigWeb);
+      } else {
+        localStorage.setItem('sig_name', sigName);
+        localStorage.setItem('sig_title', sigTitle);
+        localStorage.setItem('sig_phone', sigPhone);
+        localStorage.setItem('sig_email', sigEmail);
+        localStorage.setItem('sig_web', sigWeb);
+      }
+    }
     setIsSigSaved(true);
     setTimeout(() => setIsSigSaved(false), 3000);
   };

@@ -40,7 +40,20 @@ export function SendQuoteMailModal({
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const getStorageKey = (key: string) => `${key}${userEmail ? `_${userEmail}` : ''}`;
+  const getSignatureField = (key: string, defaultValue: string) => {
+    if (typeof window === 'undefined') return defaultValue;
+    if (userEmail) {
+      const cleanEmail = userEmail.trim().toLowerCase();
+      const val = localStorage.getItem(`${key}_${cleanEmail}`);
+      if (val) return val;
+      
+      const rawVal = localStorage.getItem(`${key}_${userEmail}`);
+      if (rawVal) return rawVal;
+      
+      return defaultValue; // Prevent profile overlap
+    }
+    return localStorage.getItem(key) || defaultValue;
+  };
 
   // Initial prefilled professional message template
   useEffect(() => {
@@ -65,12 +78,6 @@ export function SendQuoteMailModal({
     setErrorMessage('');
 
     try {
-      const nameKey = getStorageKey('sig_name');
-      const titleKey = getStorageKey('sig_title');
-      const phoneKey = getStorageKey('sig_phone');
-      const emailKey = getStorageKey('sig_email');
-      const webKey = getStorageKey('sig_web');
-
       const res = await fetch(`/api/quotes/${quoteId}/email`, {
         method: 'POST',
         headers: {
@@ -81,11 +88,11 @@ export function SendQuoteMailModal({
           ccEmail,
           message,
           saveToClient,
-          sigName: typeof window !== 'undefined' ? (localStorage.getItem(nameKey) || localStorage.getItem('sig_name') || '') : '',
-          sigTitle: typeof window !== 'undefined' ? (localStorage.getItem(titleKey) || localStorage.getItem('sig_title') || '') : '',
-          sigPhone: typeof window !== 'undefined' ? (localStorage.getItem(phoneKey) || localStorage.getItem('sig_phone') || '') : '',
-          sigEmail: typeof window !== 'undefined' ? (localStorage.getItem(emailKey) || localStorage.getItem('sig_email') || '') : '',
-          sigWeb: typeof window !== 'undefined' ? (localStorage.getItem(webKey) || localStorage.getItem('sig_web') || '') : ''
+          sigName: getSignatureField('sig_name', userName || 'Ricardo Basurto'),
+          sigTitle: getSignatureField('sig_title', 'Director General'),
+          sigPhone: getSignatureField('sig_phone', '+52 1 55 1234 5678'),
+          sigEmail: getSignatureField('sig_email', userEmail || 'info@laserinova.com'),
+          sigWeb: getSignatureField('sig_web', 'www.laserinova.com')
         }),
       });
 
