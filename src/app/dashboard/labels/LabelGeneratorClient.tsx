@@ -5,6 +5,8 @@ import { Download, RefreshCw, Smartphone, Globe } from "lucide-react";
 import * as htmlToImage from "html-to-image";
 
 export default function LabelGeneratorClient() {
+  const [labelMode, setLabelMode] = useState<"digital" | "manual">("digital");
+  const [includeManualNotes, setIncludeManualNotes] = useState(true);
   const [clientName, setClientName] = useState("");
   const [projectName, setProjectName] = useState("");
   const [notes, setNotes] = useState("");
@@ -20,7 +22,9 @@ export default function LabelGeneratorClient() {
       const dataUrl = await htmlToImage.toPng(labelRef.current, { quality: 1, pixelRatio: 3 });
       
       const link = document.createElement("a");
-      link.download = `etiqueta-${clientName.replace(/\s+/g, '-').toLowerCase() || 'envio'}.png`;
+      const prefix = labelMode === "manual" ? "manual" : "digital";
+      const name = clientName.replace(/\s+/g, '-').toLowerCase() || 'envio';
+      link.download = `etiqueta-${prefix}-${name}.png`;
       link.href = dataUrl;
       link.click();
     } catch (err) {
@@ -36,6 +40,7 @@ export default function LabelGeneratorClient() {
     setProjectName("");
     setNotes("");
     setDate(new Date().toISOString().split("T")[0]);
+    setIncludeManualNotes(true);
   };
 
   const webUrl = "https://www.laserinova.com/";
@@ -48,26 +53,28 @@ export default function LabelGeneratorClient() {
         <div>
           <h2 className="text-sm font-black text-gray-800 uppercase tracking-widest border-b border-gray-100 pb-2 mb-4">Datos de la Etiqueta</h2>
           <div className="space-y-4">
+            
+            {/* Selector de Modo */}
             <div>
-              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Cliente / Destinatario</label>
-              <input 
-                type="text" 
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                placeholder="Ej. Juan Pérez"
-                className="w-full border-gray-200 rounded-xl text-sm px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              />
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Modo de Etiqueta</label>
+              <div className="grid grid-cols-2 gap-1 bg-gray-50 p-1 rounded-2xl border border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setLabelMode("digital")}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${labelMode === "digital" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                >
+                  Digital
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLabelMode("manual")}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${labelMode === "manual" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                >
+                  Manual (A mano)
+                </button>
+              </div>
             </div>
-            <div>
-              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Proyecto / Contenido</label>
-              <input 
-                type="text" 
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                placeholder="Ej. 100 Termos Grabados"
-                className="w-full border-gray-200 rounded-xl text-sm px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              />
-            </div>
+
             <div>
               <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Fecha</label>
               <input 
@@ -77,16 +84,57 @@ export default function LabelGeneratorClient() {
                 className="w-full border-gray-200 rounded-xl text-sm px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
               />
             </div>
-            <div>
-              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Notas (Opcional)</label>
-              <textarea 
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Ej. Frágil / Paquete 1 de 3"
-                rows={3}
-                className="w-full border-gray-200 rounded-xl text-sm px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none"
-              />
-            </div>
+
+            {labelMode === "digital" ? (
+              <>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Cliente / Destinatario</label>
+                  <input 
+                    type="text" 
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    placeholder="Ej. Juan Pérez"
+                    className="w-full border-gray-200 rounded-xl text-sm px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Proyecto / Contenido</label>
+                  <input 
+                    type="text" 
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    placeholder="Ej. 100 Termos Grabados"
+                    className="w-full border-gray-200 rounded-xl text-sm px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Notas (Opcional)</label>
+                  <textarea 
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Ej. Frágil / Paquete 1 de 3"
+                    rows={3}
+                    className="w-full border-gray-200 rounded-xl text-sm px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="pt-2">
+                <div 
+                  className="flex items-center gap-3 px-5 py-3 rounded-2xl border-2 cursor-pointer transition-all select-none shadow-sm bg-indigo-50/50 border-indigo-200 text-indigo-700"
+                  onClick={() => setIncludeManualNotes(!includeManualNotes)}
+                >
+                  <div className={`w-10 h-5 rounded-full transition-all relative ${includeManualNotes ? 'bg-indigo-650' : 'bg-gray-300'}`}>
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${includeManualNotes ? 'left-5.5' : 'left-0.5'}`} />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.1em]">
+                    {includeManualNotes ? 'Con Notas' : 'Sin Notas'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-2 font-semibold">Se imprimirán 3 líneas sólidas vacías de notas al final de la etiqueta para escribir a mano.</p>
+              </div>
+            )}
+
           </div>
         </div>
 
@@ -133,25 +181,52 @@ export default function LabelGeneratorClient() {
             </div>
 
             {/* Contenido Central */}
-            <div className="flex-1 py-6 flex flex-col justify-center gap-4">
-              <div>
-                <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">Para:</p>
-                <h1 className="text-3xl font-black text-gray-900 leading-tight">
-                  {clientName || "Nombre del Cliente"}
-                </h1>
-              </div>
-              
-              <div>
-                <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">Proyecto:</p>
-                <h2 className="text-2xl font-bold text-gray-800">
-                  {projectName || "Descripción del proyecto"}
-                </h2>
-              </div>
+            <div className="flex-1 py-6 flex flex-col justify-center gap-6">
+              {labelMode === "digital" ? (
+                <>
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">Para:</p>
+                    <h1 className="text-3xl font-black text-gray-900 leading-tight">
+                      {clientName || "Nombre del Cliente"}
+                    </h1>
+                  </div>
+                  
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">Proyecto / Contenido:</p>
+                    <h2 className="text-2xl font-bold text-gray-800">
+                      {projectName || "Descripción del proyecto"}
+                    </h2>
+                  </div>
 
-              {notes && (
-                <div className="mt-2 p-3 border-2 border-dashed border-gray-400 bg-gray-50 rounded-lg">
-                  <p className="text-sm font-bold text-gray-700">{notes}</p>
-                </div>
+                  {notes && (
+                    <div className="mt-2 p-3 border-2 border-dashed border-gray-400 bg-gray-50 rounded-lg">
+                      <p className="text-sm font-bold text-gray-700">{notes}</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">Para:</p>
+                    <div className="mt-1.5 h-8 border-b border-gray-400 w-full" />
+                  </div>
+                  
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">Proyecto / Contenido:</p>
+                    <div className="mt-1.5 h-8 border-b border-gray-400 w-full" />
+                  </div>
+
+                  {includeManualNotes && (
+                    <div className="mt-2 p-3 border border-gray-300 rounded-xl bg-gray-50/50">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Notas:</p>
+                      <div className="space-y-4 pb-1.5">
+                        <div className="border-b border-gray-300 w-full h-5" />
+                        <div className="border-b border-gray-300 w-full h-5" />
+                        <div className="border-b border-gray-300 w-full h-5" />
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
