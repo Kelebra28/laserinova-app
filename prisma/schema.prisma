@@ -419,3 +419,31 @@ model ProviderContact {
 
   @@index([providerId])
 }
+
+model ProjectRecipe {
+  id             String              @id @default(uuid())
+  name           String
+  machineName    String
+  rotaryDiameter Float?
+  notes          String?             @db.Text
+  active         Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  steps          ProjectRecipeStep[]
+}
+
+model ProjectRecipeStep {
+  id               String        @id @default(uuid())
+  recipeId         String
+  name             String
+  power            Float?
+  speed            Float?
+  frequency        Float?
+  passesCount      Int?          @default(1)
+  hatchLineSpacing Float?
+  hatchAngle       Float?
+  order            Int           @default(0)
+  recipe           ProjectRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@index([recipeId])
+}

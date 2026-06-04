@@ -7,6 +7,11 @@ export default async function ProcessesPage() {
     orderBy: { createdAt: "desc" }
   });
 
+  const projectRecipes = await prisma.projectRecipe.findMany({
+    orderBy: { createdAt: "desc" },
+    include: { steps: { orderBy: { order: "asc" } } }
+  });
+
   const materials = await prisma.material.findMany({
     where: { active: true },
     select: { 
@@ -33,7 +38,7 @@ export default async function ProcessesPage() {
       </div>
 
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-        <ProcessTabs initialProcesses={processes} materials={materials} />
+        <ProcessTabs initialProcesses={processes} projectRecipes={projectRecipes} materials={materials} />
       </div>
     </div>
   );
