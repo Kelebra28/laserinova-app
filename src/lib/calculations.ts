@@ -42,7 +42,13 @@ export interface CalculationInput {
   // Para SERVICIO_SITIO
   serviceDays?: number;
   serviceHours?: number;
+  operatorCost?: number;
   transportCost?: number;
+  installCost?: number;
+  laserUseCost?: number;
+  consumablesCost?: number;
+  viaticsCost?: number;
+  margin?: number;
 }
 
 export interface CalculationResult {
@@ -129,23 +135,35 @@ export function calculateConcept(input: CalculationInput, globals: GlobalCosts):
 
     case "SERVICIO_SITIO":
       const days = input.serviceDays || 0;
-      const hours = input.serviceHours || 0;
-      const transport = input.transportCost || 0;
+      const hours = input.serviceHours ?? 8;
       
-      // Costo de horas de trabajo
-      // Consideraremos un sueldo base o costo hora hombre en globals o un fijo (ej. 150/hr)
-      const costPerHour = globals.costo_hora_hombre || 150;
-      // Si el usuario especifica días (ej. 8 horas por día)
-      const totalHours = hours + (days * 8);
+      const opCost = input.operatorCost ?? globals.costo_operador_sitio ?? 1500;
+      const transCost = input.transportCost ?? globals.costo_transporte_sitio ?? 1500;
+      const instCost = input.installCost ?? globals.costo_instalacion_sitio ?? 1000;
+      const laserCost = input.laserUseCost ?? globals.costo_equipo_laser_sitio ?? 3500;
+      const consCost = input.consumablesCost ?? globals.costo_consumibles_sitio ?? 1000;
+      const viatCost = input.viaticsCost ?? globals.costo_viaticos_sitio ?? 1300;
       
-      const laborCost = totalHours * costPerHour;
+      const hourlyRateOp = opCost / 8;
+      const hourlyRateLaser = laserCost / 8;
+      const hourlyRateConsumables = consCost / 8;
       
-      // Costo Real = Horas de Trabajo + Viáticos / Transporte
+      const dailyOp = hourlyRateOp * hours;
+      const dailyLaser = hourlyRateLaser * hours;
+      const dailyCons = hourlyRateConsumables * hours;
+      
+      const totalCostPerDay = dailyOp + transCost + instCost + dailyLaser + dailyCons + viatCost;
+      const effectiveDays = days > 0 ? days : 1;
+      const totalServiceCost = totalCostPerDay * effectiveDays;
+      
+      // Costo Real = Total de Operación por Día * Días
       // Si se proporciona un costo manual, se usa ese
-      realCost = input.manualCost || (laborCost + transport);
+      realCost = input.manualCost || totalServiceCost;
       
-      const serviceMarginFactor = (100 - (globals.margen_default || 50)) / 100;
-      suggestedPrice = input.manualUnitPrice || (realCost / serviceMarginFactor);
+      const customMargin = input.margin ?? 30; // 30% default
+      // Ganancia directa (Markup)
+      const markupFactor = 1 + (customMargin / 100);
+      suggestedPrice = input.manualUnitPrice || (realCost * markupFactor);
       break;
 
   }

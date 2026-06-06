@@ -67,7 +67,13 @@ export default function NewQuoteForm({ clients, materials, products = [], global
         details: "",
         serviceDays: "",
         serviceHours: "",
+        operatorCost: "",
         transportCost: "",
+        installCost: "",
+        laserUseCost: "",
+        consumablesCost: "",
+        viaticsCost: "",
+        margin: "",
       }
     ]);
   };
@@ -99,7 +105,13 @@ export default function NewQuoteForm({ clients, materials, products = [], global
       manualCost: Number(concept.manualUnitCost) || 0,
       serviceDays: Number(concept.serviceDays) || 0,
       serviceHours: Number(concept.serviceHours) || 0,
-      transportCost: Number(concept.transportCost) || 0,
+      operatorCost: concept.operatorCost !== undefined && concept.operatorCost !== "" ? Number(concept.operatorCost) : undefined,
+      transportCost: concept.transportCost !== undefined && concept.transportCost !== "" ? Number(concept.transportCost) : undefined,
+      installCost: concept.installCost !== undefined && concept.installCost !== "" ? Number(concept.installCost) : undefined,
+      laserUseCost: concept.laserUseCost !== undefined && concept.laserUseCost !== "" ? Number(concept.laserUseCost) : undefined,
+      consumablesCost: concept.consumablesCost !== undefined && concept.consumablesCost !== "" ? Number(concept.consumablesCost) : undefined,
+      viaticsCost: concept.viaticsCost !== undefined && concept.viaticsCost !== "" ? Number(concept.viaticsCost) : undefined,
+      margin: concept.margin !== undefined && concept.margin !== "" ? Number(concept.margin) : undefined,
     };
 
     if (concept.materialId) {
@@ -455,32 +467,59 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                   {/* Campos para SERVICIO_SITIO */}
                   {concept.type === "SERVICIO_SITIO" && (
                     <>
-                      <div className="sm:col-span-1">
-                        <label className="block text-xs font-medium text-gray-700">Días</label>
-                        <input
-                          type="number"
-                          value={concept.serviceDays === 0 && String(concept.serviceDays) !== "0" ? "" : concept.serviceDays}
-                          onChange={e => updateConcept(concept.id, "serviceDays", e.target.value === "" ? "" : Number(e.target.value))}
-                          className="mt-1 block w-full sm:text-sm border-gray-300 rounded-md py-1.5 px-2 border"
-                        />
-                      </div>
-                      <div className="sm:col-span-1">
-                        <label className="block text-xs font-medium text-gray-700">Horas extras</label>
-                        <input
-                          type="number"
-                          value={concept.serviceHours === 0 && String(concept.serviceHours) !== "0" ? "" : concept.serviceHours}
-                          onChange={e => updateConcept(concept.id, "serviceHours", e.target.value === "" ? "" : Number(e.target.value))}
-                          className="mt-1 block w-full sm:text-sm border-gray-300 rounded-md py-1.5 px-2 border"
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="block text-xs font-medium text-gray-700">Viáticos / Transporte ($)</label>
-                        <input
-                          type="number"
-                          value={concept.transportCost === 0 && String(concept.transportCost) !== "0" ? "" : concept.transportCost}
-                          onChange={e => updateConcept(concept.id, "transportCost", e.target.value === "" ? "" : Number(e.target.value))}
-                          className="mt-1 block w-full sm:text-sm border-gray-300 rounded-md py-1.5 px-2 border text-orange-700"
-                        />
+                      <div className="sm:col-span-12 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4 bg-violet-50/50 p-4 rounded-xl border border-violet-100 mt-2">
+                        <div className="col-span-2 sm:col-span-4 md:col-span-6 mb-2">
+                          <span className="text-[10px] font-black text-violet-700 uppercase tracking-widest">Desglose de Costos por Día (Opcional - Modifica el Estándar)</span>
+                        </div>
+                        <div className="col-span-1">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Días</label>
+                          <input type="number" step="0.1" value={concept.serviceDays === 0 && String(concept.serviceDays) !== "0" ? "" : concept.serviceDays} onChange={e => updateConcept(concept.id, "serviceDays", e.target.value === "" ? "" : Number(e.target.value))} className="w-full text-sm border-gray-200 rounded-lg p-2.5 border" />
+                        </div>
+                        <div className="col-span-1">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Horas/Día</label>
+                          <input type="number" step="0.5" value={concept.serviceHours === 0 && String(concept.serviceHours) !== "0" ? "" : concept.serviceHours} onChange={e => updateConcept(concept.id, "serviceHours", e.target.value === "" ? "" : Number(e.target.value))} placeholder="8" className="w-full text-sm border-gray-200 rounded-lg p-2.5 border" />
+                        </div>
+                        
+                        <div className="col-span-1">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Operador ($)</label>
+                          <input type="number" step="0.01" value={concept.operatorCost ?? ""} onChange={e => updateConcept(concept.id, "operatorCost", e.target.value === "" ? "" : Number(e.target.value))} placeholder={String(globalCosts?.costo_operador_sitio || 1500)} className="w-full text-sm border-violet-200 rounded-lg p-2.5 border" />
+                        </div>
+                        <div className="col-span-1">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Transporte ($)</label>
+                          <input type="number" step="0.01" value={concept.transportCost ?? ""} onChange={e => updateConcept(concept.id, "transportCost", e.target.value === "" ? "" : Number(e.target.value))} placeholder={String(globalCosts?.costo_transporte_sitio || 1500)} className="w-full text-sm border-violet-200 rounded-lg p-2.5 border" />
+                        </div>
+                        <div className="col-span-1">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Instalación ($)</label>
+                          <input type="number" step="0.01" value={concept.installCost ?? ""} onChange={e => updateConcept(concept.id, "installCost", e.target.value === "" ? "" : Number(e.target.value))} placeholder={String(globalCosts?.costo_instalacion_sitio || 1000)} className="w-full text-sm border-violet-200 rounded-lg p-2.5 border" />
+                        </div>
+                        <div className="col-span-1">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Uso Láser ($)</label>
+                          <input type="number" step="0.01" value={concept.laserUseCost ?? ""} onChange={e => updateConcept(concept.id, "laserUseCost", e.target.value === "" ? "" : Number(e.target.value))} placeholder={String(globalCosts?.costo_equipo_laser_sitio || 3500)} className="w-full text-sm border-violet-200 rounded-lg p-2.5 border" />
+                        </div>
+                        <div className="col-span-1">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Consumibles ($)</label>
+                          <input type="number" step="0.01" value={concept.consumablesCost ?? ""} onChange={e => updateConcept(concept.id, "consumablesCost", e.target.value === "" ? "" : Number(e.target.value))} placeholder={String(globalCosts?.costo_consumibles_sitio || 1000)} className="w-full text-sm border-violet-200 rounded-lg p-2.5 border" />
+                        </div>
+                        <div className="col-span-1">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Viáticos ($)</label>
+                          <input type="number" step="0.01" value={concept.viaticsCost ?? ""} onChange={e => updateConcept(concept.id, "viaticsCost", e.target.value === "" ? "" : Number(e.target.value))} placeholder={String(globalCosts?.costo_viaticos_sitio || 1300)} className="w-full text-sm border-violet-200 rounded-lg p-2.5 border" />
+                        </div>
+                        <div className="col-span-2 sm:col-span-4 md:col-span-6 mt-4 border-t border-violet-200 pt-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black text-violet-700 uppercase tracking-widest">Margen / Ganancia Específica</span>
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs font-bold text-gray-500">Ganancia (%)</label>
+                              <input 
+                                type="number" 
+                                step="0.1" 
+                                value={concept.margin ?? ""} 
+                                onChange={e => updateConcept(concept.id, "margin", e.target.value === "" ? "" : Number(e.target.value))} 
+                                placeholder="30" 
+                                className="w-20 text-sm font-black text-emerald-700 border-violet-300 rounded-lg p-2 border focus:ring-emerald-500 focus:border-emerald-500 text-center" 
+                              />
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </>
                   )}

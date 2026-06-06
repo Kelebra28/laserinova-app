@@ -64,7 +64,13 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
       manualUnitCost: (c.realCost || 0) / (c.quantity || 1),
       serviceDays: c.serviceDays || 0,
       serviceHours: c.serviceHours || 0,
-      transportCost: c.transportCost || 0,
+      operatorCost: c.operatorCost,
+      transportCost: c.transportCost,
+      installCost: c.installCost,
+      laserUseCost: c.laserUseCost,
+      consumablesCost: c.consumablesCost,
+      viaticsCost: c.viaticsCost,
+      margin: c.margin,
       utility: c.utility || (c.totalAmount - c.realCost),
       finalUnitPrice: c.finalUnitPrice,
       calculated: {
@@ -87,7 +93,7 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
         const updated = { ...c, [field]: value };
         
         // Si el campo afecta el cálculo, recalcular
-        if (["type", "quantity", "materialId", "partWidth", "partHeight", "timeMin", "clientProvidesMaterial", "manualUnitPrice", "manualUnitCost", "serviceDays", "serviceHours", "transportCost"].includes(field)) {
+        if (["type", "quantity", "materialId", "partWidth", "partHeight", "timeMin", "clientProvidesMaterial", "manualUnitPrice", "manualUnitCost", "serviceDays", "serviceHours", "transportCost", "margin", "operatorCost", "installCost", "laserUseCost", "consumablesCost", "viaticsCost"].includes(field)) {
           const mat = materials.find(m => m.id === (field === "materialId" ? value : updated.materialId));
           const result = calculateConcept(
             {
@@ -109,7 +115,13 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
               manualCost: Number(updated.manualUnitCost) || 0,
               serviceDays: Number(updated.serviceDays) || 0,
               serviceHours: Number(updated.serviceHours) || 0,
-              transportCost: Number(updated.transportCost) || 0,
+              operatorCost: updated.operatorCost !== undefined && updated.operatorCost !== "" ? Number(updated.operatorCost) : undefined,
+              transportCost: updated.transportCost !== undefined && updated.transportCost !== "" ? Number(updated.transportCost) : undefined,
+              installCost: updated.installCost !== undefined && updated.installCost !== "" ? Number(updated.installCost) : undefined,
+              laserUseCost: updated.laserUseCost !== undefined && updated.laserUseCost !== "" ? Number(updated.laserUseCost) : undefined,
+              consumablesCost: updated.consumablesCost !== undefined && updated.consumablesCost !== "" ? Number(updated.consumablesCost) : undefined,
+              viaticsCost: updated.viaticsCost !== undefined && updated.viaticsCost !== "" ? Number(updated.viaticsCost) : undefined,
+              margin: updated.margin !== undefined && updated.margin !== "" ? Number(updated.margin) : undefined,
             },
             { ...globalCosts, margen_default: Number(margin) || 35 } // Usar el margen actual
           );
@@ -163,7 +175,13 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
           manualCost: Number(c.manualUnitCost) || 0,
           serviceDays: Number(c.serviceDays) || 0,
           serviceHours: Number(c.serviceHours) || 0,
-          transportCost: Number(c.transportCost) || 0,
+          operatorCost: c.operatorCost !== undefined && c.operatorCost !== "" ? Number(c.operatorCost) : undefined,
+          transportCost: c.transportCost !== undefined && c.transportCost !== "" ? Number(c.transportCost) : undefined,
+          installCost: c.installCost !== undefined && c.installCost !== "" ? Number(c.installCost) : undefined,
+          laserUseCost: c.laserUseCost !== undefined && c.laserUseCost !== "" ? Number(c.laserUseCost) : undefined,
+          consumablesCost: c.consumablesCost !== undefined && c.consumablesCost !== "" ? Number(c.consumablesCost) : undefined,
+          viaticsCost: c.viaticsCost !== undefined && c.viaticsCost !== "" ? Number(c.viaticsCost) : undefined,
+          margin: c.margin !== undefined && c.margin !== "" ? Number(c.margin) : undefined,
         },
         { ...globalCosts, margen_default: Number(margin) || 35 }
       );
@@ -198,7 +216,13 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
         details: "",
         serviceDays: 0,
         serviceHours: 0,
-        transportCost: 0,
+        operatorCost: "",
+        transportCost: "",
+        installCost: "",
+        laserUseCost: "",
+        consumablesCost: "",
+        viaticsCost: "",
+        margin: "",
         calculated: null
       }
     ]);
@@ -548,17 +572,59 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
                 {/* Parámetros para SERVICIO_SITIO */}
                 {concept.type === "SERVICIO_SITIO" && (
                   <>
-                    <div className="sm:col-span-3">
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Días</label>
-                      <input type="number" step="0.1" value={concept.serviceDays === 0 && String(concept.serviceDays) !== "0" ? "" : concept.serviceDays} onChange={e => updateConcept(concept.id, "serviceDays", e.target.value === "" ? "" : Number(e.target.value))} className="w-full text-sm border-gray-200 rounded-lg p-2.5 border" />
-                    </div>
-                    <div className="sm:col-span-3">
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Horas extras</label>
-                      <input type="number" step="0.5" value={concept.serviceHours === 0 && String(concept.serviceHours) !== "0" ? "" : concept.serviceHours} onChange={e => updateConcept(concept.id, "serviceHours", e.target.value === "" ? "" : Number(e.target.value))} className="w-full text-sm border-gray-200 rounded-lg p-2.5 border" />
-                    </div>
-                    <div className="sm:col-span-6">
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Viáticos / Transporte ($)</label>
-                      <input type="number" step="0.01" value={concept.transportCost === 0 && String(concept.transportCost) !== "0" ? "" : concept.transportCost} onChange={e => updateConcept(concept.id, "transportCost", e.target.value === "" ? "" : Number(e.target.value))} className="w-full text-sm border-gray-200 rounded-lg p-2.5 border text-orange-700 font-bold" />
+                    <div className="sm:col-span-12 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4 bg-violet-50/50 p-4 rounded-xl border border-violet-100">
+                      <div className="col-span-2 sm:col-span-4 md:col-span-6 mb-2">
+                        <span className="text-[10px] font-black text-violet-700 uppercase tracking-widest">Desglose de Costos por Día (Opcional - Modifica el Estándar)</span>
+                      </div>
+                      <div className="col-span-1">
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Días</label>
+                        <input type="number" step="0.1" value={concept.serviceDays === 0 && String(concept.serviceDays) !== "0" ? "" : concept.serviceDays} onChange={e => updateConcept(concept.id, "serviceDays", e.target.value === "" ? "" : Number(e.target.value))} className="w-full text-sm border-gray-200 rounded-lg p-2.5 border" />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Horas/Día</label>
+                        <input type="number" step="0.5" value={concept.serviceHours === 0 && String(concept.serviceHours) !== "0" ? "" : concept.serviceHours} onChange={e => updateConcept(concept.id, "serviceHours", e.target.value === "" ? "" : Number(e.target.value))} placeholder="8" className="w-full text-sm border-gray-200 rounded-lg p-2.5 border" />
+                      </div>
+                      
+                      <div className="col-span-1">
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Operador ($)</label>
+                        <input type="number" step="0.01" value={concept.operatorCost ?? ""} onChange={e => updateConcept(concept.id, "operatorCost", e.target.value === "" ? "" : Number(e.target.value))} placeholder={String(globalCosts?.costo_operador_sitio || 1500)} className="w-full text-sm border-violet-200 rounded-lg p-2.5 border" />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Transporte ($)</label>
+                        <input type="number" step="0.01" value={concept.transportCost ?? ""} onChange={e => updateConcept(concept.id, "transportCost", e.target.value === "" ? "" : Number(e.target.value))} placeholder={String(globalCosts?.costo_transporte_sitio || 1500)} className="w-full text-sm border-violet-200 rounded-lg p-2.5 border" />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Instalación ($)</label>
+                        <input type="number" step="0.01" value={concept.installCost ?? ""} onChange={e => updateConcept(concept.id, "installCost", e.target.value === "" ? "" : Number(e.target.value))} placeholder={String(globalCosts?.costo_instalacion_sitio || 1000)} className="w-full text-sm border-violet-200 rounded-lg p-2.5 border" />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Uso Láser ($)</label>
+                        <input type="number" step="0.01" value={concept.laserUseCost ?? ""} onChange={e => updateConcept(concept.id, "laserUseCost", e.target.value === "" ? "" : Number(e.target.value))} placeholder={String(globalCosts?.costo_equipo_laser_sitio || 3500)} className="w-full text-sm border-violet-200 rounded-lg p-2.5 border" />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Consumibles ($)</label>
+                        <input type="number" step="0.01" value={concept.consumablesCost ?? ""} onChange={e => updateConcept(concept.id, "consumablesCost", e.target.value === "" ? "" : Number(e.target.value))} placeholder={String(globalCosts?.costo_consumibles_sitio || 1000)} className="w-full text-sm border-violet-200 rounded-lg p-2.5 border" />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Viáticos ($)</label>
+                        <input type="number" step="0.01" value={concept.viaticsCost ?? ""} onChange={e => updateConcept(concept.id, "viaticsCost", e.target.value === "" ? "" : Number(e.target.value))} placeholder={String(globalCosts?.costo_viaticos_sitio || 1300)} className="w-full text-sm border-violet-200 rounded-lg p-2.5 border" />
+                      </div>
+                      <div className="col-span-2 sm:col-span-4 md:col-span-6 mt-4 border-t border-violet-200 pt-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-violet-700 uppercase tracking-widest">Margen / Ganancia Específica</span>
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs font-bold text-gray-500">Ganancia (%)</label>
+                            <input 
+                              type="number" 
+                              step="0.1" 
+                              value={concept.margin ?? ""} 
+                              onChange={e => updateConcept(concept.id, "margin", e.target.value === "" ? "" : Number(e.target.value))} 
+                              placeholder="30" 
+                              className="w-20 text-sm font-black text-emerald-700 border-violet-300 rounded-lg p-2 border focus:ring-emerald-500 focus:border-emerald-500 text-center" 
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}

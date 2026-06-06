@@ -176,7 +176,12 @@ model QuoteConcept {
   details                String?   @db.Text
   serviceDays            Float?    @default(0)
   serviceHours           Float?    @default(0)
+  operatorCost           Float?    @default(0)
   transportCost          Float?    @default(0)
+  installCost            Float?    @default(0)
+  laserUseCost           Float?    @default(0)
+  consumablesCost        Float?    @default(0)
+  viaticsCost            Float?    @default(0)
   materialCost           Float?    @default(0)
   productionCost         Float?    @default(0)
   realCost               Float?    @default(0)
