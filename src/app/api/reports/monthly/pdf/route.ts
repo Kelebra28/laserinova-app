@@ -6,6 +6,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const month = parseInt(searchParams.get("month") || "");
   const year = parseInt(searchParams.get("year") || "");
+  const tab = searchParams.get("tab") || "finanzas";
 
   if (!month || !year) {
     return NextResponse.json({ error: "Month and year are required" }, { status: 400 });
@@ -30,12 +31,12 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const pdfBuffer = await generateMonthlyReportPDF(quotes, month, year);
+    const pdfBuffer = await generateMonthlyReportPDF(quotes, month, year, tab);
 
     return new NextResponse(pdfBuffer as any, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="reporte_mensual_${month}_${year}.pdf"`,
+        "Content-Disposition": `attachment; filename="reporte_${tab}_${month}_${year}.pdf"`,
       },
     });
   } catch (error) {

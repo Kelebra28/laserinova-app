@@ -356,7 +356,7 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
   return buffer;
 }
 
-export async function generateMonthlyReportPDF(quotes: any[], month: number, year: number): Promise<Buffer> {
+export async function generateMonthlyReportPDF(quotes: any[], month: number, year: number, tab: string = 'finanzas'): Promise<Buffer> {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
   const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -374,7 +374,15 @@ export async function generateMonthlyReportPDF(quotes: any[], month: number, yea
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
-  doc.text(`REPORTE MENSUAL: ${monthNames[month - 1].toUpperCase()} ${year}`, pageWidth / 2, 25, { align: "center" });
+  
+  const titles: Record<string, string> = {
+    'finanzas': 'FINANCIERO',
+    'clientes': 'DE CLIENTES',
+    'inventario': 'DE INVENTARIO',
+    'procesos': 'DE PROCESOS'
+  };
+  
+  doc.text(`REPORTE ${titles[tab] || 'MENSUAL'}: ${monthNames[month - 1].toUpperCase()} ${year}`, pageWidth / 2, 25, { align: "center" });
 
   doc.setDrawColor(200);
   doc.line(14, 30, pageWidth - 14, 30);
@@ -385,66 +393,176 @@ export async function generateMonthlyReportPDF(quotes: any[], month: number, yea
   const totalCollected = quotes.reduce((sum, q) => sum + (q.realAmountCollected || 0), 0);
   const totalUtility = activeQuotes.reduce((sum, q) => sum + (q.realUtilityTotal || 0), 0);
 
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Total Cotizaciones: ${quotes.length}`, 14, 40);
-  doc.text(`Total Cotizado: $${totalAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 14, 46);
-  doc.text(`Cobrado Real: $${totalCollected.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 80, 40);
-  doc.text(`Utilidad Estimada Total: $${totalUtility.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 80, 46);
+  if (tab === 'finanzas') {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Total Cotizaciones: ${quotes.length}`, 14, 40);
+    doc.text(`Total Cotizado: $${totalAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 14, 46);
+    doc.text(`Cobrado Real: $${totalCollected.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 80, 40);
+    doc.text(`Utilidad Estimada Total: $${totalUtility.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 80, 46);
 
-  // Table
-  const tableColumn = ["Folio", "Fecha", "Cliente", "Estatus", "Total", "Utilidad"];
-  const tableRows = quotes.map(q => [
-    q.folio,
-    new Date(q.createdAt).toLocaleDateString("es-MX"),
-    q.client?.name || "Sin cliente",
-    q.status,
-    `$${q.total.toFixed(2)}`,
-    `$${(q.realUtilityTotal || 0).toFixed(2)}`
-  ]);
+    const tableColumn = ["Folio", "Fecha", "Cliente", "Estatus", "Total", "Utilidad"];
+    const tableRows = quotes.map(q => [
+      q.folio,
+      new Date(q.createdAt).toLocaleDateString("es-MX"),
+      q.client?.name || q.prospectName || "Sin cliente",
+      q.status,
+      `$${q.total.toFixed(2)}`,
+      `$${(q.realUtilityTotal || 0).toFixed(2)}`
+    ]);
 
-  autoTable(doc, {
-    startY: 55,
-    head: [tableColumn],
-    body: tableRows,
-    theme: 'striped',
-    headStyles: { fillColor: [220, 38, 38] }, // Red-600
-    styles: { fontSize: 8 },
-    columnStyles: {
-      4: { halign: 'right' },
-      5: { halign: 'right' }
-    }
-  });
+    autoTable(doc, {
+      startY: 55,
+      head: [tableColumn],
+      body: tableRows,
+      theme: 'striped',
+      headStyles: { fillColor: [220, 38, 38] },
+      styles: { fontSize: 8 },
+      columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' } }
+    });
 
-  const finalY = (doc as any).lastAutoTable.finalY + 15;
-  const totalCosts = totalCollected - totalUtility;
+    const finalY = (doc as any).lastAutoTable.finalY + 15;
+    const totalCosts = totalCollected - totalUtility;
 
-  doc.setDrawColor(220, 38, 38);
-  doc.setLineWidth(0.5);
-  doc.rect(14, finalY, pageWidth - 28, 40);
+    doc.setDrawColor(220, 38, 38);
+    doc.setLineWidth(0.5);
+    doc.rect(14, finalY, pageWidth - 28, 40);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text("RESUMEN DE RESULTADOS", pageWidth / 2, finalY + 10, { align: "center" });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("RESUMEN DE RESULTADOS", pageWidth / 2, finalY + 10, { align: "center" });
 
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text("Total Ingresos (Cobrado Real):", 20, finalY + 20);
-  doc.setFont("helvetica", "bold");
-  doc.text(`$${totalCollected.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - 20, finalY + 20, { align: "right" });
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("Total Ingresos (Cobrado Real):", 20, finalY + 20);
+    doc.setFont("helvetica", "bold");
+    doc.text(`$${totalCollected.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - 20, finalY + 20, { align: "right" });
 
-  doc.setFont("helvetica", "normal");
-  doc.text("Total Gastos Operativos:", 20, finalY + 27);
-  doc.setFont("helvetica", "bold");
-  doc.text(`$${totalCosts.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - 20, finalY + 27, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.text("Total Gastos Operativos:", 20, finalY + 27);
+    doc.setFont("helvetica", "bold");
+    doc.text(`$${totalCosts.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - 20, finalY + 27, { align: "right" });
 
-  doc.setDrawColor(200);
-  doc.line(20, finalY + 31, pageWidth - 20, finalY + 31);
+    doc.setDrawColor(200);
+    doc.line(20, finalY + 31, pageWidth - 20, finalY + 31);
 
-  doc.setFontSize(11);
-  doc.setTextColor(220, 38, 38);
-  doc.text("UTILIDAD REAL NETA:", 20, finalY + 36);
-  doc.text(`$${totalUtility.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - 20, finalY + 36, { align: "right" });
+    doc.setFontSize(11);
+    doc.setTextColor(220, 38, 38);
+    doc.text("UTILIDAD REAL NETA:", 20, finalY + 36);
+    doc.text(`$${totalUtility.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - 20, finalY + 36, { align: "right" });
+  } 
+  else if (tab === 'clientes') {
+    const clientsStats = Array.from(quotes.reduce((acc, q) => {
+      const cId = q.clientId || `prospect_${q.prospectName || 'unknown'}`;
+      if (!acc.has(cId)) acc.set(cId, { name: q.client?.name || q.prospectName || 'Sin Cliente', count: 0, total: 0, utility: 0 });
+      const entry = acc.get(cId);
+      entry.count += 1;
+      if(q.status !== "CANCELLED" && q.status !== "REJECTED") {
+        entry.total += q.total;
+        entry.utility += (q.realUtilityTotal || 0);
+      }
+      return acc;
+    }, new Map()).values()).sort((a: any, b: any) => b.total - a.total);
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Total Clientes Activos: ${clientsStats.length}`, 14, 40);
+    doc.text(`Ingreso Total Generado: $${totalAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 80, 40);
+
+    const tableColumn = ["Cliente / Prospecto", "Cotizaciones", "Ingreso Aprobado", "Utilidad Neta"];
+    const tableRows = clientsStats.map((c: any) => [
+      c.name,
+      c.count.toString(),
+      `$${c.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+      `$${c.utility.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+    ]);
+
+    autoTable(doc, {
+      startY: 50,
+      head: [tableColumn],
+      body: tableRows,
+      theme: 'striped',
+      headStyles: { fillColor: [220, 38, 38] },
+      styles: { fontSize: 8 },
+      columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
+    });
+  }
+  else if (tab === 'inventario') {
+    const productsStats = Array.from(activeQuotes.reduce((acc, q) => {
+      q.concepts.forEach((c: any) => {
+        if(c.conceptType === "PRODUCTO" || c.conceptType === "RESALE") {
+          const pName = c.description || 'Producto sin nombre';
+          if (!acc.has(pName)) acc.set(pName, { name: pName, type: c.conceptType, quantity: 0, revenue: 0, cost: 0 });
+          const entry = acc.get(pName);
+          entry.quantity += c.quantity;
+          entry.revenue += ((c.finalUnitPrice || 0) * c.quantity);
+          entry.cost += ((c.realCost || 0));
+        }
+      });
+      return acc;
+    }, new Map()).values()).sort((a: any, b: any) => b.revenue - a.revenue);
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Total Productos Únicos: ${productsStats.length}`, 14, 40);
+
+    const tableColumn = ["Producto", "Tipo", "Cantidad", "Ingreso Generado", "Utilidad"];
+    const tableRows = productsStats.map((p: any) => [
+      p.name,
+      p.type === 'RESALE' ? 'Reventa' : 'Propio',
+      p.quantity.toString(),
+      `$${p.revenue.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+      `$${(p.revenue - p.cost).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+    ]);
+
+    autoTable(doc, {
+      startY: 50,
+      head: [tableColumn],
+      body: tableRows,
+      theme: 'striped',
+      headStyles: { fillColor: [220, 38, 38] },
+      styles: { fontSize: 8 },
+      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'right' } }
+    });
+  }
+  else if (tab === 'procesos') {
+    const processesStats = Array.from(activeQuotes.reduce((acc, q) => {
+      q.concepts.forEach((c: any) => {
+        if(c.conceptType !== "PRODUCTO" && c.conceptType !== "RESALE") {
+          const type = c.conceptType;
+          if (!acc.has(type)) acc.set(type, { name: type, quantity: 0, revenue: 0, cost: 0, utility: 0 });
+          const entry = acc.get(type);
+          entry.quantity += c.quantity;
+          entry.revenue += ((c.finalUnitPrice || 0) * c.quantity);
+          entry.cost += (c.realCost || 0);
+          entry.utility += (((c.finalUnitPrice || 0) * c.quantity) - (c.realCost || 0));
+        }
+      });
+      return acc;
+    }, new Map()).values()).sort((a: any, b: any) => b.revenue - a.revenue);
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Tipos de Procesos Prestados: ${processesStats.length}`, 14, 40);
+
+    const tableColumn = ["Servicio / Proceso", "Contrataciones", "Ingreso Generado", "Utilidad Neta"];
+    const tableRows = processesStats.map((p: any) => [
+      p.name,
+      p.quantity.toString(),
+      `$${p.revenue.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+      `$${p.utility.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+    ]);
+
+    autoTable(doc, {
+      startY: 50,
+      head: [tableColumn],
+      body: tableRows,
+      theme: 'striped',
+      headStyles: { fillColor: [220, 38, 38] },
+      styles: { fontSize: 8 },
+      columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
+    });
+  }
 
   const buffer = Buffer.from(doc.output("arraybuffer"));
   return buffer;
