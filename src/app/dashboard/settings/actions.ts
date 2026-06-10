@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { encrypt } from "@/lib/encryption";
 
 // ─── Cost configs ─────────────────────────────────────────────────────────────
@@ -75,31 +75,37 @@ export async function updateUserAction(formData: FormData) {
 // ─── Update own profile ───────────────────────────────────────────────────────
 
 export async function updateProfileAction(formData: FormData) {
-  const session = await getServerSession(authOptions);
-  const currentUserId = (session?.user as any)?.id;
-  if (!currentUserId) throw new Error("No autenticado");
+  try {
+    const session = await getServerSession(authOptions);
+    const currentUserId = (session?.user as any)?.id;
+    if (!currentUserId) return { success: false, error: "No autenticado" };
 
-  const name  = (formData.get("name") as string).trim();
-  const email = (formData.get("email") as string).trim().toLowerCase();
+    const name  = (formData.get("name") as string).trim();
+    const email = (formData.get("email") as string).trim().toLowerCase();
 
-  const data: any = { name, email };
+    const data: any = { name, email };
 
-  const currentPassword = (formData.get("currentPassword") as string)?.trim();
-  const newPassword     = (formData.get("newPassword") as string)?.trim();
+    const currentPassword = (formData.get("currentPassword") as string)?.trim();
+    const newPassword     = (formData.get("newPassword") as string)?.trim();
 
-  if (currentPassword && newPassword) {
-    const user = await prisma.user.findUnique({ where: { id: currentUserId } });
-    if (!user) throw new Error("Usuario no encontrado");
+    if (currentPassword && newPassword) {
+      const user = await prisma.user.findUnique({ where: { id: currentUserId } });
+      if (!user) return { success: false, error: "Usuario no encontrado" };
 
-    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!valid) throw new Error("La contraseña actual es incorrecta");
-    if (newPassword.length < 6) throw new Error("La nueva contraseña debe tener al menos 6 caracteres");
+      const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!valid) return { success: false, error: "La contraseña actual es incorrecta" };
+      if (newPassword.length < 6) return { success: false, error: "La nueva contraseña debe tener al menos 6 caracteres" };
 
-    data.passwordHash = await bcrypt.hash(newPassword, 10);
+      data.passwordHash = await bcrypt.hash(newPassword, 10);
+    }
+
+    await prisma.user.update({ where: { id: currentUserId }, data });
+    revalidatePath("/dashboard/settings");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error in updateProfileAction:", error);
+    return { success: false, error: error.message || "Error al actualizar el perfil" };
   }
-
-  await prisma.user.update({ where: { id: currentUserId }, data });
-  revalidatePath("/dashboard/settings");
 }
 
 // ─── Toggle user active ───────────────────────────────────────────────────────
@@ -115,27 +121,33 @@ export async function toggleUserActiveAction(userId: string, active: boolean) {
 // ─── Update own email credentials ─────────────────────────────────────────────
 
 export async function updateUserEmailConfigAction(formData: FormData) {
-  const session = await getServerSession(authOptions);
-  const currentUserId = (session?.user as any)?.id;
-  if (!currentUserId) throw new Error("No autenticado");
+  try {
+    const session = await getServerSession(authOptions);
+    const currentUserId = (session?.user as any)?.id;
+    if (!currentUserId) return { success: false, error: "No autenticado" };
 
-  const emailPassword = (formData.get("emailPassword") as string)?.trim();
-  const imapServer = (formData.get("imapServer") as string)?.trim() || "imap.hostinger.com";
-  const smtpServer = (formData.get("smtpServer") as string)?.trim() || "smtp.hostinger.com";
+    const emailPassword = (formData.get("emailPassword") as string)?.trim();
+    const imapServer = (formData.get("imapServer") as string)?.trim() || "imap.hostinger.com";
+    const smtpServer = (formData.get("smtpServer") as string)?.trim() || "smtp.hostinger.com";
 
-  const data: any = {
-    emailIncomingServer: imapServer,
-    emailOutgoingServer: smtpServer,
-  };
+    const data: any = {
+      emailIncomingServer: imapServer,
+      emailOutgoingServer: smtpServer,
+    };
 
-  if (emailPassword) {
-    data.emailPasswordEncrypted = encrypt(emailPassword);
+    if (emailPassword) {
+      data.emailPasswordEncrypted = encrypt(emailPassword);
+    }
+
+    await prisma.user.update({
+      where: { id: currentUserId },
+      data,
+    });
+
+    revalidatePath("/dashboard/settings");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error in updateUserEmailConfigAction:", error);
+    return { success: false, error: error.message || "Error al actualizar la configuración de correo" };
   }
-
-  await prisma.user.update({
-    where: { id: currentUserId },
-    data,
-  });
-
-  revalidatePath("/dashboard/settings");
 }

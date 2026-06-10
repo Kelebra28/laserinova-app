@@ -33,10 +33,14 @@ export function ProfileForm({ user }: Props) {
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
       try {
-        await updateProfileAction(fd);
-        setCurrentPassword("");
-        setNewPassword("");
-        showToast("ok", "Perfil actualizado correctamente");
+        const res = await updateProfileAction(fd);
+        if (res && !res.success) {
+          showToast("err", res.error || "Error al actualizar el perfil");
+        } else {
+          setCurrentPassword("");
+          setNewPassword("");
+          showToast("ok", "Perfil actualizado correctamente");
+        }
       } catch (err: any) {
         showToast("err", err.message ?? "Error al actualizar el perfil");
       }

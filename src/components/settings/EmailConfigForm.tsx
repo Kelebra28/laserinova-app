@@ -19,11 +19,18 @@ export function EmailConfigForm({ incomingServer, outgoingServer }: EmailConfigF
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
       try {
-        await updateUserEmailConfigAction(formData);
-        setStatus({
-          type: "success",
-          message: "¡Configuración de correo guardada con éxito!",
-        });
+        const res = await updateUserEmailConfigAction(formData);
+        if (res && !res.success) {
+          setStatus({
+            type: "error",
+            message: res.error || "Hubo un error al intentar guardar.",
+          });
+        } else {
+          setStatus({
+            type: "success",
+            message: "¡Configuración de correo guardada con éxito!",
+          });
+        }
       } catch (error: any) {
         setStatus({
           type: "error",
