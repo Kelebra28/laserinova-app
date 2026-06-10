@@ -4,7 +4,7 @@ import { loadEmailFromDisk, saveEmailToDisk, getStorageBasePath } from '@/lib/em
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 import { decrypt } from '@/lib/encryption';
 import fs from 'fs';
 import path from 'path';
@@ -95,12 +95,15 @@ export async function GET(
       connectionTimeout: 8000,
     });
 
-    await client.connect();
-
     let html = '';
     let text = '';
+    let connectionSuccess = false;
+    let connectionErrorMessage = '';
 
     try {
+      await client.connect();
+      connectionSuccess = true;
+
       // Map CRM folder to IMAP folder names
       const imapFolder = email.folder === 'SENT' ? 'INBOX.Sent' : 'INBOX';
       
@@ -136,19 +139,37 @@ export async function GET(
       } catch (imapErr: any) {
         console.warn('IMAP Search/Fetch failed for folder', imapFolder, ':', imapErr.message);
       }
+
+      await client.logout();
     } catch (err: any) {
+      connectionErrorMessage = err.message || 'Error de conexión';
       console.warn('IMAP connection or lock failed:', err.message);
     }
 
-    await client.logout();
-
     if (!html && !text) {
+      let title = "Error de Conexión de Correo";
+      let description = "No se pudo descargar el contenido de este correo. Esto sucede porque la contraseña de tu correo en Hostinger no está configurada o es incorrecta.";
+      
+      if (connectionSuccess) {
+        title = "Correo no encontrado";
+        description = `Nos conectamos exitosamente a tu buzón (${imapUser}), pero el mensaje no fue encontrado en la carpeta "${email.folder === 'SENT' ? 'Enviados' : 'Recibidos'}". Esto ocurre si el correo fue borrado del servidor de Hostinger o si pertenece a tu otra cuenta anterior (raball@laserinova.com).`;
+      } else if (connectionErrorMessage) {
+        description = `No se pudo conectar al servidor de correo de Hostinger. Detalles del error: "${connectionErrorMessage}". Por favor verifica tu contraseña en Ajustes.`;
+      }
+
       return NextResponse.json({ 
         success: true, 
-        html: `<div style="font-family: sans-serif; padding: 12px; border: 1px solid #ef4444; background: #fef2f2; color: #b91c1c; border-radius: 8px;">
-          <strong>Error de descarga:</strong> No pudimos obtener el contenido de este correo desde el servidor de Hostinger.
+        html: `<div style="font-family: sans-serif; padding: 24px; border: 1px solid #fca5a5; background: #fef2f2; color: #991b1b; border-radius: 16px; max-width: 460px; margin: 40px auto; text-align: center; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.05);">
+          <div style="font-size: 28px; margin-bottom: 12px;">${connectionSuccess ? '✉️' : '⚠️'}</div>
+          <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold; color: #7f1d1d; text-transform: uppercase; letter-spacing: 0.5px;">${title}</h4>
+          <p style="margin: 0 0 20px 0; font-size: 12px; line-height: 1.6; color: #b91c1c;">
+            ${description}
+          </p>
+          <a href="/dashboard/settings" style="display: inline-block; background: #ef4444; color: white; text-decoration: none; padding: 10px 20px; border-radius: 12px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.2); transition: all 0.2s;">
+            Configurar mi Correo
+          </a>
         </div>`,
-        text: 'Error al descargar desde Hostinger IMAP.'
+        text: `Error: ${title}. ${description}`
       });
     }
 

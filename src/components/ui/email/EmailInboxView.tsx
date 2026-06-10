@@ -11,6 +11,7 @@ interface EmailInboxViewProps {
   emails: Email[];
   isLoading: boolean;
   isSyncing: boolean;
+  syncError?: string | null;
   currentFolder: string;
   onFolderChange: (folder: string) => void;
   onRefresh: () => void;
@@ -30,6 +31,7 @@ export function EmailInboxView({
   emails, 
   isLoading, 
   isSyncing, 
+  syncError,
   currentFolder, 
   onFolderChange, 
   onRefresh, 
@@ -585,6 +587,20 @@ export function EmailInboxView({
                 </div>
               )}
             </div>
+
+            {/* Sync Error Alert Banner */}
+            {syncError && (
+              <div className="mx-6 mt-4 p-4 bg-red-50 border border-red-150 text-red-900 rounded-2xl flex items-start gap-3 text-xs font-semibold animate-in fade-in duration-200">
+                <AlertOctagon className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold">Error de sincronización con tu cuenta de correo:</p>
+                  <p className="font-normal text-red-750/90 leading-relaxed">{syncError}</p>
+                  <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider mt-1.5">
+                    Ve a "Configuración" (arriba a la derecha) &gt; pestaña "Correo Hostinger" e ingresa la contraseña correcta de tu correo.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Email List Table */}
             <div className="flex-1 overflow-y-auto bg-slate-50/20">

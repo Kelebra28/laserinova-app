@@ -15,6 +15,7 @@ export default function EmailPage() {
     emails, 
     isLoading, 
     isSyncing, 
+    syncError,
     syncEmails, 
     fetchEmails,
     currentFolder, 
@@ -109,6 +110,7 @@ export default function EmailPage() {
             emails={emails}
             isLoading={isLoading}
             isSyncing={isSyncing}
+            syncError={syncError}
             currentFolder={currentFolder}
             onFolderChange={changeFolder}
             onRefresh={syncEmails}

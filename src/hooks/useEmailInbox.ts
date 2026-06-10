@@ -43,6 +43,7 @@ export function useEmailInbox(initialFolder: string = 'INBOX') {
   const [totalEmails, setTotalEmails] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [currentFolder, setCurrentFolder] = useState(initialFolder);
   const [page, setPage] = useState(1);
   const limit = 10;
@@ -75,14 +76,19 @@ export function useEmailInbox(initialFolder: string = 'INBOX') {
 
   const syncEmails = useCallback(async () => {
     setIsSyncing(true);
+    setSyncError(null);
     try {
       const res = await fetch('/api/email/sync', { method: 'POST' });
       if (res.ok) {
         await fetchEmails(currentFolder, 1, false); // Block loading during forced sync to show new mail
         setPage(1);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setSyncError(data.message || data.errorDetail || 'Error al intentar conectar con el servidor IMAP.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to sync emails', error);
+      setSyncError(error.message || 'Error de red al intentar sincronizar.');
     }
     setIsSyncing(false);
   }, [fetchEmails, currentFolder]);
@@ -117,6 +123,7 @@ export function useEmailInbox(initialFolder: string = 'INBOX') {
     emails, 
     isLoading, 
     isSyncing, 
+    syncError,
     syncEmails, 
     fetchEmails, 
     currentFolder, 

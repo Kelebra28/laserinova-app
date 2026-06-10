@@ -104,6 +104,7 @@ export function EmailConfigForm({ incomingServer, outgoingServer }: EmailConfigF
           type="password"
           name="emailPassword"
           placeholder="Tu contraseña de Hostinger..."
+          autoComplete="new-password"
           className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-sm text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition-all font-medium placeholder-gray-300"
         />
         <p className="text-[10px] text-gray-400 font-medium mt-1">
