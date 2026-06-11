@@ -40,7 +40,7 @@ function getInitialData(folder: string): { emails: Email[]; total: number } {
   return { emails: [], total: 0 };
 }
 
-export function useEmailInbox(initialFolder: string = 'INBOX') {
+export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: string) {
   const [emails, setEmails] = useState<Email[]>([]);
   const [totalEmails, setTotalEmails] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -114,12 +114,24 @@ export function useEmailInbox(initialFolder: string = 'INBOX') {
     fetchEmails(currentFolder, newPage, false); // Blocker-load during page changes
   };
 
-  // Silent sync on mount
+  // Silent sync on mount + smart passive sync
   useEffect(() => {
     const folderData = getInitialData(currentFolder);
     const hasCache = folderData.emails.length > 0;
     fetchEmails(currentFolder, page, hasCache);
-  }, [currentFolder, page, fetchEmails]);
+
+    if (userEmail && currentFolder === 'INBOX' && page === 1) {
+      const now = Date.now();
+      const cacheKey = `last_imap_sync_${userEmail.trim().toLowerCase()}`;
+      const lastSyncStr = localStorage.getItem(cacheKey);
+      const lastSync = lastSyncStr ? parseInt(lastSyncStr, 10) : 0;
+      
+      if (now - lastSync > 5 * 60 * 1000) {
+        localStorage.setItem(cacheKey, now.toString());
+        syncEmails();
+      }
+    }
+  }, [currentFolder, page, fetchEmails, userEmail, syncEmails]);
 
   return { 
     emails, 

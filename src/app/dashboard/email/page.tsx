@@ -24,7 +24,7 @@ export default function EmailPage() {
     totalEmails,
     limit,
     changePage
-  } = useEmailInbox();
+  } = useEmailInbox('INBOX', session?.user?.email || '');
   const { isSending, sendEmail, downloadAttachment, updateEmail } = useEmailActions();
   
   const [isComposeOpen, setIsComposeOpen] = useState(false);
