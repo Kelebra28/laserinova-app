@@ -173,6 +173,14 @@ export async function POST(req: Request) {
 
     } catch (connectionError: any) {
       console.warn("IMAP Connection failed.", connectionError.message);
+      const errMsg = (connectionError.message || '').toUpperCase();
+      const isAuthError = decryptionFailed || 
+                          !imapPass || 
+                          errMsg.includes('AUTHENTICATIONFAILED') || 
+                          errMsg.includes('LOGIN FAILED') || 
+                          errMsg.includes('CREDENTIAL') || 
+                          errMsg.includes('AUTH');
+      
       return NextResponse.json({ 
         success: false, 
         message: 'Sync failed to connect to IMAP server', 
@@ -181,12 +189,17 @@ export async function POST(req: Request) {
         decryptionError,
         usedFallback,
         imapUserUsed: imapUser,
-        mock: false 
+        mock: false,
+        authError: isAuthError
       }, { status: 500 });
     }
   } catch (error: any) {
     console.error('Email sync general error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message,
+      authError: false
+    }, { status: 500 });
   }
 }
 

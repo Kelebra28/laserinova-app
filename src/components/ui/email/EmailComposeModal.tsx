@@ -10,6 +10,7 @@ interface EmailComposeModalProps {
   initialTo?: string;
   initialSubject?: string;
   initialText?: string;
+  initialQuotedText?: string;
 }
 
 export function EmailComposeModal({ 
@@ -19,12 +20,15 @@ export function EmailComposeModal({
   isSending,
   initialTo = '',
   initialSubject = '',
-  initialText = ''
+  initialText = '',
+  initialQuotedText = ''
 }: EmailComposeModalProps) {
   const [to, setTo] = useState(initialTo);
   const [cc, setCc] = useState('');
   const [subject, setSubject] = useState(initialSubject);
   const [text, setText] = useState(initialText);
+  const [quotedText, setQuotedText] = useState(initialQuotedText);
+  const [showQuoted, setShowQuoted] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -37,9 +41,11 @@ export function EmailComposeModal({
       setCc('');
       setSubject(initialSubject);
       setText(initialText);
+      setQuotedText(initialQuotedText);
+      setShowQuoted(false);
       setErrorMsg('');
     }
-  }, [isOpen, initialTo, initialSubject, initialText]);
+  }, [isOpen, initialTo, initialSubject, initialText, initialQuotedText]);
 
   const templates = [
     {
@@ -106,12 +112,14 @@ export function EmailComposeModal({
     if (!to || !subject || !text) return;
     
     setErrorMsg('');
-    const result = await onSend(to, cc, subject, text, files);
+    const finalText = text + (quotedText ? `\n\n\n${quotedText}` : '');
+    const result = await onSend(to, cc, subject, finalText, files);
     if (result.success) {
       setTo('');
       setCc('');
       setSubject('');
       setText('');
+      setQuotedText('');
       setFiles([]);
       onClose();
     } else {
@@ -202,57 +210,88 @@ export function EmailComposeModal({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="flex flex-col flex-1 p-4 space-y-3 bg-gray-50/10 relative">
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 p-4 space-y-3 bg-gray-50/10 relative overflow-hidden">
             
-            {/* Error Banner */}
-            {errorMsg && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-lg text-xs font-semibold mb-2 animate-in fade-in slide-in-from-top-1 flex items-start gap-2">
-                <span className="mt-0.5 block flex-shrink-0">⚠️</span>
-                <span>{errorMsg}</span>
+            {/* Headers (Sticky at top) */}
+            <div className="flex-shrink-0 space-y-3">
+              {/* Error Banner */}
+              {errorMsg && (
+                <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-lg text-xs font-semibold mb-2 animate-in fade-in slide-in-from-top-1 flex items-start gap-2">
+                  <span className="mt-0.5 block flex-shrink-0">⚠️</span>
+                  <span>{errorMsg}</span>
+                </div>
+              )}
+              {/* Para (To) */}
+              <div className="pb-1">
+                <EmailInput 
+                  label="Para:" 
+                  placeholder="ejemplo@correo.com" 
+                  emails={to.split(',').filter(Boolean).map(e => e.trim())} 
+                  onChange={(emails) => setTo(emails.join(','))} 
+                  required 
+                />
               </div>
-            )}
-            {/* Para (To) */}
-            <div className="pb-1">
-              <EmailInput 
-                label="Para:" 
-                placeholder="ejemplo@correo.com" 
-                emails={to.split(',').filter(Boolean).map(e => e.trim())} 
-                onChange={(emails) => setTo(emails.join(','))} 
-                required 
-              />
+
+              {/* CC */}
+              <div className="pb-2">
+                <EmailInput 
+                  label="CC (Con Copia):" 
+                  placeholder="copia@correo.com" 
+                  emails={cc.split(',').filter(Boolean).map(e => e.trim())} 
+                  onChange={(emails) => setCc(emails.join(','))} 
+                />
+              </div>
+
+              {/* Asunto (Subject) */}
+              <div className="flex items-center border-b border-gray-150/70 pb-2">
+                <span className="text-xs font-medium text-gray-400 w-12">Asunto:</span>
+                <input 
+                  type="text" 
+                  value={subject}
+                  onChange={e => setSubject(e.target.value)}
+                  required
+                  placeholder="Asunto de tu correo profesional"
+                  className="flex-1 bg-transparent outline-none text-xs font-semibold text-gray-800 placeholder-gray-400"
+                />
+              </div>
             </div>
 
-            {/* CC */}
-            <div className="pb-2">
-              <EmailInput 
-                label="CC (Con Copia):" 
-                placeholder="copia@correo.com" 
-                emails={cc.split(',').filter(Boolean).map(e => e.trim())} 
-                onChange={(emails) => setCc(emails.join(','))} 
-              />
-            </div>
-
-            {/* Asunto (Subject) */}
-            <div className="flex items-center border-b border-gray-150/70 pb-2">
-              <span className="text-xs font-medium text-gray-400 w-12">Asunto:</span>
-              <input 
-                type="text" 
-                value={subject}
-                onChange={e => setSubject(e.target.value)}
+            {/* Scrollable middle container for message writing and history */}
+            <div className="flex-1 overflow-y-auto min-h-0 space-y-3 pr-1 select-text">
+              {/* Body */}
+              <textarea 
+                placeholder="Redacta el contenido de tu correo aquí o usa nuestro botón 'Redactar Pro' para cargar una plantilla profesional..."
+                value={text}
+                onChange={e => setText(e.target.value)}
                 required
-                placeholder="Asunto de tu correo profesional"
-                className="flex-1 bg-transparent outline-none text-xs font-semibold text-gray-800 placeholder-gray-400"
+                className="w-full bg-transparent outline-none text-xs text-gray-700 resize-none font-sans leading-relaxed pt-2 min-h-[140px]"
               />
-            </div>
 
-            {/* Body */}
-            <textarea 
-              placeholder="Redacta el contenido de tu correo aquí o usa nuestro botón 'Redactar Pro' para cargar una plantilla profesional..."
-              value={text}
-              onChange={e => setText(e.target.value)}
-              required
-              className="flex-1 w-full bg-transparent outline-none text-xs text-gray-700 resize-none font-sans leading-relaxed pt-2"
-            />
+              {/* Quoted History (Gmail style fold) */}
+              {quotedText && (
+                <div className="border-t border-slate-100 pt-2.5 flex flex-col items-start gap-2.5 w-full flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowQuoted(!showQuoted)}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 rounded-lg text-[10px] font-extrabold transition-all border border-slate-200/50 shadow-sm active:scale-95 select-none"
+                    title="Mostrar/ocultar historial"
+                  >
+                    <span>...</span>
+                    {showQuoted ? (
+                      <ChevronRight className="w-3 h-3 text-slate-400 rotate-90 transition-transform" />
+                    ) : (
+                      <ChevronRight className="w-3 h-3 text-slate-400 transition-transform" />
+                    )}
+                  </button>
+                  
+                  {showQuoted && (
+                    <div className="w-full max-h-48 overflow-y-auto bg-slate-50 border-l-2 border-red-600 rounded-r-xl p-3.5 text-xs text-slate-600 font-sans leading-relaxed select-text whitespace-pre-wrap text-left border-y border-r border-slate-200/60 shadow-inner">
+                      {quotedText}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Attachments List */}
             {files.length > 0 && (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, Trash2, Settings2, Search } from "lucide-react";
+import { Plus, Trash2, Settings2, Scissors, Layers, CheckSquare, Camera, Sliders, Info } from "lucide-react";
 import { createProcessAction, deleteProcessAction } from "./actions";
 import SubmitButton from "@/components/ui/SubmitButton";
 import MaterialRecipeSelector from "@/components/processes/MaterialRecipeSelector";
@@ -14,6 +14,8 @@ const MACHINES = [
   { id: "CO2", name: "CO2" },
   { id: "UV", name: "UV" },
   { id: "XTOOL", name: "xTool" },
+  { id: "PLOTTER", name: "Plotter" },
+  { id: "CAMA_PLANA", name: "Cama Plana" },
 ];
 
 export default function ProcessTabs({ 
@@ -72,6 +74,78 @@ export default function ProcessTabs({
           </button>
         ))}
       </div>
+
+      {/* Cuidados e Instrucciones Especiales según la máquina activa */}
+      {activeTab === "PLOTTER" && (
+        <div className="mb-6 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/80 animate-in fade-in duration-300">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-blue-600/10 text-blue-600 rounded-xl">
+              <Scissors className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-black text-blue-950 uppercase tracking-wider">Protocolo de Cuidado y Notas de Configuración (Plotter)</h3>
+              <p className="text-[11px] text-slate-700 mt-1 font-semibold leading-relaxed">
+                Antes de iniciar cualquier producción en el plotter de corte/impresión, sigue estas recomendaciones obligatorias:
+              </p>
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3 text-[11px] font-bold text-slate-700">
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
+                  Limpiar rodillos de arrastre semanalmente para evitar acumulación de adhesivo.
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
+                  Validar que la cuchilla no tenga residuos de vinil o lona atorados en el cabezal.
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
+                  Regular la exposición de la cuchilla (debe sobresalir el equivalente a una tarjeta de crédito).
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
+                  <strong>Realizar siempre un corte de prueba (Test Cut)</strong> antes de mandar todo el rollo.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "CAMA_PLANA" && (
+        <div className="mb-6 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/80 animate-in fade-in duration-300">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-blue-600/10 text-blue-600 rounded-xl">
+              <Camera className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xs font-black text-blue-950 uppercase tracking-wider">Rutina Diaria de Cuidado y Calibración (Cama Plana UV)</h3>
+              <p className="text-[11px] text-slate-700 mt-1 font-semibold leading-relaxed">
+                Este equipo requiere mantenimiento de precisión constante para evitar daños en los cabezales UV:
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+                <div className="bg-white/95 p-3 rounded-xl border border-blue-100 shadow-sm">
+                  <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest block mb-1">1. Limpieza y Test Diario</span>
+                  <p className="text-[10px] font-bold text-slate-700 leading-normal">
+                    Hacer Head Cleaning al encender. Imprimir un <strong>Nozzle Check</strong> (patrón de prueba) y validar que no falte ninguna línea.
+                  </p>
+                </div>
+                <div className="bg-white/95 p-3 rounded-xl border border-blue-100 shadow-sm">
+                  <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest block mb-1">2. Escáner y Cámara UV</span>
+                  <p className="text-[10px] font-bold text-slate-700 leading-normal">
+                    Limpiar el lente de la cámara y cristal del escáner con alcohol isopropílico. Validar la calibración de registro en el software de control.
+                  </p>
+                </div>
+                <div className="bg-white/95 p-3 rounded-xl border border-blue-100 shadow-sm">
+                  <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest block mb-1">3. Altura de Seguridad</span>
+                  <p className="text-[10px] font-bold text-slate-700 leading-normal">
+                    Usar siempre el sensor automático de altura (Auto-height) para evitar que los cabezales golpeen o raspen el material base.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
@@ -137,29 +211,85 @@ export default function ProcessTabs({
                   <input type="hidden" name="material" value={selectedMaterial} required />
                 </div>
 
-                <div className="col-span-full mt-2"><span className="text-[10px] font-black text-red-600 uppercase tracking-widest bg-red-50 px-2 py-1 rounded">Parámetros de Corte</span></div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Vel. Corte (mm/s)</label>
-                  <input type="number" step="0.1" name="cutSpeed" className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Pot. Corte (%)</label>
-                  <input type="number" step="0.1" name="cutPower" className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all" />
-                </div>
+                {activeTab === "PLOTTER" ? (
+                  <>
+                    <div className="col-span-full mt-2">
+                      <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded">Parámetros del Plotter</span>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Velocidad de Corte (mm/s)</label>
+                      <input type="number" step="1" name="cutSpeed" required placeholder="Ej. 150" className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Presión / Fuerza (g)</label>
+                      <input type="number" step="1" name="cutPower" required placeholder="Ej. 80" className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Tipo de Cuchilla / Ángulo</label>
+                      <select name="waveType" className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all cursor-pointer">
+                        <option value="Cuchilla de 45°">Cuchilla de 45° (Normal)</option>
+                        <option value="Cuchilla de 60°">Cuchilla de 60° (Grosor/Detalle)</option>
+                        <option value="Cuchilla de 30°">Cuchilla de 30° (Vinil Delgado)</option>
+                        <option value="Otro / Bolígrafo">Otro / Bolígrafo</option>
+                      </select>
+                    </div>
+                  </>
+                ) : activeTab === "CAMA_PLANA" ? (
+                  <>
+                    <div className="col-span-full mt-2">
+                      <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded">Configuración de Impresión UV</span>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Tipo de Barniz</label>
+                      <select name="waveType" className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all cursor-pointer">
+                        <option value="Ninguno">Ninguno</option>
+                        <option value="Brillante (Gloss)">Brillante (Gloss)</option>
+                        <option value="Mate (Matte)">Mate (Matte)</option>
+                        <option value="Efecto 3D / Emboss">Efecto 3D / Emboss (Relieve)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Saturación de Color (%)</label>
+                      <input type="number" name="engravePower" placeholder="Ej. 100" required className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Saturación de Barniz (%)</label>
+                      <input type="number" name="cutPower" placeholder="Ej. 60" className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Resolución (DPI)</label>
+                      <input type="number" name="engraveFrequency" placeholder="Ej. 720" className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all" />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="col-span-full mt-2"><span className="text-[10px] font-black text-red-600 uppercase tracking-widest bg-red-50 px-2 py-1 rounded">Parámetros de Corte</span></div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Vel. Corte (mm/s)</label>
+                      <input type="number" step="0.1" name="cutSpeed" className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Pot. Corte (%)</label>
+                      <input type="number" step="0.1" name="cutPower" className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all" />
+                    </div>
 
-                <div className="col-span-full mt-2"><span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded">Parámetros de Grabado</span></div>
-                
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Velocidad (mm/s)</label>
-                  <input type="number" step="0.1" name="engraveSpeed" required className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Potencia (%)</label>
-                  <input type="number" step="0.1" name="engravePower" required className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all" />
-                </div>
+                    <div className="col-span-full mt-2"><span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded">Parámetros de Grabado</span></div>
+                    
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Velocidad (mm/s)</label>
+                      <input type="number" step="0.1" name="engraveSpeed" required className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Potencia (%)</label>
+                      <input type="number" step="0.1" name="engravePower" required className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all" />
+                    </div>
+                  </>
+                )}
 
                 <div className="col-span-full">
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Notas / Observaciones</label>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                    {activeTab === "CAMA_PLANA" ? "Notas de Calibración de Cámara / Escáner / Curado" : "Notas / Observaciones de Configuración"}
+                  </label>
                   <input type="text" name="notes" className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-2 focus:ring-red-600/20 focus:border-red-600" />
                 </div>
               </div>
@@ -188,8 +318,24 @@ export default function ProcessTabs({
             <thead>
               <tr className="bg-gray-50/50">
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest rounded-l-xl">Material</th>
-                <th className="px-6 py-4 text-[10px] font-black text-red-400 uppercase tracking-widest text-center">Corte (Vel / Pot)</th>
-                <th className="px-6 py-4 text-[10px] font-black text-blue-400 uppercase tracking-widest text-center">Grabado (Vel / Pot)</th>
+                
+                {activeTab === "PLOTTER" ? (
+                  <>
+                    <th className="px-6 py-4 text-[10px] font-black text-blue-500 uppercase tracking-widest text-center">Config. Corte (Vel / Presión)</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-orange-400 uppercase tracking-widest text-center">Tipo de Cuchilla</th>
+                  </>
+                ) : activeTab === "CAMA_PLANA" ? (
+                  <>
+                    <th className="px-6 py-4 text-[10px] font-black text-blue-400 uppercase tracking-widest text-center font-bold">Impresión UV (Saturación Color / Barniz)</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-purple-400 uppercase tracking-widest text-center font-bold">Tipo de Barniz</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="px-6 py-4 text-[10px] font-black text-red-400 uppercase tracking-widest text-center">Corte (Vel / Pot)</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-blue-400 uppercase tracking-widest text-center">Grabado (Vel / Pot)</th>
+                  </>
+                )}
+                
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Notas</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest rounded-r-xl text-right">Acciones</th>
               </tr>
@@ -198,24 +344,58 @@ export default function ProcessTabs({
               {filteredProcesses.map((process) => (
                 <tr key={process.id} className="hover:bg-gray-50/50 transition-colors group">
                   <td className="px-6 py-4">
-                    <span className="text-sm font-black text-gray-900 group-hover:text-red-600 transition-colors">{process.material}</span>
+                    <span className="text-sm font-black text-gray-900 group-hover:text-blue-600 transition-colors">{process.material}</span>
                   </td>
                   
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col items-center">
-                      <span className="text-sm font-black text-gray-900 bg-red-50/50 px-3 py-1.5 rounded-xl border border-red-100/50 w-fit">
-                        {process.cutSpeed || '0'}<span className="text-[10px] text-red-400 ml-0.5">ms</span> / {process.cutPower || '0'}<span className="text-[10px] text-red-400">%</span>
-                      </span>
-                    </div>
-                  </td>
-                  
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col items-center">
-                      <span className="text-sm font-black text-gray-900 bg-blue-50/50 px-3 py-1.5 rounded-xl border border-blue-100/50 w-fit">
-                        {process.engraveSpeed || '0'}<span className="text-[10px] text-blue-400 ml-0.5">ms</span> / {process.engravePower || '0'}<span className="text-[10px] text-blue-400">%</span>
-                      </span>
-                    </div>
-                  </td>
+                  {activeTab === "PLOTTER" ? (
+                    <>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col items-center">
+                          <span className="text-sm font-black text-gray-900 bg-blue-50/50 px-3 py-1.5 rounded-xl border border-blue-100/50 w-fit">
+                            {process.cutSpeed || '0'}<span className="text-[10px] text-blue-500 ml-0.5">mm/s</span> / {process.cutPower || '0'}<span className="text-[10px] text-blue-500">g</span>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="text-xs font-black text-orange-600 bg-orange-50 px-2.5 py-1 rounded-lg border border-orange-100">
+                          {process.waveType || 'Cuchilla de 45°'}
+                        </span>
+                      </td>
+                    </>
+                  ) : activeTab === "CAMA_PLANA" ? (
+                    <>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col items-center">
+                          <span className="text-sm font-black text-gray-900 bg-blue-50/50 px-3 py-1.5 rounded-xl border border-blue-100/50 w-fit">
+                            {process.engravePower || '100'}<span className="text-[10px] text-blue-400 ml-0.5">% Color</span> / {process.cutPower || '0'}<span className="text-[10px] text-blue-400">% Barniz</span>
+                            {process.engraveFrequency ? <span className="text-[9px] text-gray-400 block text-center font-bold mt-0.5">{process.engraveFrequency} DPI</span> : null}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="text-xs font-black text-purple-600 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-100">
+                          {process.waveType || 'Ninguno'}
+                        </span>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col items-center">
+                          <span className="text-sm font-black text-gray-900 bg-red-50/50 px-3 py-1.5 rounded-xl border border-red-100/50 w-fit">
+                            {process.cutSpeed || '0'}<span className="text-[10px] text-red-400 ml-0.5">ms</span> / {process.cutPower || '0'}<span className="text-[10px] text-red-400">%</span>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col items-center">
+                          <span className="text-sm font-black text-gray-900 bg-blue-50/50 px-3 py-1.5 rounded-xl border border-blue-100/50 w-fit">
+                            {process.engraveSpeed || '0'}<span className="text-[10px] text-blue-400 ml-0.5">ms</span> / {process.engravePower || '0'}<span className="text-[10px] text-blue-400">%</span>
+                          </span>
+                        </div>
+                      </td>
+                    </>
+                  )}
                   
                   <td className="px-6 py-4 text-[11px] font-medium text-gray-400 max-w-xs truncate" title={process.notes}>
                     {process.notes || '-'}
@@ -233,7 +413,7 @@ export default function ProcessTabs({
               ))}
               {filteredProcesses.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-24 text-center">
+                  <td colSpan={activeTab === "PLOTTER" || activeTab === "CAMA_PLANA" ? 5 : 5} className="px-6 py-24 text-center">
                     <Settings2 className="h-8 w-8 text-gray-200 mx-auto mb-4 animate-spin-slow" />
                     <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.3em]">No se encontraron recetas</p>
                   </td>

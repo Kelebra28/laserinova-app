@@ -46,6 +46,7 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncAuthError, setSyncAuthError] = useState<boolean>(false);
   const [currentFolder, setCurrentFolder] = useState(initialFolder);
   const [page, setPage] = useState(1);
   const limit = 10;
@@ -79,6 +80,7 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
   const syncEmails = useCallback(async () => {
     setIsSyncing(true);
     setSyncError(null);
+    setSyncAuthError(false);
     try {
       const res = await fetch('/api/email/sync', { method: 'POST' });
       if (res.ok) {
@@ -87,6 +89,9 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
       } else {
         const data = await res.json().catch(() => ({}));
         setSyncError(data.message || data.errorDetail || 'Error al intentar conectar con el servidor IMAP.');
+        if (data.authError === true) {
+          setSyncAuthError(true);
+        }
       }
     } catch (error: any) {
       console.error('Failed to sync emails', error);
@@ -138,6 +143,7 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
     isLoading, 
     isSyncing, 
     syncError,
+    syncAuthError,
     syncEmails, 
     fetchEmails, 
     currentFolder, 

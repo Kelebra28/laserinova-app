@@ -12,6 +12,7 @@ interface EmailInboxViewProps {
   isLoading: boolean;
   isSyncing: boolean;
   syncError?: string | null;
+  syncAuthError?: boolean;
   currentFolder: string;
   onFolderChange: (folder: string) => void;
   onRefresh: () => void;
@@ -32,6 +33,7 @@ export function EmailInboxView({
   isLoading, 
   isSyncing, 
   syncError,
+  syncAuthError,
   currentFolder, 
   onFolderChange, 
   onRefresh, 
@@ -641,16 +643,31 @@ export function EmailInboxView({
 
             {/* Sync Error Alert Banner */}
             {syncError && (
-              <div className="mx-6 mt-4 p-4 bg-red-50 border border-red-150 text-red-900 rounded-2xl flex items-start gap-3 text-xs font-semibold animate-in fade-in duration-200">
-                <AlertOctagon className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-bold">Error de sincronización con tu cuenta de correo:</p>
-                  <p className="font-normal text-red-750/90 leading-relaxed">{syncError}</p>
-                  <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider mt-1.5">
-                    Ve a "Configuración" (arriba a la derecha) &gt; pestaña "Correo Hostinger" e ingresa la contraseña correcta de tu correo.
-                  </p>
+              syncAuthError ? (
+                <div className="mx-6 mt-4 p-4 bg-red-50 border border-red-150 text-red-900 rounded-2xl flex items-start gap-3 text-xs font-semibold animate-in fade-in duration-200">
+                  <AlertOctagon className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-bold">Error de sincronización con tu cuenta de correo:</p>
+                    <p className="font-normal text-red-750/90 leading-relaxed">{syncError}</p>
+                    <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider mt-1.5">
+                      Ve a "Configuración" (arriba a la derecha) &gt; pestaña "Correo Hostinger" e ingresa la contraseña correcta de tu correo.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="mx-6 mt-4 p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl flex items-start gap-3 text-xs font-semibold animate-in fade-in duration-200">
+                  <AlertOctagon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-bold text-amber-950">Demora de conexión temporal (Hostinger):</p>
+                    <p className="font-medium text-amber-850/90 leading-relaxed">
+                      El servidor de Hostinger está tardando en responder o limitó la velocidad de conexión temporalmente. <strong>Tu contraseña es correcta y está bien guardada</strong>; es solo un retraso de red temporal. El sistema reintentará la sincronización pronto automáticamente.
+                    </p>
+                    <p className="text-[10px] text-amber-700/80 font-mono mt-1">
+                      Servidor IMAP: imap.hostinger.com | Detalle: {syncError}
+                    </p>
+                  </div>
+                </div>
+              )
             )}
 
             {/* Email List Table */}

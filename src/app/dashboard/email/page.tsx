@@ -16,6 +16,7 @@ export default function EmailPage() {
     isLoading, 
     isSyncing, 
     syncError,
+    syncAuthError,
     syncEmails, 
     fetchEmails,
     currentFolder, 
@@ -31,7 +32,7 @@ export default function EmailPage() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [activeThread, setActiveThread] = useState<(Email & { html?: string; text?: string; attachments?: any[] })[]>([]);
   const [expandedEmails, setExpandedEmails] = useState<Record<string, boolean>>({});
-  const [replyData, setReplyData] = useState<{ to: string; subject: string; text: string } | null>(null);
+  const [replyData, setReplyData] = useState<{ to: string; subject: string; text: string; quotedText: string } | null>(null);
 
   const handleSelectEmail = async (email: Email) => {
     setSelectedEmail(email);
@@ -104,14 +105,39 @@ export default function EmailPage() {
     
     const replySubject = email.subject.startsWith('Re:') ? email.subject : `Re: ${email.subject}`;
     
-    // Crear cita limpia del mensaje anterior
-    const replyText = `\n\n-------------------\nEl ${new Date(email.receivedAt).toLocaleString('es-MX')}, ${email.from} escribió:\n> ${email.snippet || ''}\n`;
+    // Buscar el cuerpo completo del correo en el hilo activo
+    const threadMail = activeThread.find(m => m.id === email.id);
+    const emailText = threadMail?.text || '';
+    
+    // Prefijar cada línea del mensaje original con "> " y limpiar líneas vacías consecutivas
+    const originalBodyQuoted = emailText
+      ? emailText
+          .split('\n')
+          .map(line => `> ${line}`)
+          .filter((line, index, arr) => {
+            if (line.trim() === '>') {
+              return index === 0 || arr[index - 1].trim() !== '>';
+            }
+            return true;
+          })
+          .join('\n')
+      : `> ${email.snippet || ''}`;
+
+    const formattedDate = new Date(email.receivedAt).toLocaleString('es-MX', {
+      dateStyle: 'long',
+      timeStyle: 'short'
+    });
+    
+    // Crear cita limpia al estilo Gmail (se adjunta por debajo)
+    const replyText = `El ${formattedDate}, ${email.from} escribió:\n${originalBodyQuoted}`;
     
     setReplyData({
       to: replyTo,
       subject: replySubject,
-      text: replyText
+      text: '', // Empieza limpio
+      quotedText: replyText
     });
+    setIsComposeOpen(true);
   };
 
   const toggleExpand = (emailId: string) => {
@@ -137,6 +163,7 @@ export default function EmailPage() {
             isLoading={isLoading}
             isSyncing={isSyncing}
             syncError={syncError}
+            syncAuthError={syncAuthError}
             currentFolder={currentFolder}
             onFolderChange={changeFolder}
             onRefresh={syncEmails}
@@ -409,6 +436,7 @@ export default function EmailPage() {
           initialTo={replyData?.to || ''}
           initialSubject={replyData?.subject || ''}
           initialText={replyData?.text || ''}
+          initialQuotedText={replyData?.quotedText || ''}
         />
       </div>
     </div>
