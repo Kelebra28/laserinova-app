@@ -25,6 +25,7 @@ model User {
   createdTasks           Task[]                 @relation("TaskCreatedBy")
   taskAssignments        TaskAssignee[]
   providers              Provider[]
+  emails                 Email[]
 }
 
 model Client {
@@ -370,12 +371,15 @@ model Email {
   receivedAt  DateTime
   clientId    String?
   client      Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   attachments Attachment[]
   storagePath String?      
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
   @@index([clientId])
+  @@index([userId])
   @@index([folder])
   @@index([threadId])
   @@index([receivedAt])

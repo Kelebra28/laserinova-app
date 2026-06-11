@@ -7,7 +7,7 @@ import { EmailInboxView } from '@/components/ui/email/EmailInboxView';
 import { EmailComposeModal } from '@/components/ui/email/EmailComposeModal';
 import { EmailBodyViewer } from '@/components/ui/email/EmailBodyViewer';
 import { useSession } from 'next-auth/react';
-import { Trash2, AlertOctagon, MailOpen, ArrowLeft, Download, Calendar, X, Reply } from 'lucide-react';
+import { Trash2, AlertOctagon, MailOpen, ArrowLeft, Download, Calendar, X, Reply, Loader2, Paperclip, ChevronDown, ChevronRight } from 'lucide-react';
 
 export default function EmailPage() {
   const { data: session } = useSession();
@@ -29,24 +29,39 @@ export default function EmailPage() {
   
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
-  const [activeEmailBody, setActiveEmailBody] = useState<{html: string, text: string} | null>(null);
+  const [activeThread, setActiveThread] = useState<(Email & { html?: string; text?: string; attachments?: any[] })[]>([]);
+  const [expandedEmails, setExpandedEmails] = useState<Record<string, boolean>>({});
   const [replyData, setReplyData] = useState<{ to: string; subject: string; text: string } | null>(null);
 
   const handleSelectEmail = async (email: Email) => {
     setSelectedEmail(email);
-    setActiveEmailBody(null);
+    setActiveThread([]);
+    setExpandedEmails({});
 
     // Fetch body from hybrid storage API
     try {
       const res = await fetch(`/api/email/${email.id}/body`);
       if (res.ok) {
         const data = await res.json();
-        if (data.success) {
-          setActiveEmailBody({ html: data.html, text: data.text });
+        if (data.success && data.thread) {
+          setActiveThread(data.thread);
+          // Expand the last email in the thread by default
+          if (data.thread.length > 0) {
+            const lastId = data.thread[data.thread.length - 1].id;
+            setExpandedEmails({ [lastId]: true });
+          }
+        } else {
+          setActiveThread([{ ...email, html: `<p>${email.snippet || ''}</p>`, text: email.snippet }]);
+          setExpandedEmails({ [email.id]: true });
         }
+      } else {
+        setActiveThread([{ ...email, html: `<p>${email.snippet || ''}</p>`, text: email.snippet }]);
+        setExpandedEmails({ [email.id]: true });
       }
     } catch (e) {
       console.error('Error fetching email body:', e);
+      setActiveThread([{ ...email, html: `<p>${email.snippet || ''}</p>`, text: email.snippet }]);
+      setExpandedEmails({ [email.id]: true });
     }
 
     // Marcar como leído automáticamente en DB
@@ -97,15 +112,26 @@ export default function EmailPage() {
       subject: replySubject,
       text: replyText
     });
-    setIsComposeOpen(true);
+  };
+
+  const toggleExpand = (emailId: string) => {
+    setExpandedEmails(prev => ({ ...prev, [emailId]: !prev[emailId] }));
+  };
+
+  const toggleExpandAll = (expand: boolean) => {
+    const next: Record<string, boolean> = {};
+    activeThread.forEach(em => {
+      next[em.id] = expand;
+    });
+    setExpandedEmails(next);
   };
 
   return (
-    <div className="flex h-[calc(100vh-6rem)] p-6 bg-slate-50/30">
-      <div className="flex-1 max-w-7xl mx-auto h-full relative flex gap-6">
+    <div className="flex h-[calc(100vh-7.5rem)] w-full bg-slate-50/30">
+      <div className="flex-1 w-full h-full relative flex gap-4">
         
         {/* Main Inbox View */}
-        <div className={`flex-1 transition-all duration-300 ${selectedEmail ? 'w-1/2 hidden md:flex' : 'w-full'}`}>
+        <div className={`flex-1 transition-all duration-300 ${selectedEmail ? 'hidden' : 'w-full'}`}>
           <EmailInboxView 
             emails={emails}
             isLoading={isLoading}
@@ -130,9 +156,9 @@ export default function EmailPage() {
           />
         </div>
 
-        {/* Selected Email Panel (Beautiful Gmail-inspired split viewer) */}
+        {/* Selected Email Panel (Full screen viewer when active) */}
         {selectedEmail && (
-          <div className="flex-1 md:w-1/2 w-full bg-white border border-slate-200/80 rounded-2xl shadow-xl flex flex-col overflow-hidden animate-in slide-in-from-right-8 duration-300">
+          <div className="flex-1 w-full bg-white border border-slate-200/80 rounded-2xl shadow-xl flex flex-col overflow-hidden animate-in slide-in-from-right-8 duration-300">
             {/* Action Bar (Top) */}
             <div className="px-4 py-3 bg-slate-50 border-b border-slate-200/80 flex justify-between items-center flex-shrink-0">
               <div className="flex items-center gap-1.5">
@@ -204,70 +230,168 @@ export default function EmailPage() {
               </button>
             </div>
 
-            {/* Email Header Panel */}
-            <div className="p-6 border-b border-slate-100 flex-shrink-0 bg-slate-50/20">
-              <h2 className="font-bold text-lg text-slate-800 leading-tight mb-4">{selectedEmail.subject}</h2>
-              
-              <div className="flex items-start justify-between">
-                <div className="flex gap-3 items-center">
-                  <div className="w-9 h-9 bg-slate-200 border border-slate-300/50 rounded-full flex items-center justify-center text-slate-700 font-bold text-xs uppercase shadow-sm">
-                    {selectedEmail.from.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-semibold text-slate-800 text-xs">{selectedEmail.from}</p>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Para: {selectedEmail.to}</p>
-                  </div>
-                </div>
-
-                <div className="text-right flex flex-col items-end gap-1">
-                  <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" />
-                    {new Date(selectedEmail.receivedAt).toLocaleString('es-MX', {
-                      dateStyle: 'medium',
-                      timeStyle: 'short'
-                    })}
-                  </span>
-                </div>
+            {/* Thread Subject Title Bar */}
+            <div className="p-6 border-b border-slate-100 flex-shrink-0 bg-slate-50/20 flex justify-between items-center">
+              <div>
+                <h2 className="font-bold text-lg text-slate-800 leading-tight">{selectedEmail.subject}</h2>
+                {activeThread.length > 1 && (
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Conversación de {activeThread.length} mensajes
+                  </p>
+                )}
               </div>
+              {activeThread.length > 1 && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => toggleExpandAll(true)}
+                    className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 rounded-lg transition-all"
+                  >
+                    Expandir todos
+                  </button>
+                  <button
+                    onClick={() => toggleExpandAll(false)}
+                    className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 rounded-lg transition-all"
+                  >
+                    Colapsar todos
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Email Body Content */}
-            <div className="p-6 overflow-y-auto flex-1 bg-white">
-              {/* Elegant Sandboxed Frame to prevent visual deformation or style escaping */}
-              <EmailBodyViewer 
-                html={activeEmailBody ? activeEmailBody.html : '<div style="display:flex;justify-content:center;padding:20px;color:#cbd5e1;"><p>Cargando contenido...</p></div>'} 
-                text={activeEmailBody ? activeEmailBody.text : selectedEmail.snippet} 
-              />
-              
-              {/* Attachments Display */}
-              {selectedEmail.attachments && selectedEmail.attachments.length > 0 && (
-                <div className="mt-8 border-t border-slate-100 pt-5">
-                  <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                    Adjuntos ({selectedEmail.attachments.length})
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {selectedEmail.attachments.map((att, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between p-3 border border-slate-200/80 hover:border-slate-350 bg-slate-50/50 rounded-xl transition-all group"
-                      >
-                        <div className="min-w-0 flex-1 pr-2">
-                          <p className="text-xs font-semibold text-slate-800 truncate">{att.filename}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">({(att.size / 1024).toFixed(1)} KB)</p>
-                        </div>
-                        <button
-                          onClick={() => downloadAttachment(selectedEmail.messageId, att.filename)}
-                          className="p-2 text-slate-500 hover:text-red-600 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 shadow-sm transition-all"
-                          title="Descargar archivo"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+            {/* Email Body Content / Scroll Area */}
+            <div className="p-6 overflow-y-auto flex-1 bg-slate-55/30 space-y-4">
+              {activeThread.length === 0 ? (
+                <div className="flex flex-col justify-center items-center py-12 text-slate-450 gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-red-650" />
+                  <span className="text-xs font-medium">Cargando conversación...</span>
                 </div>
+              ) : (
+                activeThread.map((em) => {
+                  const isExpanded = !!expandedEmails[em.id];
+                  const senderInitial = em.from.charAt(0).toUpperCase();
+
+                  return (
+                    <div 
+                      key={em.id} 
+                      className={`bg-white border rounded-xl shadow-sm transition-all overflow-hidden ${
+                        isExpanded ? 'border-slate-200' : 'border-slate-150 hover:border-slate-300 hover:shadow-md cursor-pointer'
+                      }`}
+                    >
+                      {/* Accordion Header / Compact Row */}
+                      <div 
+                        onClick={() => toggleExpand(em.id)}
+                        className={`px-4 py-3 flex items-center justify-between gap-4 select-none ${
+                          !isExpanded ? 'bg-white' : 'bg-slate-50/50 border-b border-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-8 h-8 bg-slate-100 border border-slate-200 rounded-full flex items-center justify-center text-slate-700 font-bold text-xs uppercase shadow-sm flex-shrink-0">
+                            {senderInitial}
+                          </div>
+                          
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline gap-2 justify-between pr-2">
+                              <span className="font-semibold text-slate-800 text-xs truncate max-w-[200px]">
+                                {em.from}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-semibold flex-shrink-0">
+                                {new Date(em.receivedAt).toLocaleDateString('es-MX', { 
+                                  month: 'short', 
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                            
+                            {!isExpanded && (
+                              <p className="text-xs text-slate-500 truncate max-w-full mt-0.5 pr-4">
+                                {em.snippet}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {em.attachments && em.attachments.length > 0 && (
+                            <Paperclip className="w-3.5 h-3.5 text-slate-400" />
+                          )}
+                          <div className="p-1 hover:bg-slate-100 rounded text-slate-400">
+                            {isExpanded ? (
+                              <ChevronDown className="w-4 h-4" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4" />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Expanded View */}
+                      {isExpanded && (
+                        <div className="p-5 bg-white space-y-4">
+                          <div className="flex justify-between items-start text-xs border-b border-slate-100 pb-3">
+                            <div>
+                              <p className="text-slate-500">De: <span className="font-semibold text-slate-805">{em.from}</span></p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">Para: {em.to}</p>
+                              {em.cc && <p className="text-[10px] text-slate-400">Cc: {em.cc}</p>}
+                            </div>
+                            <div className="text-right text-[10px] text-slate-400">
+                              {new Date(em.receivedAt).toLocaleString('es-MX', {
+                                dateStyle: 'medium',
+                                timeStyle: 'short'
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Email Body */}
+                          <div className="pt-2">
+                            <EmailBodyViewer html={em.html} text={em.text} />
+                          </div>
+
+                          {/* Attachments */}
+                          {em.attachments && em.attachments.length > 0 && (
+                            <div className="border-t border-slate-100 pt-4 mt-4">
+                              <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                                Adjuntos ({em.attachments.length})
+                              </h4>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {em.attachments.map((att: any, i: number) => (
+                                  <div
+                                    key={i}
+                                    className="flex items-center justify-between p-2.5 border border-slate-200/80 hover:border-slate-350 bg-slate-50/50 rounded-xl transition-all group"
+                                  >
+                                    <div className="min-w-0 flex-1 pr-2">
+                                      <p className="text-xs font-semibold text-slate-800 truncate">{att.filename}</p>
+                                      <p className="text-[10px] text-slate-400 mt-0.5">({(att.size / 1024).toFixed(1)} KB)</p>
+                                    </div>
+                                    <button
+                                      onClick={() => downloadAttachment(em.messageId, att.filename)}
+                                      className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 shadow-sm transition-all"
+                                      title="Descargar archivo"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Individual Message Quick reply button */}
+                          <div className="flex justify-end pt-2">
+                            <button
+                              onClick={() => handleReply(em)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-600 hover:text-red-650 rounded-lg text-xs font-semibold transition-all active:scale-95"
+                            >
+                              <Reply className="w-3.5 h-3.5" />
+                              Responder a este mensaje
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>

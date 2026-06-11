@@ -25,23 +25,46 @@ export function EmailBodyViewer({ html, text }: EmailBodyViewerProps) {
     const baseStyles = `
       <style>
         body {
-          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-          font-size: 14px;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          font-size: 14.5px;
           line-height: 1.6;
-          color: #1e293b;
+          color: #334155;
           background-color: #ffffff;
           margin: 0;
-          padding: 12px;
-          word-break: break-word;
-          overflow-wrap: break-word;
+          padding: 8px;
+          word-wrap: break-word;
+          overflow-x: hidden;
           max-width: 100%;
+        }
+        p {
+          margin-top: 0;
+          margin-bottom: 1em;
         }
         img {
           max-width: 100% !important;
           height: auto !important;
+          display: block;
+          margin: 1em 0;
         }
         table {
+          width: 100% !important;
           max-width: 100% !important;
+          border-collapse: collapse;
+          margin: 1em 0;
+        }
+        td, th {
+          padding: 6px;
+          border: 1px solid #e2e8f0;
+        }
+        a {
+          color: #dc2626; /* match tailwind red-600 */
+          text-decoration: underline;
+        }
+        blockquote {
+          margin: 1em 0;
+          padding-left: 1em;
+          border-left: 3px solid #cbd5e1;
+          color: #64748b;
         }
       </style>
     `;

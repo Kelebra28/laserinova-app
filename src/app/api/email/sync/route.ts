@@ -71,111 +71,94 @@ export async function POST(req: Request) {
 
         await client.connect();
 
-        // Sincronizar INBOX (Recibidos)
-        let lock = await client.getMailboxLock('INBOX');
+        // Restablecer todos los correos marcados como SPAM de vuelta a INBOX antes de sincronizar (para este usuario)
         try {
-          const totalMessages = client.mailbox ? (client.mailbox as any).exists : 0;
-          if (totalMessages > 0) {
-            // Sincronizamos solo los últimos 20 correos para que sea ultra rápido
-            const startRange = Math.max(1, totalMessages - 19);
-            const messages = client.fetch(`${startRange}:*`, { source: true, uid: true, envelope: true });
-            const recentMessages = [];
-            for await (const msg of messages) {
-              recentMessages.push(msg);
-            }
-
-            for (const msg of recentMessages) {
-              if (!msg.source) continue;
-
-              const parsed = await simpleParser(msg.source);
-              const messageId = parsed.messageId || `${msg.uid}@local`;
-
-              const exists = await prisma.email.findUnique({ where: { messageId } });
-              if (exists) continue;
-
-              const created = await prisma.email.create({
-                data: {
-                  messageId,
-                  subject: parsed.subject || '(Sin Asunto)',
-                  from: (parsed.from as any)?.text || '',
-                  to: (parsed.to as any)?.text || '',
-                  cc: (parsed.cc as any)?.text || '',
-                  bcc: (parsed.bcc as any)?.text || '',
-                  storagePath: saveEmailToDisk(messageId, parsed.html || '', parsed.text || ''),
-                  snippet: parsed.text?.substring(0, 100) || '',
-                  receivedAt: parsed.date || new Date(),
-                  folder: 'INBOX',
-                },
-              });
-
-              if (parsed.attachments && parsed.attachments.length > 0) {
-                await prisma.attachment.createMany({
-                  data: parsed.attachments.map(att => ({
-                    emailId: created.id,
-                    filename: att.filename || 'adjunto',
-                    mimeType: att.contentType || 'application/octet-stream',
-                    size: att.size || 0,
-                    contentId: att.contentId,
-                  })),
-                });
-              }
-            }
-          }
-        } finally {
-          lock.release();
+          await prisma.email.updateMany({
+            where: { folder: 'SPAM', userId: currentUserId },
+            data: { folder: 'INBOX' }
+          });
+        } catch (resetErr: any) {
+          console.warn("Error restableciendo bandeja de spam:", resetErr.message);
         }
 
-        // Sincronizar Sent (Enviados - En Hostinger es INBOX.Sent)
-        try {
-          lock = await client.getMailboxLock('INBOX.Sent');
-          const totalMessages = client.mailbox ? (client.mailbox as any).exists : 0;
-          if (totalMessages > 0) {
-            // Sincronizamos los últimos 15 enviados
-            const startRange = Math.max(1, totalMessages - 14);
-            const messages = client.fetch(`${startRange}:*`, { source: true, uid: true, envelope: true });
-            const recentMessages = [];
-            for await (const msg of messages) {
-              recentMessages.push(msg);
-            }
+        const syncFolder = async (folderName: string, dbFolderName: string, maxCount: number) => {
+          try {
+            const lock = await client.getMailboxLock(folderName);
+            try {
+              const totalMessages = client.mailbox ? (client.mailbox as any).exists : 0;
+              if (totalMessages > 0) {
+                const startRange = Math.max(1, totalMessages - (maxCount - 1));
+                // Fetch UID and Envelope first - ultra fast, doesn't download body/attachments
+                const messages = client.fetch(`${startRange}:*`, { uid: true, envelope: true });
+                const msgList = [];
+                for await (const msg of messages) {
+                  msgList.push(msg);
+                }
 
-            for (const msg of recentMessages) {
-              if (!msg.source) continue;
-              const parsed = await simpleParser(msg.source);
-              const messageId = parsed.messageId || `${msg.uid}@local-sent`;
+                // Process messages
+                for (const msg of msgList) {
+                  const messageId = msg.envelope?.messageId || `${msg.uid}@local-${dbFolderName.toLowerCase()}`;
+                  
+                  // Check if it already exists in DB
+                  const exists = await prisma.email.findUnique({ where: { messageId } });
+                  if (exists) {
+                    // Si ya existe pero su carpeta en DB es distinta, la actualizamos para que coincida con el servidor
+                    if (exists.folder !== dbFolderName) {
+                      await prisma.email.update({
+                        where: { messageId },
+                        data: { folder: dbFolderName }
+                      });
+                    }
+                    continue;
+                  }
 
-              const exists = await prisma.email.findUnique({ where: { messageId } });
-              if (exists) continue;
+                  // Only fetch full raw RFC822 source for new emails
+                  const fetchResult = await client.fetchOne(msg.uid, { source: true });
+                  if (fetchResult && fetchResult.source) {
+                    const parsed = await simpleParser(fetchResult.source);
+                    
+                    const created = await prisma.email.create({
+                      data: {
+                        userId: currentUserId,
+                        messageId,
+                        subject: parsed.subject || '(Sin Asunto)',
+                        from: (parsed.from as any)?.text || '',
+                        to: (parsed.to as any)?.text || '',
+                        cc: (parsed.cc as any)?.text || '',
+                        bcc: (parsed.bcc as any)?.text || '',
+                        storagePath: saveEmailToDisk(messageId, parsed.html || '', parsed.text || ''),
+                        snippet: parsed.text?.substring(0, 100) || '',
+                        receivedAt: parsed.date || new Date(),
+                        folder: dbFolderName,
+                      },
+                    });
 
-              const created = await prisma.email.create({
-                data: {
-                  messageId,
-                  subject: parsed.subject || '(Sin Asunto)',
-                  from: (parsed.from as any)?.text || '',
-                  to: (parsed.to as any)?.text || '',
-                  storagePath: saveEmailToDisk(messageId, parsed.html || '', parsed.text || ''),
-                  snippet: parsed.text?.substring(0, 100) || '',
-                  receivedAt: parsed.date || new Date(),
-                  folder: 'SENT',
-                },
-              });
-
-              if (parsed.attachments && parsed.attachments.length > 0) {
-                await prisma.attachment.createMany({
-                  data: parsed.attachments.map(att => ({
-                    emailId: created.id,
-                    filename: att.filename || 'adjunto',
-                    mimeType: att.contentType || 'application/octet-stream',
-                    size: att.size || 0,
-                    contentId: att.contentId,
-                  })),
-                });
+                    if (parsed.attachments && parsed.attachments.length > 0) {
+                      await prisma.attachment.createMany({
+                        data: parsed.attachments.map(att => ({
+                          emailId: created.id,
+                          filename: att.filename || 'adjunto',
+                          mimeType: att.contentType || 'application/octet-stream',
+                          size: att.size || 0,
+                          contentId: att.contentId,
+                        })),
+                      });
+                    }
+                  }
+                }
               }
+            } finally {
+              lock.release();
             }
+          } catch (folderErr: any) {
+            console.warn(`Folder ${folderName} sync error:`, folderErr.message);
           }
-          lock.release();
-        } catch (e) {
-          console.warn("Sent folder sync error", e);
-        }
+        };
+
+        // Sincronizar bandejas principales natively
+        await syncFolder('INBOX', 'INBOX', 20);
+        await syncFolder('INBOX.Sent', 'SENT', 15);
+        await syncFolder('INBOX.Junk', 'SPAM', 15);
 
         await client.logout();
       };

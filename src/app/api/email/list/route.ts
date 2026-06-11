@@ -1,17 +1,29 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const currentUserId = (session.user as any).id;
+
     const { searchParams } = new URL(req.url);
     const folder = searchParams.get('folder') || 'INBOX';
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '10', 10);
     const skip = (page - 1) * limit;
 
-    const whereClause = folder === 'STARRED' ? { isStarred: true } : { folder };
+    const baseWhere = folder === 'STARRED' ? { isStarred: true } : { folder };
+    const whereClause = {
+      ...baseWhere,
+      userId: currentUserId
+    };
 
     const [emails, total] = await Promise.all([
       prisma.email.findMany({

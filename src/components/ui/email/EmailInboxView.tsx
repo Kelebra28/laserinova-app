@@ -51,6 +51,7 @@ export function EmailInboxView({
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
   const [isMounted, setIsMounted] = useState(false);
   const [isFolderSidebarOpen, setIsFolderSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -255,27 +256,61 @@ export function EmailInboxView({
       )}
 
       {/* Sidebar Folders */}
-      <div className="hidden lg:flex w-64 bg-slate-900 flex-col justify-between text-slate-300">
+      <div className={`hidden lg:flex bg-slate-900 flex-col justify-between text-slate-300 transition-all duration-300 ${
+        isSidebarCollapsed ? 'w-16' : 'w-64'
+      }`}>
         <div>
           {/* Logo / Header */}
-          <div className="p-5 border-b border-slate-800 flex items-center gap-3">
-            <div className="w-8 h-8 bg-red-650 rounded-lg flex items-center justify-center font-bold text-white text-xs uppercase shadow-sm">
-              {userName ? userName.charAt(0) : 'U'}
+          {isSidebarCollapsed ? (
+            <div className="p-4 border-b border-slate-800 flex items-center justify-center">
+              <button 
+                onClick={() => setIsSidebarCollapsed(false)}
+                className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors"
+                title="Expandir menú"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
             </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="font-bold text-xs text-white leading-tight truncate">{userName || 'LaserInova Mail'}</h2>
-              <p className="text-[9px] text-slate-400 font-medium truncate mt-0.5">{userEmail || 'Bandeja Profesional'}</p>
+          ) : (
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 bg-red-650 rounded-lg flex items-center justify-center font-bold text-white text-xs uppercase shadow-sm flex-shrink-0">
+                  {userName ? userName.charAt(0) : 'U'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-bold text-xs text-white leading-tight truncate">{userName || 'LaserInova Mail'}</h2>
+                  <p className="text-[9px] text-slate-400 font-medium truncate mt-0.5">{userEmail || 'Bandeja Profesional'}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsSidebarCollapsed(true)}
+                className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors flex-shrink-0"
+                title="Colapsar menú"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-          </div>
+          )}
 
+          {/* Redactar Button */}
           <div className="p-4">
-            <button 
-              onClick={onCompose}
-              className="w-full flex justify-center items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white bg-red-600 hover:bg-red-700 rounded-xl transition-all shadow-md active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              Redactar Correo
-            </button>
+            {isSidebarCollapsed ? (
+              <button 
+                onClick={onCompose}
+                className="w-10 h-10 mx-auto flex justify-center items-center text-white bg-red-600 hover:bg-red-700 rounded-full transition-all shadow-md active:scale-95"
+                title="Redactar Correo"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            ) : (
+              <button 
+                onClick={onCompose}
+                className="w-full flex justify-center items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white bg-red-600 hover:bg-red-700 rounded-xl transition-all shadow-md active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                Redactar Correo
+              </button>
+            )}
           </div>
 
           <nav className="px-3 space-y-1">
@@ -286,7 +321,10 @@ export function EmailInboxView({
                 <button
                   key={f.id}
                   onClick={() => onFolderChange(f.id)}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${
+                  title={isSidebarCollapsed ? f.label : undefined}
+                  className={`w-full flex items-center rounded-xl text-xs font-semibold tracking-wide transition-all relative ${
+                    isSidebarCollapsed ? 'justify-center py-3' : 'justify-between px-3.5 py-2.5'
+                  } ${
                     isSelected 
                       ? 'bg-slate-800 text-white shadow-sm border border-slate-700' 
                       : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
@@ -294,10 +332,15 @@ export function EmailInboxView({
                 >
                   <div className="flex items-center gap-3">
                     <span className={isSelected ? 'text-red-500' : ''}>{f.icon}</span>
-                    {f.label}
+                    {!isSidebarCollapsed && f.label}
                   </div>
-                  {hasBadge && (
+                  {!isSidebarCollapsed && hasBadge && (
                     <span className="bg-red-500 text-white font-bold text-[10px] px-2 py-0.5 rounded-full">
+                      {unreadCount}
+                    </span>
+                  )}
+                  {isSidebarCollapsed && hasBadge && (
+                    <span className="absolute right-2 top-2 bg-red-500 text-white font-bold text-[8px] w-4 h-4 flex items-center justify-center rounded-full border border-slate-900">
                       {unreadCount}
                     </span>
                   )}
@@ -309,8 +352,16 @@ export function EmailInboxView({
 
         {/* Sync Info Footer */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/20 text-center">
-          <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Servidor IMAP</p>
-          <p className="text-[10px] text-slate-400 mt-1 truncate">imap.hostinger.com</p>
+          {isSidebarCollapsed ? (
+            <div className="flex justify-center text-slate-500" title="imap.hostinger.com">
+              <Mail className="w-4 h-4" />
+            </div>
+          ) : (
+            <>
+              <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Servidor IMAP</p>
+              <p className="text-[10px] text-slate-400 mt-1 truncate">imap.hostinger.com</p>
+            </>
+          )}
         </div>
       </div>
 

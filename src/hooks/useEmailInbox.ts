@@ -10,6 +10,8 @@ export interface Email {
   isRead: boolean;
   isStarred: boolean;
   folder: string;
+  cc?: string;
+  bcc?: string;
   receivedAt: string;
   storagePath?: string;
   attachments: { filename: string, size: number }[];
