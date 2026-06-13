@@ -170,7 +170,7 @@ export default function ProcessTabs({
                 >
                   <span className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-2.5">
                     <Sliders className="h-4 w-4 text-blue-600" />
-                    🧪 1. Acabado Especial Brillante (Uso de Barniz)
+                    1. Acabado Especial Brillante (Uso de Barniz)
                   </span>
                   <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-md">{expandedGuide === "barniz" ? "Ocultar" : "Mostrar"}</span>
                 </button>
@@ -193,16 +193,16 @@ export default function ProcessTabs({
                 >
                   <span className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-2.5">
                     <RotateCw className="h-4 w-4 text-blue-600" />
-                    🍼 2. Impresión en Termos con Motor Rotativo
+                    2. Impresión en Termos con Motor Rotativo
                   </span>
                   <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-md">{expandedGuide === "termos" ? "Ocultar" : "Mostrar"}</span>
                 </button>
                 {expandedGuide === "termos" && (
                   <div className="p-4 bg-white border-t border-gray-100 text-xs font-bold text-slate-700 leading-relaxed space-y-2.5 animate-in slide-in-from-top-2 duration-200">
-                    <p className="flex items-start gap-2 text-red-600 bg-red-50 p-2.5 rounded-xl border border-red-100/50">
-                      <span className="text-red-500 mt-0.5">⚠️</span>
+                    <div className="flex items-start gap-2 text-red-600 bg-red-50 p-2.5 rounded-xl border border-red-100/50">
+                      <Info className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
                       <span><strong>PROHIBIDO EL BARNIZ:</strong> No se debe aplicar barniz en la impresión de termos.</span>
-                    </p>
+                    </div>
                     <p className="flex items-start gap-2">
                       <span className="text-blue-500 mt-0.5">•</span>
                       <span><strong>Ejes de Movimiento:</strong> En el software, debes <strong>desactivar el eje Y</strong> por completo y habilitar únicamente el movimiento en el <strong>eje X</strong>.</span>
@@ -224,7 +224,7 @@ export default function ProcessTabs({
                 >
                   <span className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-2.5">
                     <Maximize className="h-4 w-4 text-blue-600" />
-                    👁️ 3. Configuración y Uso del Escáner UV
+                    3. Configuración y Uso del Escáner UV
                   </span>
                   <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-md">{expandedGuide === "escaner" ? "Ocultar" : "Mostrar"}</span>
                 </button>
@@ -242,14 +242,14 @@ export default function ProcessTabs({
                       <span className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[10px] font-black shrink-0">3</span>
                       <span>Importa tu imagen de diseño, colócala con precisión sobre el área de la pieza y presiona el botón de <strong>Match</strong>.</span>
                     </p>
-                    <p className="flex items-start gap-2 text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-100/50">
-                      <span className="text-amber-500 mt-0.5">⚠️</span>
+                    <div className="flex items-start gap-2 text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-100/50">
+                      <Info className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
                       <span><strong>REINICIO DEL EJE Y:</strong> Es indispensable reiniciar el eje Y antes de escanear para que el sensor recorra toda la mesa de trabajo.</span>
-                    </p>
-                    <p className="flex items-start gap-2 text-red-700 bg-red-50 p-2.5 rounded-xl border border-red-100/50">
-                      <span className="text-red-500 mt-0.5">⚠️</span>
+                    </div>
+                    <div className="flex items-start gap-2 text-red-700 bg-red-50 p-2.5 rounded-xl border border-red-100/50">
+                      <Info className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
                       <span><strong>INICIO DESDE CM 18:</strong> Es importante considerar que el escaneo y detección se realiza <strong>a partir del centímetro 18 (cm 18)</strong> de la mesa.</span>
-                    </p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -263,7 +263,7 @@ export default function ProcessTabs({
                 >
                   <span className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-2.5">
                     <MapPin className="h-4 w-4 text-blue-600" />
-                    📍 4. Impresión Clásica por Coordenadas
+                    4. Impresión Clásica por Coordenadas
                   </span>
                   <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-md">{expandedGuide === "coordenadas" ? "Ocultar" : "Mostrar"}</span>
                 </button>
