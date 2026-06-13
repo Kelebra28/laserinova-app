@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, Trash2, Settings2, Scissors, Layers, CheckSquare, Camera, Sliders, Info } from "lucide-react";
+import { Plus, Trash2, Settings2, Scissors, Layers, CheckSquare, Camera, Sliders, Info, Sparkles, RotateCw, MapPin, Maximize } from "lucide-react";
 import { createProcessAction, deleteProcessAction } from "./actions";
 import SubmitButton from "@/components/ui/SubmitButton";
 import MaterialRecipeSelector from "@/components/processes/MaterialRecipeSelector";
@@ -32,6 +32,7 @@ export default function ProcessTabs({
   const [editingProject, setEditingProject] = useState<any>(null);
   const [selectedMaterial, setSelectedMaterial] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [expandedGuide, setExpandedGuide] = useState<string | null>(null);
 
   // Group materials by Category Name + Thickness for the select
   const materialOptions = useMemo(() => {
@@ -111,40 +112,177 @@ export default function ProcessTabs({
       )}
 
       {activeTab === "CAMA_PLANA" && (
-        <div className="mb-6 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/80 animate-in fade-in duration-300">
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-blue-600/10 text-blue-600 rounded-xl">
-              <Camera className="h-5 w-5" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-xs font-black text-blue-950 uppercase tracking-wider">Rutina Diaria de Cuidado y Calibración (Cama Plana UV)</h3>
-              <p className="text-[11px] text-slate-700 mt-1 font-semibold leading-relaxed">
-                Este equipo requiere mantenimiento de precisión constante para evitar daños en los cabezales UV:
-              </p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
-                <div className="bg-white/95 p-3 rounded-xl border border-blue-100 shadow-sm">
-                  <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest block mb-1">1. Limpieza y Test Diario</span>
-                  <p className="text-[10px] font-bold text-slate-700 leading-normal">
-                    Hacer Head Cleaning al encender. Imprimir un <strong>Nozzle Check</strong> (patrón de prueba) y validar que no falte ninguna línea.
-                  </p>
-                </div>
-                <div className="bg-white/95 p-3 rounded-xl border border-blue-100 shadow-sm">
-                  <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest block mb-1">2. Escáner y Cámara UV</span>
-                  <p className="text-[10px] font-bold text-slate-700 leading-normal">
-                    Limpiar el lente de la cámara y cristal del escáner con alcohol isopropílico. Validar la calibración de registro en el software de control.
-                  </p>
-                </div>
-                <div className="bg-white/95 p-3 rounded-xl border border-blue-100 shadow-sm">
-                  <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest block mb-1">3. Altura de Seguridad</span>
-                  <p className="text-[10px] font-bold text-slate-700 leading-normal">
-                    Usar siempre el sensor automático de altura (Auto-height) para evitar que los cabezales golpeen o raspen el material base.
-                  </p>
+        <>
+          <div className="mb-6 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/80 animate-in fade-in duration-300">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-blue-600/10 text-blue-600 rounded-xl">
+                <Camera className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xs font-black text-blue-950 uppercase tracking-wider">Rutina Diaria de Cuidado y Calibración (Cama Plana UV)</h3>
+                <p className="text-[11px] text-slate-700 mt-1 font-semibold leading-relaxed">
+                  Este equipo requiere mantenimiento y encendido estricto para evitar daños irreversibles en los cabezales UV:
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-3">
+                  <div className="bg-white/95 p-3 rounded-xl border border-blue-100 shadow-sm">
+                    <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest block mb-1">1. Uso Diario</span>
+                    <p className="text-[10px] font-bold text-slate-700 leading-normal">
+                      La máquina se debe mantener prendida todos los días durante al menos <strong>2 a 3 horas</strong> para evitar taponamientos.
+                    </p>
+                  </div>
+                  <div className="bg-white/95 p-3 rounded-xl border border-blue-100 shadow-sm">
+                    <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest block mb-1">2. Encendido y Apagado</span>
+                    <p className="text-[10px] font-bold text-slate-700 leading-normal">
+                      Al encender: presionar <strong>Clear</strong> y mandar <strong>Test</strong>. Al apagar: verificar que los cabezales queden <strong>guardados / estacionados</strong> correctamente.
+                    </p>
+                  </div>
+                  <div className="bg-white/95 p-3 rounded-xl border border-blue-100 shadow-sm">
+                    <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest block mb-1">3. Mantenimiento Semanal</span>
+                    <p className="text-[10px] font-bold text-slate-700 leading-normal">
+                      Cada semana se tiene que limpiar y purgar la tinta blanca utilizando una <strong>jeringa</strong> para mantener el flujo constante.
+                    </p>
+                  </div>
+                  <div className="bg-white/95 p-3 rounded-xl border border-blue-100 shadow-sm">
+                    <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest block mb-1">4. Sensores y Cámara</span>
+                    <p className="text-[10px] font-bold text-slate-700 leading-normal">
+                      Limpiar lentes de cámara/escáner y activar siempre el <strong>sensor automático de altura</strong> para proteger el cabezal UV.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+
+          {/* Guías de Operación Especiales */}
+          <div className="mb-8 p-5 bg-white border border-gray-100 rounded-3xl shadow-sm space-y-4">
+            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-gray-50 pb-2">
+              <Sparkles className="h-4.5 w-4.5 text-blue-600" />
+              Guías de Operación Especiales (Cama Plana)
+            </h3>
+            <div className="grid grid-cols-1 gap-2">
+              {/* Acabado Brillante */}
+              <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setExpandedGuide(expandedGuide === "barniz" ? null : "barniz")}
+                  className="w-full flex justify-between items-center p-4 bg-gray-50/50 hover:bg-gray-50 text-left transition-colors"
+                >
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-2.5">
+                    <Sliders className="h-4 w-4 text-blue-600" />
+                    🧪 1. Acabado Especial Brillante (Uso de Barniz)
+                  </span>
+                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-md">{expandedGuide === "barniz" ? "Ocultar" : "Mostrar"}</span>
+                </button>
+                {expandedGuide === "barniz" && (
+                  <div className="p-4 bg-white border-t border-gray-100 text-xs font-bold text-slate-700 leading-relaxed space-y-1.5 animate-in slide-in-from-top-2 duration-200">
+                    <p className="flex items-start gap-2">
+                      <span className="text-blue-500 mt-0.5">•</span>
+                      Para que una pieza obtenga un acabado brillante, <strong>es obligatorio aplicar la capa de barniz</strong> en la configuración de impresión. Sin el barniz, el acabado quedará opaco.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Termos con Motor Rotativo */}
+              <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setExpandedGuide(expandedGuide === "termos" ? null : "termos")}
+                  className="w-full flex justify-between items-center p-4 bg-gray-50/50 hover:bg-gray-50 text-left transition-colors"
+                >
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-2.5">
+                    <RotateCw className="h-4 w-4 text-blue-600" />
+                    🍼 2. Impresión en Termos con Motor Rotativo
+                  </span>
+                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-md">{expandedGuide === "termos" ? "Ocultar" : "Mostrar"}</span>
+                </button>
+                {expandedGuide === "termos" && (
+                  <div className="p-4 bg-white border-t border-gray-100 text-xs font-bold text-slate-700 leading-relaxed space-y-2.5 animate-in slide-in-from-top-2 duration-200">
+                    <p className="flex items-start gap-2 text-red-600 bg-red-50 p-2.5 rounded-xl border border-red-100/50">
+                      <span className="text-red-500 mt-0.5">⚠️</span>
+                      <span><strong>PROHIBIDO EL BARNIZ:</strong> No se debe aplicar barniz en la impresión de termos.</span>
+                    </p>
+                    <p className="flex items-start gap-2">
+                      <span className="text-blue-500 mt-0.5">•</span>
+                      <span><strong>Ejes de Movimiento:</strong> En el software, debes <strong>desactivar el eje Y</strong> por completo y habilitar únicamente el movimiento en el <strong>eje X</strong>.</span>
+                    </p>
+                    <p className="flex items-start gap-2">
+                      <span className="text-blue-500 mt-0.5">•</span>
+                      <span><strong>Medida en mm:</strong> Debes ingresar el diámetro/dimensiones del termo <strong>en milímetros (mm)</strong> en la casilla de configuración donde se coloca el termo físicamente en el rotativo.</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Uso del Escáner */}
+              <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setExpandedGuide(expandedGuide === "escaner" ? null : "escaner")}
+                  className="w-full flex justify-between items-center p-4 bg-gray-50/50 hover:bg-gray-50 text-left transition-colors"
+                >
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-2.5">
+                    <Maximize className="h-4 w-4 text-blue-600" />
+                    👁️ 3. Configuración y Uso del Escáner UV
+                  </span>
+                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-md">{expandedGuide === "escaner" ? "Ocultar" : "Mostrar"}</span>
+                </button>
+                {expandedGuide === "escaner" && (
+                  <div className="p-4 bg-white border-t border-gray-100 text-xs font-bold text-slate-700 leading-relaxed space-y-2.5 animate-in slide-in-from-top-2 duration-200">
+                    <p className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[10px] font-black shrink-0">1</span>
+                      <span>Se operan <strong>2 programas en conjunto</strong>. En el primero, debes colocar y alinear una pieza físicamente en la mesa de trabajo para que el escáner detecte su silueta.</span>
+                    </p>
+                    <p className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[10px] font-black shrink-0">2</span>
+                      <span>En el software, crea un <strong>Template (plantilla)</strong> dibujando un cuadro de selección de tamaño mediano a grande.</span>
+                    </p>
+                    <p className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[10px] font-black shrink-0">3</span>
+                      <span>Importa tu imagen de diseño, colócala con precisión sobre el área de la pieza y presiona el botón de <strong>Match</strong>.</span>
+                    </p>
+                    <p className="flex items-start gap-2 text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-100/50">
+                      <span className="text-amber-500 mt-0.5">⚠️</span>
+                      <span><strong>REINICIO DEL EJE Y:</strong> Es indispensable reiniciar el eje Y antes de escanear para que el sensor recorra toda la mesa de trabajo.</span>
+                    </p>
+                    <p className="flex items-start gap-2 text-red-700 bg-red-50 p-2.5 rounded-xl border border-red-100/50">
+                      <span className="text-red-500 mt-0.5">⚠️</span>
+                      <span><strong>INICIO DESDE CM 18:</strong> Es importante considerar que el escaneo y detección se realiza <strong>a partir del centímetro 18 (cm 18)</strong> de la mesa.</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Impresión Clásica */}
+              <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setExpandedGuide(expandedGuide === "coordenadas" ? null : "coordenadas")}
+                  className="w-full flex justify-between items-center p-4 bg-gray-50/50 hover:bg-gray-50 text-left transition-colors"
+                >
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-2.5">
+                    <MapPin className="h-4 w-4 text-blue-600" />
+                    📍 4. Impresión Clásica por Coordenadas
+                  </span>
+                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-md">{expandedGuide === "coordenadas" ? "Ocultar" : "Mostrar"}</span>
+                </button>
+                {expandedGuide === "coordenadas" && (
+                  <div className="p-4 bg-white border-t border-gray-100 text-xs font-bold text-slate-700 leading-relaxed space-y-1.5 animate-in slide-in-from-top-2 duration-200">
+                    <p className="flex items-start gap-2">
+                      <span className="text-blue-500 mt-0.5">•</span>
+                      <span>Coloca la pieza físicamente alineada en la mesa de impresión.</span>
+                    </p>
+                    <p className="flex items-start gap-2">
+                      <span className="text-blue-500 mt-0.5">•</span>
+                      <span>Ingresa manualmente las coordenadas de posicionamiento exactas (X, Y) en el software para mandar la impresión clásica de forma directa.</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
