@@ -567,3 +567,263 @@ export async function generateMonthlyReportPDF(quotes: any[], month: number, yea
   const buffer = Buffer.from(doc.output("arraybuffer"));
   return buffer;
 }
+
+export async function generateReceiptPDF(receipt: any, showSignatures: boolean = true): Promise<Buffer> {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.width;
+  const pageHeight = doc.internal.pageSize.height;
+
+  const drawHeader = (d: jsPDF, isFirstPage: boolean = false) => {
+    try {
+      const logoPath = path.join(process.cwd(), "public", "logo_pdf.png");
+      const logoBuffer = fs.readFileSync(logoPath);
+      const logoBase64 = `data:image/png;base64,${logoBuffer.toString("base64")}`;
+      d.addImage(logoBase64, "PNG", 14, 10, 50, 15);
+    } catch (error) {
+      if (isFirstPage) console.error("No se pudo cargar el logo para el PDF", error);
+      d.setFont("helvetica", "bold");
+      d.setFontSize(24);
+      d.setTextColor(0, 0, 0);
+      d.text("LASER INOVA", 14, 22);
+    }
+    d.setFont("helvetica", "bold");
+    d.setFontSize(22);
+    d.setTextColor(0, 0, 0);
+    d.text("NOTA DE PEDIDO", pageWidth / 2, 22, { align: "center" });
+    d.setDrawColor(200);
+    d.setLineWidth(0.5);
+    d.line(14, 30, pageWidth - 14, 30);
+  };
+
+  const drawFooter = (d: jsPDF) => {
+    const pHeight = d.internal.pageSize.height;
+    const footerY = pHeight - 20;
+    d.setDrawColor(220);
+    d.setLineWidth(0.5);
+    d.line(14, footerY, pageWidth - 14, footerY);
+    d.setFont("helvetica", "normal");
+    d.setFontSize(8);
+    d.setTextColor(120);
+    d.text("Laser Inova - www.laserinova.com - info@laserinova.com", pageWidth / 2, footerY + 6, { align: "center" });
+  };
+
+  const drawWatermark = (d: jsPDF) => {
+    d.saveGraphicsState();
+    
+    // Use low opacity for watermark
+    try {
+      const GState = (d as any).GState;
+      if (GState) {
+        d.setGState(new GState({ opacity: 0.06 }));
+      }
+    } catch (e) {
+      // Fallback if GState is not supported
+    }
+
+    // Centered light gray logo
+    try {
+      const logoPath = path.join(process.cwd(), "public", "logo_pdf.png");
+      if (fs.existsSync(logoPath)) {
+        const logoBuffer = fs.readFileSync(logoPath);
+        const logoBase64 = `data:image/png;base64,${logoBuffer.toString("base64")}`;
+        d.addImage(logoBase64, "PNG", pageWidth / 2 - 60, pageHeight / 2 - 45, 120, 36);
+      }
+    } catch (e) {}
+
+    // Diagonal status text
+    d.setFont("helvetica", "bold");
+    d.setFontSize(50);
+    d.setTextColor(220, 220, 220); // Fallback light gray color
+    
+    const watermarkText = receipt.status === "PAID" ? "PAGADO / LIQUIDADO" : "PENDIENTE DE PAGO";
+    d.text(watermarkText, pageWidth / 2, pageHeight / 2 + 15, {
+      align: "center",
+      angle: 35
+    });
+
+    d.restoreGraphicsState();
+  };
+
+  // Header and Watermark
+  drawHeader(doc, true);
+  drawWatermark(doc);
+
+  // Top Right Details (Fecha & Folio & Estatus)
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(80);
+  const formattedDate = new Date(receipt.createdAt).toLocaleDateString("es-MX");
+  doc.text(`Fecha:   ${formattedDate}`, pageWidth - 14, 38, { align: "right" });
+  doc.text(`No. de Recibo:   ${receipt.folio}`, pageWidth - 14, 44, { align: "right" });
+  
+  doc.text("Estatus: ", pageWidth - 58, 50, { align: "right" });
+  doc.setFont("helvetica", "bold");
+  if (receipt.status === "PAID") {
+    doc.setTextColor(46, 125, 50); // green
+    doc.text("LIQUIDADO", pageWidth - 14, 50, { align: "right" });
+  } else {
+    doc.setTextColor(211, 47, 47); // red
+    doc.text("PENDIENTE", pageWidth - 14, 50, { align: "right" });
+  }
+
+  // Top Left Details (Client & Project)
+  let currentY = 38;
+  doc.setTextColor(0);
+  const displayName = receipt.client?.name || receipt.prospectName;
+  const displayCompany = receipt.client?.company;
+
+  if (displayName) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("PARA:", 14, currentY);
+    doc.setFont("helvetica", "bold");
+    doc.text(displayName, 35, currentY);
+    currentY += 6;
+    if (displayCompany) {
+      doc.setFont("helvetica", "normal");
+      doc.text(displayCompany, 35, currentY);
+      currentY += 6;
+    }
+  }
+
+  doc.setFont("helvetica", "normal");
+  doc.text("Proyecto:", 14, currentY);
+  doc.setFont("helvetica", "bold");
+  doc.text(receipt.project || "", 35, currentY);
+  currentY += 12;
+
+  // Description
+  let tableStartY = currentY;
+  if (receipt.description) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    const splitDesc = doc.splitTextToSize(receipt.description, pageWidth - 28);
+    doc.text(splitDesc, 14, currentY);
+    tableStartY = currentY + (splitDesc.length * 5) + 5;
+  }
+
+  // Concepts Table
+  const tableColumn = ["Descripción", "Cantidad", "P. Unitario", "Total"];
+  const tableRows: any[][] = [];
+  const fmt = (n: number) =>
+    `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const rawConcepts = receipt.concepts;
+  const concepts = Array.isArray(rawConcepts) ? rawConcepts : [];
+
+  concepts.forEach((concept: any, index: number) => {
+    const desc = concept.description || `Concepto ${index + 1}`;
+    const qty = concept.quantity || 1;
+    const unitPrice = concept.unitPrice || concept.finalUnitPrice || 0;
+    const totalAmount = unitPrice * qty;
+    tableRows.push([
+      desc,
+      qty.toString(),
+      fmt(unitPrice),
+      fmt(totalAmount),
+    ]);
+  });
+
+  autoTable(doc, {
+    head: [tableColumn],
+    body: tableRows,
+    startY: tableStartY,
+    theme: "striped",
+    headStyles: { fillColor: [80, 80, 80], textColor: 255, fontSize: 10, fontStyle: "bold" },
+    bodyStyles: { fontSize: 9, textColor: 50 },
+    columnStyles: {
+      0: { cellWidth: "auto" },
+      1: { cellWidth: 25, halign: "center" },
+      2: { cellWidth: 35, halign: "right" },
+      3: { cellWidth: 35, halign: "right" }
+    },
+    margin: { top: 35, bottom: 30 },
+    didDrawPage: (data) => {
+      if (data.pageNumber > 1 && data.cursor?.y === data.settings.margin.top) {
+        drawHeader(doc);
+        drawWatermark(doc);
+      }
+      drawFooter(doc);
+    }
+  });
+
+  const finalY = (doc as any).lastAutoTable?.finalY || tableStartY + 20;
+
+  // Totals & Balance Section
+  const totalsY = finalY + 10;
+  doc.setFontSize(11);
+  doc.setTextColor(0);
+
+  doc.setFont("helvetica", "normal");
+  doc.text("Total:", pageWidth - 55, totalsY, { align: "right" });
+  doc.setFont("helvetica", "bold");
+  doc.text(fmt(receipt.total), pageWidth - 14, totalsY, { align: "right" });
+
+  doc.setFont("helvetica", "normal");
+  doc.text("Anticipo / Pagado:", pageWidth - 55, totalsY + 8, { align: "right" });
+  doc.setFont("helvetica", "bold");
+  doc.text(fmt(receipt.advance), pageWidth - 14, totalsY + 8, { align: "right" });
+
+  doc.setFontSize(13);
+  if (receipt.balance > 0) {
+    doc.setTextColor(211, 47, 47); // red color for pending balance
+  } else {
+    doc.setTextColor(46, 125, 50); // green color for paid
+  }
+  doc.setFont("helvetica", "bold");
+  doc.text("Restante pendiente:", pageWidth - 55, totalsY + 18, { align: "right" });
+  doc.text(fmt(receipt.balance), pageWidth - 14, totalsY + 18, { align: "right" });
+
+  // Reset text color
+  doc.setTextColor(0);
+
+  // Notes/Considerations
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  let currentTextY = totalsY + 28;
+
+  const marginThreshold = pageHeight - 35;
+
+  if (receipt.notes) {
+    if (currentTextY > marginThreshold - 10) {
+      doc.addPage();
+      drawHeader(doc);
+      drawWatermark(doc);
+      drawFooter(doc);
+      currentTextY = 40;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.text("Notas del Pedido:", 14, currentTextY);
+    currentTextY += 5;
+    doc.setFont("helvetica", "normal");
+    const splitNotes = doc.splitTextToSize(receipt.notes, pageWidth - 28);
+    doc.text(splitNotes, 14, currentTextY);
+    currentTextY += (splitNotes.length * 5) + 5;
+  }
+
+  // Add signature lines if requested
+  if (showSignatures) {
+    if (currentTextY > marginThreshold - 30) {
+      doc.addPage();
+      drawHeader(doc);
+      drawWatermark(doc);
+      drawFooter(doc);
+      currentTextY = 40;
+    }
+
+    currentTextY += 18;
+    doc.setDrawColor(200);
+    doc.setLineWidth(0.5);
+    doc.line(30, currentTextY, 90, currentTextY);
+    doc.line(pageWidth - 90, currentTextY, pageWidth - 30, currentTextY);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(80);
+    doc.text("Firma de Conformidad Cliente", 60, currentTextY + 5, { align: "center" });
+    doc.text("Entregado por / Laser Inova", pageWidth - 60, currentTextY + 5, { align: "center" });
+  }
+
+  const buffer = Buffer.from(doc.output("arraybuffer"));
+  return buffer;
+}

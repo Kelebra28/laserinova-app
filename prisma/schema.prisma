@@ -26,6 +26,7 @@ model User {
   taskAssignments        TaskAssignee[]
   providers              Provider[]
   emails                 Email[]
+  receipts               Receipt[]
 }
 
 model Client {
@@ -43,6 +44,7 @@ model Client {
   quotes                Quote[]
   financialTransactions FinancialTransaction[]
   emails                Email[]
+  receipts              Receipt[]
 }
 
 model MaterialCategory {
@@ -456,3 +458,29 @@ model ProjectRecipeStep {
 
   @@index([recipeId])
 }
+
+model Receipt {
+  id            String   @id @default(uuid())
+  folio         String   @unique
+  clientId      String?
+  prospectName  String?
+  userId        String
+  project       String
+  description   String?  @db.Text
+  concepts      Json?    // Array of concepts: [{ description, quantity, unitPrice, total }]
+  total         Float    @default(0)
+  advance       Float    @default(0) // Anticipo
+  balance       Float    @default(0) // Restante pendiente
+  paymentMethod String   @default("EFECTIVO") // EFECTIVO, TRANSFERENCIA, TARJETA, DEPOSITO
+  notes         String?  @db.Text
+  status        String   @default("PENDING") // PENDING (pendiente de liquidar), PAID (liquidado)
+  quoteId       String?  // Reference to original quote if pulled from it
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  client        Client?  @relation(fields: [clientId], references: [id])
+  user          User     @relation(fields: [userId], references: [id])
+
+  @@index([clientId])
+  @@index([userId])
+}
+

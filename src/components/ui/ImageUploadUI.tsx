@@ -1,4 +1,4 @@
-import { ChangeEvent, useState, DragEvent, useRef } from 'react';
+import { ChangeEvent, useState, DragEvent, useRef, useEffect } from 'react';
 import { Trash2, UploadCloud } from 'lucide-react';
 
 interface ImageUploadUIProps {
@@ -12,6 +12,53 @@ interface ImageUploadUIProps {
 export const ImageUploadUI = ({ imageUrls, isUploading, onFileChange, onFilesDropped, onRemoveImage }: ImageUploadUIProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      // Ignorar si el usuario está escribiendo dentro de un input de texto
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        // Excepción: Si es un input pero es de tipo file o hidden, quizás podríamos permitirlo, pero por seguridad general lo omitimos
+        if (target.tagName === 'INPUT') {
+          const inputType = (target as HTMLInputElement).type;
+          if (inputType === 'text' || inputType === 'number' || inputType === 'email') {
+            return;
+          }
+        } else {
+          return;
+        }
+      }
+
+      if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+        const dt = new DataTransfer();
+        let hasImages = false;
+
+        // Filtrar solo las imágenes
+        for (let i = 0; i < e.clipboardData.files.length; i++) {
+          const file = e.clipboardData.files[i];
+          if (file.type.startsWith('image/')) {
+            dt.items.add(file);
+            hasImages = true;
+          }
+        }
+
+        if (hasImages) {
+          e.preventDefault(); // Evitar que el navegador intente hacer algo más
+          
+          if (onFilesDropped) {
+            onFilesDropped(dt.files);
+          } else if (fileInputRef.current) {
+            fileInputRef.current.files = dt.files;
+            const event = new Event('change', { bubbles: true });
+            fileInputRef.current.dispatchEvent(event);
+          }
+        }
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [onFilesDropped]);
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -68,7 +115,7 @@ export const ImageUploadUI = ({ imageUrls, isUploading, onFileChange, onFilesDro
           <UploadCloud className="w-6 h-6" />
         </div>
         <p className="text-sm font-bold text-gray-700 mb-1">
-          {isDragging ? 'Suelta las imágenes aquí' : 'Haz clic para subir o arrastra tus imágenes'}
+          {isDragging ? 'Suelta las imágenes aquí' : 'Haz clic, arrastra o pega (Cmd+V) tus imágenes'}
         </p>
         <p className="text-xs text-gray-500">
           Archivos PNG, JPG o WEBP (máx. 1000px)
