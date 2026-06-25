@@ -11,6 +11,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import QuoteVersionTabs from "@/components/quotes/QuoteVersionTabs";
 import CloneQuoteButton from "@/components/quotes/CloneQuoteButton";
 import { SendQuoteMailButton } from "@/components/quotes/SendQuoteMailButton";
+import SurveyLinkButton from "@/components/quotes/SurveyLinkButton";
 
 const statusLabels: Record<string, string> = {
   DRAFT: "Borrador",
@@ -153,6 +154,9 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
               <FileText className="mr-2 h-4 w-4" />
               PDF Comparativo
             </a>
+          )}
+          {quote.status === "DELIVERED" && (
+            <SurveyLinkButton quoteId={quote.id} projectName={quote.project} />
           )}
           <SendQuoteMailButton 
             quoteId={quote.id}

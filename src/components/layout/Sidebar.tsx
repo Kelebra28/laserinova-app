@@ -17,7 +17,8 @@ import {
   Printer,
   Mail,
   Building2,
-  Receipt
+  Receipt,
+  Star
 } from "lucide-react";
 import { useSession } from "next-auth/react";
  
@@ -34,6 +35,7 @@ const menuItems = [
   { name: "Materiales", href: "/dashboard/materials", icon: Package },
   { name: "Procesos", href: "/dashboard/processes", icon: Cpu },
   { name: "Etiquetas", href: "/dashboard/labels", icon: Printer },
+  { name: "Encuestas", href: "/dashboard/surveys", icon: Star, adminOnly: true },
   { name: "Reportes", href: "/dashboard/reports", icon: PieChart },
   { name: "Configuración", href: "/dashboard/settings", icon: Settings, adminOnly: true },
 ];

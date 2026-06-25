@@ -160,6 +160,7 @@ model Quote {
   user                  User                   @relation(fields: [userId], references: [id])
   concepts              QuoteConcept[]
   financialTransactions FinancialTransaction[]
+  surveyResponse        SurveyResponse?
 
   @@index([clientId], map: "Quote_clientId_fkey")
   @@index([userId], map: "Quote_userId_fkey")
@@ -490,3 +491,36 @@ model Receipt {
   @@index([userId])
 }
 
+model SurveyQuestion {
+  id        String         @id @default(uuid())
+  text      String         @db.Text
+  order     Int            @default(0)
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  answers   SurveyAnswer[]
+}
+
+model SurveyResponse {
+  id           String         @id @default(uuid())
+  quoteId      String         @unique
+  averageScore Float          @default(0)
+  feedbackText String?        @db.Text
+  createdAt    DateTime       @default(now())
+  quote        Quote          @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  answers      SurveyAnswer[]
+
+  @@index([quoteId])
+}
+
+model SurveyAnswer {
+  id         String         @id @default(uuid())
+  responseId String
+  questionId String
+  score      Int            // 1 to 5
+  response   SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  question   SurveyQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([responseId])
+  @@index([questionId])
+}
