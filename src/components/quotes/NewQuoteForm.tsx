@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Calculator, Save, Plus, Trash2, Info, DollarSign, Check } from "lucide-react";
 import SubmitButton from "@/components/ui/SubmitButton";
 import { calculateConcept, CalculationInput, GlobalCosts, MaterialData } from "@/lib/calculations";
@@ -10,6 +10,7 @@ import ClientSelector from "@/components/quotes/ClientSelector";
 import ConfirmSaveModal from "@/components/ui/ConfirmSaveModal";
 import { ImageUploadUI } from "@/components/ui/ImageUploadUI";
 import { useImageUpload } from "@/hooks/useImageUpload";
+import { AutocompleteInput } from "@/components/ui/AutocompleteInput";
 
 
 interface NewQuoteFormProps {
@@ -32,6 +33,23 @@ export default function NewQuoteForm({ clients, materials, products = [], global
   const [margin, setMargin] = useState(globalCosts.margen_default || 35);
   const [images, setImages] = useState<string[]>([]);
   const { isUploading, handleFileChange, uploadImages, deleteImage } = useImageUpload();
+  
+  // Sugerencias para autocompletado
+  const [suggestions, setSuggestions] = useState({
+    projects: [] as string[],
+    quoteDescriptions: [] as string[],
+    conceptDescriptions: [] as string[],
+    conceptDetails: [] as string[]
+  });
+
+  useEffect(() => {
+    fetch('/api/quotes/suggestions')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.error) setSuggestions(data);
+      })
+      .catch(err => console.error("Error cargando sugerencias:", err));
+  }, []);
   
   const handleRemoveImage = async (index: number) => {
     const urlToRemove = images[index];
@@ -188,7 +206,6 @@ export default function NewQuoteForm({ clients, materials, products = [], global
       <input type="hidden" name="prospectName" value={prospectName} />
       <input type="hidden" name="globalCostsSnapshot" value={JSON.stringify(globalCosts)} />
       <input type="hidden" name="images" value={JSON.stringify(images)} />
-
       {/* 1. Datos Generales */}
       <div className="bg-white shadow-sm border border-gray-100 rounded-lg p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-6">Datos Generales</h2>
@@ -205,24 +222,24 @@ export default function NewQuoteForm({ clients, materials, products = [], global
           </div>
           <div>
             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Proyecto *</label>
-            <input
-              type="text"
+            <AutocompleteInput
               name="project"
               value={project}
-              onChange={e => setProject(e.target.value)}
+              suggestions={suggestions.projects}
+              onChange={setProject}
               required
               placeholder="Ej. Señalética Corporativa"
-              className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all outline-none text-gray-900"
+              className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all outline-none text-gray-900 border"
             />
           </div>
           <div className="sm:col-span-2">
             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Descripción General (Opcional)</label>
-            <input
-              type="text"
+            <AutocompleteInput
               name="description"
+              suggestions={suggestions.quoteDescriptions}
               value={description}
-              onChange={e => setDescription(e.target.value)}
-              className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all outline-none text-gray-900"
+              onChange={setDescription}
+              className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all outline-none text-gray-900 border"
               placeholder="Ej: Servicio de personalización..."
             />
           </div>
@@ -359,6 +376,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                             updateConcept(concept.id, "description", desc);
                             updateConcept(concept.id, "manualUnitPrice", selectedProd.unitPrice);
                             updateConcept(concept.id, "manualUnitCost", selectedProd.unitCost);
+                            updateConcept(concept.id, "productId", prodId);
                             
                             if (selectedProd.image && !images.includes(selectedProd.image)) {
                               setImages(prev => [...prev, selectedProd.image]);
@@ -379,21 +397,21 @@ export default function NewQuoteForm({ clients, materials, products = [], global
 
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-medium text-gray-700">Descripción</label>
-                    <input
-                      type="text"
+                    <AutocompleteInput
+                      suggestions={suggestions.conceptDescriptions}
                       value={concept.description}
-                      onChange={e => updateConcept(concept.id, "description", e.target.value)}
+                      onChange={val => updateConcept(concept.id, "description", val)}
                       className="mt-1 block w-full sm:text-sm border-gray-300 rounded-md py-1.5 px-2 border text-gray-900"
                     />
                   </div>
                   <div className="sm:col-span-4">
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Detalles (para el PDF - Opcional)</label>
-                    <textarea 
+                    <AutocompleteInput
+                      suggestions={suggestions.conceptDetails}
                       value={concept.details || ""} 
-                      onChange={e => updateConcept(concept.id, "details", e.target.value)}
+                      onChange={val => updateConcept(concept.id, "details", val)}
                       className="mt-1 block w-full text-xs border-gray-300 rounded-md py-1.5 px-2 border bg-gray-50 focus:bg-white transition-all"
                       placeholder="Ej. Grabado profundo, limpieza de bordes, etc. Si se deja vacío, se generará automáticamente."
-                      rows={1}
                     />
                   </div>
                   <div>

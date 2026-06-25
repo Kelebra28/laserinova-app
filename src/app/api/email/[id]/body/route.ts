@@ -42,19 +42,33 @@ export async function GET(
     const cleanSubj = normalizeSubject(targetEmail.subject);
 
     // Find all related emails in DB that share the same normalized subject
-    const relatedEmails = await prisma.email.findMany({
-      where: {
-        userId: currentUserId,
-        OR: [
-          { subject: { contains: cleanSubj } },
-          { subject: cleanSubj }
-        ]
-      },
-      include: {
-        attachments: true
-      },
-      orderBy: { receivedAt: 'asc' }
-    });
+    let relatedEmails: any[] = [];
+    
+    if (!cleanSubj || cleanSubj.trim().length < 3) {
+      // Si el asunto está vacío o es muy corto, mejor no intentar agrupar hilos para evitar mezclar correos.
+      relatedEmails = [targetEmail];
+    } else {
+      // Buscamos candidatos amplios pero filtramos estrictamente en memoria
+      const candidates = await prisma.email.findMany({
+        where: {
+          userId: currentUserId,
+          subject: { contains: cleanSubj }
+        },
+        include: { attachments: true },
+        orderBy: { receivedAt: 'asc' }
+      });
+      
+      relatedEmails = candidates.filter(em => {
+        const norm = normalizeSubject(em.subject);
+        // Filtrado estricto: debe coincidir exactamente el asunto normalizado
+        return norm.toLowerCase() === cleanSubj.toLowerCase();
+      });
+      
+      // Asegurarnos de que el targetEmail siempre esté incluido aunque algo falle
+      if (!relatedEmails.find(e => e.id === targetEmail.id)) {
+        relatedEmails.push(targetEmail);
+      }
+    }
 
     // Helper to get body for a single email
     const getEmailContent = async (emailRecord: any) => {
@@ -143,25 +157,70 @@ export async function GET(
               try {
                 const lock = await client.getMailboxLock(imapFolder);
                 try {
-                  const searchResult = await client.search({ header: { 'message-id': em.messageId } });
-                  if (searchResult && searchResult.length > 0) {
-                    const fetchResult = await client.fetchOne(searchResult[0], { source: true });
-                    if (fetchResult && fetchResult.source) {
-                      const parsed = await simpleParser(fetchResult.source);
-                      html = parsed.html || `<p>${parsed.text?.replace(/\n/g, '<br>') || ''}</p>`;
-                      text = parsed.text || '';
+                  // Limpiamos los brackets para la búsqueda, algunos servidores IMAP son sensibles a esto
+                  const cleanMessageId = em.messageId.replace(/^<|>$/g, '');
+                  
+                  // Intentamos buscar con y sin brackets
+                  let searchResult = await client.search({ header: { 'message-id': em.messageId } });
+                  if (!searchResult || searchResult.length === 0) {
+                    searchResult = await client.search({ header: { 'message-id': cleanMessageId } });
+                  }
+                  
+                  // Fallback 1: Búsqueda por Asunto exacto
+                  let cleanSubjForSearch = '';
+                  if (!searchResult || searchResult.length === 0) {
+                    cleanSubjForSearch = em.subject.replace(/^(Re|Fwd|Rv|FW|RE|RV|Fw)\s*:\s*/i, '').trim();
+                    if (cleanSubjForSearch) {
+                      searchResult = await client.search({ header: { subject: cleanSubjForSearch } });
+                    }
+                  }
+                  
+                  // Fallback 2: Búsqueda por primera palabra clave larga del asunto (Hostinger falla con caracteres especiales como //)
+                  if (!searchResult || searchResult.length === 0) {
+                    const words = cleanSubjForSearch.split(/[\s\/\\:-]+/).filter(w => w.length > 5);
+                    if (words.length > 0) {
+                      searchResult = await client.search({ header: { subject: words[0] } });
+                    }
+                  }
 
-                      try {
-                        const savedPath = saveEmailToDisk(em.messageId, html, text);
-                        await prisma.email.update({
-                          where: { id: em.id },
-                          data: { storagePath: savedPath }
-                        });
-                      } catch (writeErr) {
-                        console.warn('Could not persist', writeErr);
+                  // Fallback 3: Búsqueda por remitente (From)
+                  if (!searchResult || searchResult.length === 0) {
+                    if (em.from) {
+                      const fromEmailMatch = em.from.match(/<([^>]+)>/);
+                      const fromEmail = fromEmailMatch ? fromEmailMatch[1] : em.from;
+                      if (fromEmail) {
+                        searchResult = await client.search({ from: fromEmail });
                       }
                     }
                   }
+                  
+                  if (searchResult && searchResult.length > 0) {
+                    for (const uid of searchResult) {
+                      const fetchResult = await client.fetchOne(uid, { source: true });
+                      if (fetchResult && fetchResult.source) {
+                        const parsed = await simpleParser(fetchResult.source);
+                        const parsedId = parsed.messageId || '';
+                        const idMatches = parsedId === em.messageId || parsedId === cleanMessageId || `<${parsedId}>` === em.messageId;
+                        
+                        if (idMatches) {
+                          html = parsed.html || `<p>${parsed.text?.replace(/\n/g, '<br>') || ''}</p>`;
+                          text = parsed.text || '';
+
+                          try {
+                            const savedPath = saveEmailToDisk(em.messageId, html, text);
+                            await prisma.email.update({
+                              where: { id: em.id },
+                              data: { storagePath: savedPath }
+                            });
+                          } catch (writeErr) {
+                            console.warn('Could not persist', writeErr);
+                          }
+                          break;
+                        }
+                      }
+                    }
+                  }
+
                 } finally {
                   lock.release();
                 }

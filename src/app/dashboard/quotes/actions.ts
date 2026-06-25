@@ -110,6 +110,7 @@ export async function createQuoteAction(formData: FormData) {
           description: c.description || `Concepto ${index + 1}`,
           quantity: Number(c.quantity) || 1,
           ...(c.materialId ? { material: { connect: { id: c.materialId } } } : {}),
+          ...(c.productId ? { product: { connect: { id: c.productId } } } : {}),
           clientProvidesMaterial: Boolean(c.clientProvidesMaterial),
           width: Number(c.partWidth) || null,
           height: Number(c.partHeight) || null,
@@ -205,6 +206,7 @@ export async function updateQuoteAction(formData: FormData) {
           description: c.description || `Concepto ${index + 1}`,
           quantity: Number(c.quantity) || 1,
           ...(c.materialId ? { material: { connect: { id: c.materialId } } } : {}),
+          ...(c.productId ? { product: { connect: { id: c.productId } } } : {}),
           clientProvidesMaterial: Boolean(c.clientProvidesMaterial),
           width: Number(c.partWidth) || null,
           height: Number(c.partHeight) || null,
@@ -231,9 +233,34 @@ export async function updateQuoteAction(formData: FormData) {
 }
 
 export async function updateQuoteStatusAction(quoteId: string, newStatus: string) {
+  const quote = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    include: { concepts: true }
+  });
+
+  if (!quote) return;
+
+  let stockDeducted = quote.stockDeducted;
+
+  if (['APPROVED', 'IN_PRODUCTION', 'DELIVERED'].includes(newStatus) && !stockDeducted) {
+    for (const concept of quote.concepts) {
+      if ((concept.conceptType === 'PRODUCTO' || concept.conceptType === 'RESALE') && concept.productId) {
+        await prisma.product.update({
+          where: { id: concept.productId },
+          data: { stockQuantity: { decrement: concept.quantity } }
+        });
+      }
+    }
+    stockDeducted = true;
+  }
+
   await prisma.quote.update({
     where: { id: quoteId },
-    data: { status: newStatus }
+    data: { 
+      status: newStatus,
+      stockDeducted,
+      ...(stockDeducted && !quote.stockDeducted ? { isDone: true } : {})
+    }
   });
   
   revalidatePath("/dashboard");

@@ -47,14 +47,7 @@ export function EmailBodyViewer({ html, text }: EmailBodyViewerProps) {
           margin: 1em 0;
         }
         table {
-          width: 100% !important;
           max-width: 100% !important;
-          border-collapse: collapse;
-          margin: 1em 0;
-        }
-        td, th {
-          padding: 6px;
-          border: 1px solid #e2e8f0;
         }
         a {
           color: #dc2626; /* match tailwind red-600 */

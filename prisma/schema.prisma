@@ -69,6 +69,7 @@ model Material {
   guardPercentage Float?
   productionPrice Float?
   pricePerCm2     Float?
+  location        String?
   notes           String?          @db.Text
   active          Boolean          @default(true)
   createdAt       DateTime         @default(now())
@@ -103,6 +104,7 @@ model Product {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   category      ProductCategory @relation(fields: [categoryId], references: [id])
+  quoteConcepts QuoteConcept[]
 
   @@index([categoryId], map: "Product_categoryId_fkey")
 }
@@ -139,6 +141,7 @@ model Quote {
   realAmountCollected   Float?                 @default(0)
   realUtilityTotal      Float?                 @default(0)
   isDone                Boolean                @default(false)
+  stockDeducted         Boolean                @default(false)
   sentDate              DateTime?
   closeDate             DateTime?
   deliveryTime          String?
@@ -169,6 +172,7 @@ model QuoteConcept {
   description            String    @db.Text
   quantity               Int       @default(1)
   materialId             String?
+  productId              String?
   clientProvidesMaterial Boolean   @default(false)
   width                  Float?
   height                 Float?
@@ -194,9 +198,11 @@ model QuoteConcept {
   totalAmount            Float     @default(0)
   order                  Int       @default(0)
   material               Material? @relation(fields: [materialId], references: [id])
+  product                Product?  @relation(fields: [productId], references: [id])
   quote                  Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
   @@index([materialId], map: "QuoteConcept_materialId_fkey")
+  @@index([productId], map: "QuoteConcept_productId_fkey")
   @@index([quoteId], map: "QuoteConcept_quoteId_fkey")
 }
 

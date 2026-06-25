@@ -11,9 +11,35 @@ export async function updateQuoteStatus(formData: FormData) {
 
   if (!quoteId || !status) return;
 
+  const quote = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    include: { concepts: true }
+  });
+
+  if (!quote) return;
+
+  let stockDeducted = quote.stockDeducted;
+
+  // Si pasa a aprobada (o posterior) y no se ha descontado stock
+  if (['APPROVED', 'IN_PRODUCTION', 'DELIVERED'].includes(status) && !stockDeducted) {
+    for (const concept of quote.concepts) {
+      if ((concept.conceptType === 'PRODUCTO' || concept.conceptType === 'RESALE') && concept.productId) {
+        await prisma.product.update({
+          where: { id: concept.productId },
+          data: { stockQuantity: { decrement: concept.quantity } }
+        });
+      }
+    }
+    stockDeducted = true;
+  }
+
   await prisma.quote.update({
     where: { id: quoteId },
-    data: { status },
+    data: { 
+      status,
+      stockDeducted,
+      ...(stockDeducted && !quote.stockDeducted ? { isDone: true } : {}) // Auto-marcar como isDone si se descuenta stock
+    },
   });
 
   revalidatePath(`/dashboard/quotes/${quoteId}`);

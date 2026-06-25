@@ -60,7 +60,12 @@ export default function MaterialSelector({ materials, value, onChange, disabled 
         }`}
       >
         <span className="truncate">
-          {selectedMaterial ? `${selectedMaterial.name} ${selectedMaterial.brand ? `(${selectedMaterial.brand})` : ''}` : "Seleccionar material..."}
+          {selectedMaterial ? (
+            <>
+              {selectedMaterial.name} {selectedMaterial.brand ? `(${selectedMaterial.brand})` : ''}
+              {selectedMaterial.location && <span className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded ml-1 font-black tracking-wider text-[9px] uppercase">[{selectedMaterial.location}]</span>}
+            </>
+          ) : "Seleccionar material..."}
         </span>
         <ChevronDown className={`h-4 w-4 text-gray-400 shrink-0 ml-2 transition-transform duration-300 ${isOpen ? 'rotate-180 text-red-600' : ''}`} />
       </button>
@@ -125,6 +130,7 @@ export default function MaterialSelector({ materials, value, onChange, disabled 
                   <div className="flex flex-col min-w-0">
                     <span className={`truncate text-xs font-bold ${value === m.id ? "text-red-700" : "text-gray-700 group-hover:text-gray-900"}`}>
                       {m.name} {m.brand && <span className="text-gray-400 font-normal ml-1">({m.brand})</span>}
+                      {m.location && <span className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded ml-1 font-black tracking-wider text-[9px] uppercase">[{m.location}]</span>}
                     </span>
                     <span className="text-[10px] text-gray-400 group-hover:text-gray-500">${(m.pricePerCm2 * 10000).toFixed(2)} / m²</span>
                   </div>
