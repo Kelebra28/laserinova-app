@@ -208,21 +208,22 @@ export default async function DashboardPage() {
 
       {/* Kanban Board Section - Enhanced Container */}
       <div className="space-y-6">
-        <div className="flex items-center justify-between px-4">
-           <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.3em] flex items-center gap-3">
-             <div className="p-2 bg-gray-100 rounded-xl text-gray-900">
+        <div className="flex items-center justify-between px-2">
+           <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+             <div className="p-1.5 bg-slate-100/80 rounded-lg text-slate-600">
                 <Clock className="h-4 w-4" />
              </div>
              Flujo de Trabajo (Mes Actual)
            </h3>
-           <div className="flex items-center gap-4 text-[10px] font-black text-gray-400 uppercase">
-              <span className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> {quotesThisMonth.length} Cotizaciones
+           <div className="flex items-center gap-3 text-xs font-semibold text-slate-500">
+              <span className="flex items-center gap-1.5 bg-white px-3 py-1 rounded-full shadow-sm border border-slate-100">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" /> 
+                {quotesThisMonth.length} Cotizaciones
               </span>
            </div>
         </div>
         
-        <div className="bg-white/50 backdrop-blur-sm rounded-[3rem] border border-gray-100 shadow-2xl p-2 min-h-[600px]">
+        <div className="-mx-4 px-4 pb-8 overflow-x-auto hide-scrollbar">
           <KanbanBoard initialQuotes={quotesThisMonth} columns={columns} />
         </div>
       </div>

@@ -216,7 +216,7 @@ export default function EmailPage() {
         {/* Sync button */}
         <div className="p-3 border-t border-slate-200/60">
           <button
-            onClick={syncEmails}
+            onClick={() => syncEmails()}
             disabled={isSyncing}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all disabled:opacity-50"
           >
@@ -227,7 +227,7 @@ export default function EmailPage() {
       </div>
 
       {/* ─── EMAIL LIST ─── */}
-      <div className={`flex-shrink-0 flex flex-col border-r border-slate-200/60 bg-white transition-all duration-300 ${selectedEmail ? 'w-80' : 'flex-1'}`}>
+      <div className={`flex-shrink-0 flex flex-col border-r border-slate-200/60 bg-white transition-all duration-300 ${selectedEmail ? 'w-80' : 'flex-1 min-w-0'}`}>
         {/* List header */}
         <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
@@ -278,46 +278,73 @@ export default function EmailPage() {
               const senderName = getSenderName(email.from);
               const initials = getInitials(email.from);
               const avatarColor = getAvatarColor(email.from);
+              
+              // If no email is selected, we are in full-width mode
+              const isFullWidth = !selectedEmail;
 
               return (
                 <button
                   key={email.id}
                   onClick={() => handleSelectEmail(email)}
-                  className={`w-full text-left px-3 py-3 border-b border-slate-100 transition-all hover:bg-slate-50 group ${
-                    isSelected ? 'bg-red-50/60 border-l-2 border-l-red-500' : ''
+                  className={`w-full text-left px-4 py-3 border-b border-slate-100 transition-all hover:bg-slate-50 group ${
+                    isSelected ? 'bg-red-50/60 border-l-2 border-l-red-500' : 'border-l-2 border-l-transparent'
                   }`}
                 >
-                  <div className="flex items-start gap-2.5">
+                  <div className={`w-full min-w-0 flex ${isFullWidth ? 'items-center gap-4' : 'items-start gap-3'}`}>
                     {/* Avatar */}
-                    <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold ${avatarColor}`}>
+                    <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-sm font-bold ${avatarColor}`}>
                       {initials}
                     </div>
 
-                    <div className="min-w-0 flex-1">
-                      {/* Row 1: sender + date */}
-                      <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <span className={`text-xs truncate ${!email.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-600'}`}>
+                    {isFullWidth ? (
+                      /* ─── FULL WIDTH LAYOUT (Gmail style) ─── */
+                      <div className="flex-1 flex items-center gap-3 min-w-0">
+                        {/* Sender */}
+                        <div className={`w-24 md:w-40 flex-shrink-0 truncate text-sm md:text-sm ${!email.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
                           {senderName}
-                        </span>
-                        <span className="text-[10px] text-slate-400 flex-shrink-0">
-                          {formatEmailDate(email.receivedAt)}
-                        </span>
+                        </div>
+                        
+                        {/* Subject & Snippet Container */}
+                        <div className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden">
+                          <span className={`flex-shrink-0 max-w-[40%] md:max-w-[50%] truncate text-sm ${!email.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>
+                            {email.subject || '(Sin asunto)'}
+                          </span>
+                          <span className="text-slate-400 truncate text-xs md:text-sm flex-1 min-w-0">
+                            - {email.snippet}
+                          </span>
+                        </div>
+                        
+                        {/* Date & Unread indicator */}
+                        <div className="w-16 md:w-24 text-right flex-shrink-0 flex items-center justify-end gap-1.5 md:gap-2">
+                          {!email.isRead && <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-red-500 flex-shrink-0" />}
+                          <span className={`text-[10px] md:text-xs truncate ${!email.isRead ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+                            {formatEmailDate(email.receivedAt)}
+                          </span>
+                        </div>
                       </div>
+                    ) : (
+                      /* ─── COMPACT SIDEBAR LAYOUT ─── */
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <span className={`text-sm truncate ${!email.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
+                            {senderName}
+                          </span>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {!email.isRead && <div className="w-1.5 h-1.5 rounded-full bg-red-500" />}
+                            <span className={`text-[10px] ${!email.isRead ? 'font-bold text-slate-900' : 'text-slate-400'}`}>
+                              {formatEmailDate(email.receivedAt)}
+                            </span>
+                          </div>
+                        </div>
 
-                      {/* Row 2: subject */}
-                      <p className={`text-xs truncate ${!email.isRead ? 'font-semibold text-slate-800' : 'text-slate-600'}`}>
-                        {email.subject || '(Sin asunto)'}
-                      </p>
+                        <p className={`text-xs truncate ${!email.isRead ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
+                          {email.subject || '(Sin asunto)'}
+                        </p>
 
-                      {/* Row 3: snippet */}
-                      <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                        {email.snippet}
-                      </p>
-                    </div>
-
-                    {/* Unread dot */}
-                    {!email.isRead && (
-                      <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 mt-1" />
+                        <p className="text-[11px] text-slate-500 truncate mt-0.5 leading-relaxed">
+                          {email.snippet}
+                        </p>
+                      </div>
                     )}
                   </div>
                 </button>
@@ -349,14 +376,8 @@ export default function EmailPage() {
       </div>
 
       {/* ─── EMAIL VIEWER PANEL ─── */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-white">
-        {!selectedEmail ? (
-          /* Empty state */
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-300 gap-4">
-            <Mail className="w-16 h-16 opacity-30" />
-            <p className="text-sm font-medium text-slate-400">Selecciona un correo para leerlo</p>
-          </div>
-        ) : (
+      {selectedEmail && (
+        <div className="flex-1 flex flex-col overflow-hidden bg-white">
           <>
             {/* Viewer toolbar */}
             <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-white">
@@ -553,8 +574,8 @@ export default function EmailPage() {
               )}
             </div>
           </>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Compose Modal */}
       <EmailComposeModal

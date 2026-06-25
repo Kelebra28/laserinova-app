@@ -117,23 +117,23 @@ export default function KanbanBoard({
               onDragOver={(e) => onDragOver(e, col.id)}
               onDragLeave={onDragLeave}
               onDrop={(e) => onDrop(e, col.id)}
-              className={`flex flex-col h-full rounded-[2rem] p-4 border transition-all duration-200 w-[300px] shrink-0 ${
+              className={`flex flex-col h-full rounded-2xl p-4 transition-all duration-200 w-[300px] shrink-0 ${
                 dragOverCol === col.id 
                   ? `${getDropZoneColor(col.id)} shadow-inner scale-[1.01]` 
-                  : 'bg-gray-50/30 border-gray-100/50'
+                  : 'bg-slate-50 border border-slate-200/60'
               }`}
             >
 
-              <div className="flex items-center justify-between mb-6 px-2">
+              <div className="flex items-center justify-between mb-5 px-1">
                 <div className="flex items-center gap-2">
-                  <div className={`w-2.5 h-2.5 rounded-full ${col.dotClass} ${col.shadowClass}`}></div>
-                  <h2 className="text-[10px] font-black text-gray-900 uppercase tracking-[0.2em]">{col.label}</h2>
+                  <div className={`w-2 h-2 rounded-full ${col.dotClass} ${col.shadowClass}`}></div>
+                  <h2 className="text-xs font-bold text-slate-700 tracking-wider uppercase">{col.label}</h2>
                 </div>
-                <span className="text-[10px] font-black bg-white border border-gray-100 text-gray-500 px-2.5 py-1 rounded-xl shadow-sm">
+                <span className="text-[10px] font-bold bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded-full shadow-sm">
                   {columnQuotes.length}
                 </span>
               </div>
-              <div className="space-y-4 flex-1 overflow-y-auto max-h-[360px] 2xl:max-h-[500px] pr-1.5 scrollbar-thin">
+              <div className="space-y-3 flex-1 overflow-y-auto max-h-[540px] pr-1.5 scrollbar-thin">
                 {columnQuotes.map(quote => {
                   const isDragging = draggingId === quote.id;
                   return (
@@ -149,12 +149,12 @@ export default function KanbanBoard({
                     >
                       {/* Placeholder cuando se arrastra */}
                       {isDragging && (
-                        <div className={`absolute inset-0 border-2 border-dashed rounded-2xl animate-pulse ${
-                          col.id === 'CANCELLED' ? 'border-red-200 bg-red-50/20' : 
-                          col.id === 'DELIVERED' ? 'border-emerald-200 bg-emerald-50/20' :
-                          col.id === 'IN_PRODUCTION' ? 'border-orange-200 bg-orange-50/20' :
-                          col.id === 'APPROVED' ? 'border-purple-200 bg-purple-50/20' :
-                          'border-blue-200 bg-blue-50/20'
+                        <div className={`absolute inset-0 border-2 border-dashed rounded-xl animate-pulse ${
+                          col.id === 'CANCELLED' ? 'border-red-200 bg-red-50/50' : 
+                          col.id === 'DELIVERED' ? 'border-emerald-200 bg-emerald-50/50' :
+                          col.id === 'IN_PRODUCTION' ? 'border-orange-200 bg-orange-50/50' :
+                          col.id === 'APPROVED' ? 'border-purple-200 bg-purple-50/50' :
+                          'border-blue-200 bg-blue-50/50'
                         }`}></div>
                       )}
 
@@ -181,33 +181,33 @@ function TaskCard({ quote }: { quote: any }) {
   return (
     <Link 
       href={`/dashboard/quotes/${quote.id}`}
-      className="block bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:border-gray-200 hover:shadow-xl hover:-translate-y-1 transition-all group"
+      className="block bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:border-slate-300 hover:shadow-md transition-all group"
     >
       <div className="flex justify-between items-center mb-3">
-        <span className="text-[9px] font-black text-gray-500 bg-gray-50 px-2 py-0.5 rounded-md uppercase tracking-wider">{quote.folio}</span>
-        <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">{new Date(quote.createdAt).toLocaleDateString('es-MX')}</span>
+        <span className="text-[10px] font-semibold text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md uppercase tracking-wide">{quote.folio}</span>
+        <span className="text-[10px] font-medium text-slate-400">{new Date(quote.createdAt).toLocaleDateString('es-MX')}</span>
       </div>
 
       
-      <h4 className="text-sm font-black text-gray-900 group-hover:text-gray-600 transition-colors truncate mb-1 leading-tight">{quote.project}</h4>
+      <h4 className="text-sm font-bold text-slate-800 group-hover:text-red-600 transition-colors truncate mb-1 leading-tight">{quote.project}</h4>
 
-      <p className="text-[11px] font-medium text-gray-400 truncate mb-4">{quote.client?.name || "Sin cliente asignado"}</p>
+      <p className="text-xs text-slate-500 truncate mb-4">{quote.client?.name || "Sin cliente asignado"}</p>
       
       <div className="flex flex-wrap gap-1.5 mb-4">
-        <span className="text-[8px] font-black px-2 py-0.5 rounded bg-gray-50 text-gray-400 uppercase tracking-tighter">
+        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">
           {statusLabels[quote.status]}
         </span>
-        <span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-tighter ${
-          quote.paymentStatus === "PAID" ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600"
+        <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wide ${
+          quote.paymentStatus === "PAID" ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-amber-50 text-amber-600 border border-amber-100"
         }`}>
           {paymentLabels[quote.paymentStatus || "PENDING"]}
         </span>
       </div>
 
-      <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+      <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-2">
         <div>
-          <span className="block text-[8px] font-black text-gray-300 uppercase tracking-widest">Total</span>
-          <span className="text-sm font-black text-gray-900">${quote.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total</span>
+          <span className="text-sm font-black text-slate-900">${quote.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
         {quote.paymentStatus === "PAID" && (
           <CheckSquare className="h-4 w-4 text-emerald-500" />

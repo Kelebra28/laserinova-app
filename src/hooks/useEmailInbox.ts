@@ -77,15 +77,36 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
     setIsLoading(false);
   }, [currentFolder, page]);
 
-  const syncEmails = useCallback(async () => {
+  const syncEmails = useCallback(async (signal?: AbortSignal) => {
     setIsSyncing(true);
     setSyncError(null);
     setSyncAuthError(false);
     try {
-      const res = await fetch('/api/email/sync', { method: 'POST' });
+      const res = await fetch('/api/email/sync', { method: 'POST', signal });
+      if (signal?.aborted) return;
+
       if (res.ok) {
-        await fetchEmails(currentFolder, 1, false); // Block loading during forced sync to show new mail
-        setPage(1);
+        const data = await res.json().catch(() => ({}));
+
+        if (data.background) {
+          // El sync ocurre en background — hacemos polling para mostrar nuevos correos
+          // Primera carga rápida para actualizar la vista
+          setTimeout(async () => {
+            if (!signal?.aborted) await fetchEmails(currentFolder, 1, true);
+          }, 3000);
+          // Segunda carga más tardía para capturar todos los correos ya sincronizados
+          setTimeout(async () => {
+            if (!signal?.aborted) {
+              await fetchEmails(currentFolder, 1, false);
+              setPage(1);
+              setIsSyncing(false);
+            }
+          }, 10000);
+          return; // isSyncing se apaga en el segundo setTimeout
+        } else {
+          await fetchEmails(currentFolder, 1, false);
+          setPage(1);
+        }
       } else {
         const data = await res.json().catch(() => ({}));
         setSyncError(data.message || data.errorDetail || 'Error al intentar conectar con el servidor IMAP.');
@@ -94,6 +115,7 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
         }
       }
     } catch (error: any) {
+      if (error?.name === 'AbortError') return;
       console.error('Failed to sync emails', error);
       setSyncError(error.message || 'Error de red al intentar sincronizar.');
     }
@@ -119,23 +141,31 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
     fetchEmails(currentFolder, newPage, false); // Blocker-load during page changes
   };
 
-  // Silent sync on mount + smart passive sync
+  // Carga inicial + auto-sync inteligente con limpieza en unmount
   useEffect(() => {
     const folderData = getInitialData(currentFolder);
     const hasCache = folderData.emails.length > 0;
     fetchEmails(currentFolder, page, hasCache);
+
+    let abortController: AbortController | null = null;
 
     if (userEmail && currentFolder === 'INBOX' && page === 1) {
       const now = Date.now();
       const cacheKey = `last_imap_sync_${userEmail.trim().toLowerCase()}`;
       const lastSyncStr = localStorage.getItem(cacheKey);
       const lastSync = lastSyncStr ? parseInt(lastSyncStr, 10) : 0;
-      
+
       if (now - lastSync > 5 * 60 * 1000) {
         localStorage.setItem(cacheKey, now.toString());
-        syncEmails();
+        abortController = new AbortController();
+        syncEmails(abortController.signal);
       }
     }
+
+    return () => {
+      // Cancelar el sync si el componente se desmonta antes de que termine
+      abortController?.abort();
+    };
   }, [currentFolder, page, fetchEmails, userEmail, syncEmails]);
 
   return { 
