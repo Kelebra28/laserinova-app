@@ -77,7 +77,7 @@ export default function SurveyForm({
           {isGoodReview ? (
             <div className="mt-8 space-y-6">
               <p className="text-slate-600 font-medium">
-                Nos alegra mucho saber que tuviste una excelente experiencia con nosotros. ¿Nos harías un enorme favor?
+                Nos alegra mucho saber que tuviste una excelente experiencia con nosotros. ¡Gracias por confiar en Laser Inova!
               </p>
               {/* 
               <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
