@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Plus, FileText, LayoutGrid } from "lucide-react";
-import SearchInput from "@/components/ui/SearchInput";
 import QuoteRow from "@/components/quotes/QuoteRow";
+import QuoteFilters from "@/components/quotes/QuoteFilters";
+import QuotePagination from "@/components/quotes/QuotePagination";
+import { Prisma } from "@prisma/client";
 
 const statusColors: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-800",
@@ -31,27 +33,73 @@ export const dynamic = 'force-dynamic';
 export default async function QuotesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string }>;
+  searchParams: Promise<{ 
+    search?: string, 
+    month?: string, 
+    clientId?: string, 
+    status?: string,
+    page?: string,
+    limit?: string
+  }>;
 }) {
-  const { search } = await searchParams;
+  const { search, month, clientId, status, page, limit } = await searchParams;
 
-  const quotes = await prisma.quote.findMany({
-    where: {
-      ...(search ? {
-        OR: [
-          { folio: { contains: search } },
-          { client: { name: { contains: search } } },
-          { client: { company: { contains: search } } },
-          { project: { contains: search } },
-        ]
-      } : {}),
-    },
-    include: {
-      client: true,
-      user: true,
-    },
-    orderBy: { createdAt: "desc" },
+  const clients = await prisma.client.findMany({
+    select: { id: true, name: true, company: true },
+    orderBy: { name: 'asc' }
   });
+
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const targetMonth = month !== undefined ? month : defaultMonth;
+  
+  let dateFilter = {};
+  if (targetMonth && targetMonth !== "all") {
+    const [year, m] = targetMonth.split("-").map(Number);
+    const startDate = new Date(year, m - 1, 1);
+    const endDate = new Date(year, m, 0, 23, 59, 59, 999);
+    
+    dateFilter = {
+      createdAt: {
+        gte: startDate,
+        lte: endDate
+      }
+    };
+  }
+
+  const whereClause: Prisma.QuoteWhereInput = {
+    ...(search ? {
+      OR: [
+        { folio: { contains: search } },
+        { client: { name: { contains: search } } },
+        { client: { company: { contains: search } } },
+        { project: { contains: search } },
+      ]
+    } : {}),
+    ...(clientId && clientId !== "all" ? { clientId } : {}),
+    ...(status && status !== "all" ? { status: status as any } : {}),
+    ...dateFilter
+  };
+
+  const currentPage = Math.max(1, parseInt(page || "1", 10));
+  const itemsPerPage = Math.max(1, parseInt(limit || "10", 10));
+  const skip = (currentPage - 1) * itemsPerPage;
+
+  const [totalItems, quotes] = await Promise.all([
+    prisma.quote.count({ where: whereClause }),
+    prisma.quote.findMany({
+      where: whereClause,
+      include: {
+        client: true,
+        user: true,
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: itemsPerPage,
+    })
+  ]);
+
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
 
   return (
     <div className="space-y-6">
@@ -84,14 +132,12 @@ export default async function QuotesPage({
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100">
-        <div className="px-6 py-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
-          <div className="w-full max-w-md">
-            <SearchInput placeholder="Buscar por folio, cliente o proyecto..." />
-          </div>
-        </div>
+      <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
+        <QuoteFilters clients={clients} defaultMonth={defaultMonth} />
+      </div>
 
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100">
+        <div className="overflow-x-auto min-h-[400px]">
           <table className="min-w-full">
             <thead>
               <tr className="bg-gray-50/50">
@@ -126,6 +172,13 @@ export default async function QuotesPage({
             </tbody>
           </table>
         </div>
+        
+        <QuotePagination 
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          limit={itemsPerPage}
+        />
       </div>
     </div>
   );
