@@ -15,7 +15,11 @@ import {
   Receipt
 } from "lucide-react";
 import Link from "next/link";
-import KanbanBoard from "@/components/dashboard/KanbanBoard";
+import InvoiceOverview from "@/components/dashboard/InvoiceOverview";
+import OrderStats from "@/components/dashboard/OrderStats";
+import TopClients from "@/components/dashboard/TopClients";
+import ProductTracking from "@/components/dashboard/ProductTracking";
+import BestSellingMaterials from "@/components/dashboard/BestSellingMaterials";
 
 export const dynamic = 'force-dynamic';
 
@@ -56,16 +60,6 @@ export default async function DashboardPage() {
     const balance = q.total - (q.realAmountCollected || 0);
     return sum + (balance > 0 ? balance : 0);
   }, 0);
-
-  // Categorize for Task Board (Kanban)
-  const columns = [
-    { id: "SENT", label: "Enviada", colorClass: "bg-blue-500", dotClass: "bg-blue-500", shadowClass: "shadow-[0_0_8px_rgba(59,130,246,0.5)]" },
-    { id: "APPROVED", label: "Aprobada", colorClass: "bg-purple-500", dotClass: "bg-purple-500", shadowClass: "shadow-[0_0_8px_rgba(168,85,247,0.5)]" },
-    { id: "IN_PRODUCTION", label: "En Proceso", colorClass: "bg-orange-500", dotClass: "bg-orange-500", shadowClass: "shadow-[0_0_8px_rgba(249,115,22,0.5)]" },
-    { id: "DELIVERED", label: "Entregada", colorClass: "bg-emerald-500", dotClass: "bg-emerald-500", shadowClass: "shadow-[0_0_8px_rgba(16,185,129,0.5)]" },
-    { id: "DRAFT", label: "Borrador", colorClass: "bg-gray-500", dotClass: "bg-gray-500", shadowClass: "shadow-[0_0_8px_rgba(107,114,128,0.5)]" },
-    { id: "CANCELLED", label: "Cancelada / Rechazada", colorClass: "bg-red-500", dotClass: "bg-red-500", shadowClass: "shadow-[0_0_8px_rgba(239,68,68,0.5)]" },
-  ];
 
   const activeQuotes = quotesThisMonth.filter(q => q.status !== "CANCELLED" && q.status !== "REJECTED");
   
@@ -117,6 +111,155 @@ export default async function DashboardPage() {
     const netIncome = (q.subtotal || 0) * proportion;
     return sum + netIncome;
   }, 0) - totalOperationCost;
+
+  // Generate Chart Data (Gastos vs Ingresos Histórico - 6 meses)
+  const last6Months = Array.from({length: 6}).map((_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - (5 - i));
+    return d;
+  });
+
+  let chartData = [];
+  try {
+    const chartDataPromises = last6Months.map(async (date) => {
+      const m = date.getMonth();
+      const y = date.getFullYear();
+      const s = new Date(y, m, 1);
+      const e = new Date(y, m + 1, 0, 23, 59, 59);
+
+      const income = await prisma.financialTransaction.aggregate({
+        where: { date: { gte: s, lte: e }, type: { in: ['INGRESO', 'ANTICIPO', 'LIQUIDACION'] }, isDeleted: false },
+        _sum: { amount: true }
+      });
+      const expense = await prisma.financialTransaction.aggregate({
+        where: { date: { gte: s, lte: e }, type: { in: ['GASTO_OPERATIVO', 'GASTO_PROYECTO'] }, isDeleted: false },
+        _sum: { amount: true }
+      });
+
+      const rev = income._sum.amount || 0;
+      const exp = expense._sum.amount || 0;
+
+      return {
+        month: date.toLocaleDateString('es-MX', { month: 'short' }),
+        revenue: rev,
+        profit: rev - exp
+      };
+    });
+    chartData = await Promise.all(chartDataPromises);
+  } catch (err) {
+    // Fallback if FinancialTransaction table is not yet populated
+    chartData = last6Months.map(date => ({
+      month: date.toLocaleDateString('es-MX', { month: 'short' }),
+      revenue: 0,
+      profit: 0
+    }));
+    // Override current month with quotes data if we don't have finance data
+    if (chartData.length > 0) {
+       chartData[chartData.length - 1].revenue = totalAmountWithAnticipo;
+       chartData[chartData.length - 1].profit = totalUtilityReal;
+    }
+  }
+
+  // Order Stats (Cotizaciones con mis estatus)
+  const draftCount = quotesThisMonth.filter(q => q.status === 'DRAFT').length;
+  const sentCount = quotesThisMonth.filter(q => q.status === 'SENT').length;
+  const approvedCount = quotesThisMonth.filter(q => q.status === 'APPROVED').length;
+  const inProdCount = quotesThisMonth.filter(q => q.status === 'IN_PRODUCTION').length;
+  const deliveredCount = quotesThisMonth.filter(q => q.status === 'DELIVERED').length;
+  const cancelledCount = quotesThisMonth.filter(q => ['CANCELLED', 'REJECTED'].includes(q.status)).length;
+  
+  const orderStatsData = [
+    { name: 'Borrador', value: draftCount, color: '#94a3b8', percentageChange: '0%', isPositive: true },
+    { name: 'Enviadas', value: sentCount, color: '#3b82f6', percentageChange: '0%', isPositive: true },
+    { name: 'Aprobadas', value: approvedCount, color: '#a855f7', percentageChange: '0%', isPositive: true },
+    { name: 'En Producción', value: inProdCount, color: '#f97316', percentageChange: '0%', isPositive: true },
+    { name: 'Entregadas', value: deliveredCount, color: '#10b981', percentageChange: '0%', isPositive: true },
+    { name: 'Canceladas', value: cancelledCount, color: '#ef4444', percentageChange: '0%', isPositive: false },
+  ].filter(s => s.value > 0);
+
+  // Top Clients
+  const clientRevenue: Record<string, { revenue: number, name: string }> = {};
+  quotesThisMonth.forEach(q => {
+    if (q.client) {
+      if (!clientRevenue[q.client.id]) clientRevenue[q.client.id] = { revenue: 0, name: q.client.name || q.client.company || 'Cliente' };
+      clientRevenue[q.client.id].revenue += q.total;
+    }
+  });
+  
+  const topClientsData = Object.values(clientRevenue)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 4)
+    .map((c, idx) => ({
+      name: c.name,
+      industry: 'Cotizaciones Recientes',
+      sales: 0,
+      revenue: c.revenue,
+      growth: '-',
+      iconBg: ['bg-blue-100', 'bg-sky-100', 'bg-emerald-100', 'bg-purple-100'][idx % 4],
+      iconColor: ['text-blue-600', 'text-sky-600', 'text-emerald-600', 'text-purple-600'][idx % 4],
+      initial: c.name.charAt(0).toUpperCase()
+    }));
+
+  if (topClientsData.length === 0) {
+     topClientsData.push({ name: 'Sin clientes', industry: '-', sales: 0, revenue: 0, growth: '-', iconBg: 'bg-gray-100', iconColor: 'text-gray-400', initial: '-' });
+  }
+
+  // Tracking Items (Mis Tareas)
+  const latestTasks = await prisma.task.findMany({
+    orderBy: { updatedAt: 'desc' },
+    take: 5,
+  });
+
+  const trackingItems = latestTasks.map((t) => {
+    let type: "PENDING" | "DELIVERED" | "RECEIVED" | "PAYMENT" = 'PENDING';
+    if (t.status === 'DONE') type = 'DELIVERED';
+    else if (t.status === 'IN_PROGRESS') type = 'RECEIVED';
+    else if (t.status === 'BLOCKED') type = 'PAYMENT'; // Just to use a different color
+    
+    return {
+      id: t.id,
+      title: t.title,
+      status: t.status === 'DONE' ? 'Completada' : t.status === 'IN_PROGRESS' ? 'En Progreso' : t.status === 'BLOCKED' ? 'Bloqueada' : 'Pendiente',
+      time: new Date(t.updatedAt).toLocaleDateString('es-MX'),
+      date: new Date(t.createdAt).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' }),
+      type
+    };
+  });
+
+  if (trackingItems.length === 0) {
+    trackingItems.push({ id: '1', title: 'Sin tareas', status: '-', time: '-', date: '-', type: 'PENDING' });
+  }
+
+  // Best Selling Products (Mejores Servicios/Materiales)
+  const allConcepts = await prisma.quoteConcept.findMany({
+    where: { quoteId: { in: quotesThisMonth.map(q => q.id) } },
+    include: { material: true }
+  });
+
+  const materialCounts: Record<string, { count: number, name: string, category: string, price: number }> = {};
+  allConcepts.forEach(c => {
+    if (c.material) {
+      if (!materialCounts[c.material.id]) {
+        materialCounts[c.material.id] = { count: 0, name: c.material.name, category: "Material", price: c.finalUnitPrice };
+      }
+      materialCounts[c.material.id].count += c.quantity;
+    }
+  });
+
+  const bestSellingProducts = Object.values(materialCounts)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 4)
+    .map((m, idx) => ({
+      name: m.name,
+      category: m.category,
+      price: m.price,
+      rating: 5,
+      imageColor: ['bg-amber-800', 'bg-sky-400', 'bg-emerald-500', 'bg-purple-500'][idx % 4]
+    }));
+    
+  if (bestSellingProducts.length === 0) {
+     bestSellingProducts.push({ name: 'Sin datos', category: '-', price: 0, rating: 0, imageColor: 'bg-gray-200' });
+  }
 
 
   return (
@@ -206,25 +349,27 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Kanban Board Section - Enhanced Container */}
-      <div className="space-y-6">
-        <div className="flex items-center justify-between px-2">
-           <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-             <div className="p-1.5 bg-slate-100/80 rounded-lg text-slate-600">
-                <Clock className="h-4 w-4" />
-             </div>
-             Flujo de Trabajo (Mes Actual)
-           </h3>
-           <div className="flex items-center gap-3 text-xs font-semibold text-slate-500">
-              <span className="flex items-center gap-1.5 bg-white px-3 py-1 rounded-full shadow-sm border border-slate-100">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" /> 
-                {quotesThisMonth.length} Cotizaciones
-              </span>
-           </div>
+      {/* Main Dashboard Content Layout */}
+      <div className="flex flex-col xl:flex-row gap-6">
+        <div className="xl:w-2/3 flex flex-col gap-6">
+          <InvoiceOverview 
+            totalRevenue={totalAmountWithAnticipo} 
+            netProfit={totalUtilityReal} 
+            dateRange="Ene 20, 2026 a Jul, 2026"
+            chartData={chartData}
+          />
+          <div className="flex flex-col lg:flex-row gap-6">
+            <div className="lg:w-1/2">
+               <TopClients clients={topClientsData} />
+            </div>
+            <div className="lg:w-1/2">
+               <ProductTracking items={trackingItems} />
+            </div>
+          </div>
         </div>
-        
-        <div className="-mx-4 px-4 pb-8 overflow-x-auto hide-scrollbar">
-          <KanbanBoard initialQuotes={quotesThisMonth} columns={columns} />
+        <div className="xl:w-1/3 flex flex-col gap-6">
+          <OrderStats data={orderStatsData} />
+          <BestSellingMaterials products={bestSellingProducts} />
         </div>
       </div>
     </div>

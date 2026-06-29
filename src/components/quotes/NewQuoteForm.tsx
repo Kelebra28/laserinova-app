@@ -11,6 +11,7 @@ import ConfirmSaveModal from "@/components/ui/ConfirmSaveModal";
 import { ImageUploadUI } from "@/components/ui/ImageUploadUI";
 import { useImageUpload } from "@/hooks/useImageUpload";
 import { AutocompleteInput } from "@/components/ui/AutocompleteInput";
+import CalculationAudit from "@/components/quotes/CalculationAudit";
 
 
 interface NewQuoteFormProps {
@@ -24,6 +25,7 @@ interface NewQuoteFormProps {
 export default function NewQuoteForm({ clients, materials, products = [], globalCosts, userId }: NewQuoteFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
   const [clientId, setClientId] = useState("");
   const [prospectName, setProspectName] = useState("");
   const [project, setProject] = useState("");
@@ -658,7 +660,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                   <span className="font-mono text-gray-300">${concepts.reduce((sum, c) => sum + (Number(c.calculated?.materialBaseCost) || 0), 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center text-[11px] uppercase tracking-wider text-gray-500">
-                  <span>Merma (50%):</span>
+                  <span>Merma ({globalCosts?.porcentaje_merma_corte || 20}%):</span>
                   <span className="font-mono text-gray-300">${concepts.reduce((sum, c) => sum + (Number(c.calculated?.materialWastageCost) || 0), 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center text-[11px] uppercase tracking-wider text-gray-500">
@@ -711,7 +713,34 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                 <h3 className="text-lg font-black uppercase tracking-widest text-white">Resumen de Venta</h3>
               </div>
               
-              <div className="space-y-4">
+              <div className="flex justify-end items-center mt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowAudit(true)}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <Calculator className="w-4 h-4" />
+                  Ver Desglose Matemático
+                </button>
+              </div>
+
+            {/* Modal de Auditoría */}
+            {showAudit && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowAudit(false)}
+                    className="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+                  >
+                    ✕
+                  </button>
+                  <CalculationAudit concepts={concepts} margin={margin} />
+                </div>
+              </div>
+            )}
+              
+              <div className="space-y-4 mt-6">
                 <div className="flex justify-between items-center text-sm group">
                   <span className="text-gray-400 font-medium group-hover:text-gray-300 transition-colors">Subtotal:</span>
                   <span className="font-mono font-bold text-gray-100">${subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>

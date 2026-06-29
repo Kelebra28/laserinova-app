@@ -65,6 +65,8 @@ export default async function EditQuotePage(props: { params: Promise<{ id: strin
     precio_tubo: globalCostsObj["precio_tubo"] || 250000,
     vida_util_tubo: globalCostsObj["vida_util_tubo"] || 6000,
     factor_miedo: globalCostsObj["factor_miedo"] || 2,
+    porcentaje_transporte_material: globalCostsObj["porcentaje_transporte_material"] || 20,
+    porcentaje_merma_corte: globalCostsObj["porcentaje_merma_corte"] || 20,
   };
 
   return (

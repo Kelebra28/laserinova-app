@@ -64,6 +64,8 @@ const DEFAULT_CONFIGS = [
   { key: "gastos_fijos_mensuales",    name: "Gastos Fijos Mensuales (Overhead)",   default: 3910,   unit: "$"    },
   { key: "dias_laborables_mes",       name: "Días Laborables al Mes",              default: 22,     unit: "días" },
   { key: "horas_maquina_dia",         name: "Horas Máquina al Día",               default: 8,      unit: "horas"},
+  { key: "porcentaje_transporte_material", name: "Transporte de Material (Inflado)", default: 20, unit: "%" },
+  { key: "porcentaje_merma_corte",         name: "Merma de Corte (Desperdicio)",     default: 20, unit: "%" },
 ];
 
 export default async function SettingsPage() {
@@ -98,7 +100,7 @@ export default async function SettingsPage() {
   const configMap = new Map(savedConfigs.map((c) => [c.key, c.value]));
 
   const costsContent = (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+    <div key="costs" className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
       <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 bg-gray-50/50">
           <div className="p-2 rounded-xl bg-amber-50">
@@ -159,7 +161,7 @@ export default async function SettingsPage() {
   );
 
   const usersContent = (
-    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+    <div key="users" className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 bg-gray-50/50">
         <div className="p-2 rounded-xl bg-violet-50">
           <Users className="w-5 h-5 text-violet-600" />
@@ -187,7 +189,7 @@ export default async function SettingsPage() {
   const filesColor = getFilesColor(filesPercent);
 
   const systemContent = (
-    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+    <div key="system" className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-gray-50/50">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-blue-50">
@@ -249,7 +251,7 @@ export default async function SettingsPage() {
   );
 
   const profileContent = (
-    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+    <div key="profile" className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 bg-gray-50/50">
         <div className="p-2 rounded-xl bg-red-50">
           <User className="w-5 h-5 text-red-600" />
@@ -270,7 +272,7 @@ export default async function SettingsPage() {
   );
 
   const emailContent = (
-    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+    <div key="email" className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 bg-gray-50/50">
         <div className="p-2 rounded-xl bg-teal-50">
           <Mail className="w-5 h-5 text-teal-650" />

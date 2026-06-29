@@ -4,6 +4,7 @@ import { Plus, FileText, LayoutGrid } from "lucide-react";
 import QuoteRow from "@/components/quotes/QuoteRow";
 import QuoteFilters from "@/components/quotes/QuoteFilters";
 import QuotePagination from "@/components/quotes/QuotePagination";
+import KanbanBoard from "@/components/dashboard/KanbanBoard";
 import { Prisma } from "@prisma/client";
 
 const statusColors: Record<string, string> = {
@@ -99,6 +100,36 @@ export default async function QuotesPage({
     })
   ]);
 
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const startDate = new Date(currentYear, currentMonth, 1);
+  const endDate = new Date(currentYear, currentMonth + 1, 0);
+
+  const quotesThisMonth = await prisma.quote.findMany({
+    where: {
+      active: true,
+      OR: [
+        { createdAt: { gte: startDate, lte: endDate } },
+        { updatedAt: { gte: startDate, lte: endDate } }
+      ]
+    },
+    include: {
+      client: true
+    },
+    orderBy: {
+      updatedAt: 'desc'
+    }
+  });
+
+  const columns = [
+    { id: "SENT", label: "Enviada", colorClass: "bg-blue-500", dotClass: "bg-blue-500", shadowClass: "shadow-[0_0_8px_rgba(59,130,246,0.5)]" },
+    { id: "APPROVED", label: "Aprobada", colorClass: "bg-purple-500", dotClass: "bg-purple-500", shadowClass: "shadow-[0_0_8px_rgba(168,85,247,0.5)]" },
+    { id: "IN_PRODUCTION", label: "En Proceso", colorClass: "bg-orange-500", dotClass: "bg-orange-500", shadowClass: "shadow-[0_0_8px_rgba(249,115,22,0.5)]" },
+    { id: "DELIVERED", label: "Entregada", colorClass: "bg-emerald-500", dotClass: "bg-emerald-500", shadowClass: "shadow-[0_0_8px_rgba(16,185,129,0.5)]" },
+    { id: "DRAFT", label: "Borrador", colorClass: "bg-gray-500", dotClass: "bg-gray-500", shadowClass: "shadow-[0_0_8px_rgba(107,114,128,0.5)]" },
+    { id: "CANCELLED", label: "Cancelada / Rechazada", colorClass: "bg-red-500", dotClass: "bg-red-500", shadowClass: "shadow-[0_0_8px_rgba(239,68,68,0.5)]" },
+  ];
+
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
 
   return (
@@ -130,6 +161,16 @@ export default async function QuotesPage({
             Nueva Cotización
           </Link>
         </div>
+      </div>
+
+      {/* Kanban Board Section */}
+      <div className="space-y-4">
+         <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 px-2">
+           Flujo de Trabajo (Mes Actual)
+         </h3>
+         <div className="-mx-4 px-4 pb-4 overflow-x-auto hide-scrollbar">
+           <KanbanBoard initialQuotes={quotesThisMonth} columns={columns} />
+         </div>
       </div>
 
       <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">

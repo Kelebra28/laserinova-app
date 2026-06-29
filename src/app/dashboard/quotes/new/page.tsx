@@ -39,6 +39,8 @@ export default async function NewQuotePage() {
     precio_tubo: globalCosts["precio_tubo"] || 250000,
     vida_util_tubo: globalCosts["vida_util_tubo"] || 6000,
     factor_miedo: globalCosts["factor_miedo"] || 2,
+    porcentaje_transporte_material: globalCosts["porcentaje_transporte_material"] || 20,
+    porcentaje_merma_corte: globalCosts["porcentaje_merma_corte"] || 20,
   };
 
   return (

@@ -8,7 +8,9 @@ export interface GlobalCosts {
   vida_util_tubo: number;
   factor_miedo: number;
   porcentaje_iva: number;
-  factor_guarda_default: number;
+  factor_guarda_default: number; // legacy fallback
+  porcentaje_transporte_material: number;
+  porcentaje_merma_corte: number;
   margen_default: number;
   factor_produccion_default: number;
   [key: string]: number;
@@ -78,21 +80,37 @@ export function calculateConcept(input: CalculationInput, globals: GlobalCosts):
   // 1. Calcular costo de material si aplica (CORTE o GRABADO)
   if ((input.type === "CORTE" || input.type === "GRABADO") && input.material && input.partWidth && input.partHeight) {
     if (!input.clientProvidesMaterial) {
-      let priceCm2 = input.material.pricePerCm2;
+      const transportFactor = 1 + ((globals.porcentaje_transporte_material ?? 20) / 100);
+      const mermaPercent = (globals.porcentaje_merma_corte ?? 20) / 100;
       
-      // Si no tenemos precio por cm2 directo, calcularlo
-      if (!priceCm2 && input.material.sheetPrice && input.material.length && input.material.width) {
-        // El usuario solicitó 1.5 por la merma. Usamos el factor de guarda con un fallback de 1.5
-        const guardFactor = input.material.guardPercentage || globals.factor_guarda_default || 1.5;
-        const priceWithGuard = input.material.sheetPrice * guardFactor;
+      let purePriceCm2 = 0;
+
+      // Si tenemos los datos de la hoja completa (lo más exacto)
+      if (input.material.sheetPrice && input.material.length && input.material.width) {
+        // La hoja YA incluye IVA en el inventario según el usuario, solo aplicamos Transporte
+        const sheetWithTransport = input.material.sheetPrice * transportFactor;
+        
         const areaHoja = input.material.length * input.material.width;
-        priceCm2 = priceWithGuard / areaHoja;
+        purePriceCm2 = sheetWithTransport / areaHoja;
+      } 
+      // Fallback para materiales viejos que solo tenían pricePerCm2 (legacy)
+      else if (input.material.pricePerCm2) {
+        const oldGuardFactor = input.material.guardPercentage || globals.factor_guarda_default || 1.2;
+        // Extraemos el base original sin Guarda. (Asumimos que ya trae IVA como es su nuevo estándar)
+        const baseSinNada = input.material.pricePerCm2 / oldGuardFactor;
+        // Ahora lo convertimos al nuevo modelo (solo aplicando transporte)
+        purePriceCm2 = baseSinNada * transportFactor;
       }
       
-      if (priceCm2) {
+      if (purePriceCm2 > 0) {
         const areaPieza = input.partWidth * input.partHeight;
-        materialBaseCost = areaPieza * priceCm2;
-        materialWastageCost = materialBaseCost * 0.5; // El 50% de merma solicitado
+        
+        // El materialBaseCost es el costo de la pieza YA INCLUYENDO Iva y Transporte
+        materialBaseCost = areaPieza * purePriceCm2;
+        
+        // Y a esa pieza le sumamos su propia Merma de corte
+        materialWastageCost = materialBaseCost * mermaPercent; 
+        
         materialCost = materialBaseCost + materialWastageCost;
       }
     }
