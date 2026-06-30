@@ -16,6 +16,7 @@ interface SelectProps {
   label?: string;
   disabled?: boolean;
   className?: string;
+  menuPlacement?: "top" | "bottom";
 }
 
 export default function Select({ 
@@ -25,7 +26,8 @@ export default function Select({
   placeholder = "Seleccionar...", 
   label,
   disabled,
-  className = "" 
+  className = "",
+  menuPlacement = "bottom"
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -68,7 +70,9 @@ export default function Select({
       </button>
 
       {isOpen && !disabled && (
-        <div className="absolute z-50 mt-2 w-full bg-white/95 backdrop-blur-sm shadow-2xl rounded-2xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in duration-200 origin-top">
+        <div className={`absolute z-50 w-full bg-white/95 backdrop-blur-sm shadow-2xl rounded-2xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in duration-200 ${
+          menuPlacement === "top" ? "bottom-full mb-2 origin-bottom" : "mt-2 origin-top"
+        }`}>
           <ul className="max-h-60 overflow-y-auto py-2 text-sm text-gray-700">
             {options.map((opt) => (
               <li

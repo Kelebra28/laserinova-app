@@ -177,8 +177,8 @@ export default async function QuotesPage({
         <QuoteFilters clients={clients} defaultMonth={defaultMonth} />
       </div>
 
-      <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100">
-        <div className="overflow-x-auto min-h-[400px]">
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100">
+        <div className="overflow-x-auto min-h-[400px] rounded-t-3xl">
           <table className="min-w-full">
             <thead>
               <tr className="bg-gray-50/50">

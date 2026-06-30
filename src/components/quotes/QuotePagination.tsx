@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useTransition } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Select from "@/components/ui/Select";
+import { GlobalLoader } from "@/components/ui/GlobalLoader";
 
 interface QuotePaginationProps {
   totalPages: number;
@@ -16,18 +18,24 @@ export default function QuotePagination({ totalPages, currentPage, totalItems, l
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  const [isPending, startTransition] = useTransition();
+
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set("page", newPage.toString());
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    });
   };
 
   const handleLimitChange = (newLimit: string) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("limit", newLimit);
     params.set("page", "1"); // reset to page 1 on limit change
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    });
   };
 
   const limitOptions = [
@@ -40,7 +48,13 @@ export default function QuotePagination({ totalPages, currentPage, totalItems, l
   if (totalItems === 0) return null;
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/30 gap-4">
+    <>
+      {isPending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm transition-all">
+          <GlobalLoader label="Cargando página" subLabel="Espera un momento..." minHeight="min-h-0" />
+        </div>
+      )}
+      <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/30 gap-4">
       <div className="flex items-center text-[10px] font-black text-gray-500 uppercase tracking-widest">
         Mostrando {(currentPage - 1) * limit + 1} a {Math.min(currentPage * limit, totalItems)} de {totalItems} resultados
       </div>
@@ -51,6 +65,7 @@ export default function QuotePagination({ totalPages, currentPage, totalItems, l
             options={limitOptions} 
             value={limit.toString()} 
             onChange={handleLimitChange}
+            menuPlacement="top"
           />
         </div>
 
@@ -79,5 +94,6 @@ export default function QuotePagination({ totalPages, currentPage, totalItems, l
         </nav>
       </div>
     </div>
+    </>
   );
 }

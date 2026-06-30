@@ -28,7 +28,11 @@ export default function QuoteFilters({ clients, defaultMonth }: QuoteFiltersProp
     if (value && value !== "all") {
       params.set(key, value);
     } else {
-      params.delete(key);
+      if (key === "month") {
+        params.set(key, "all");
+      } else {
+        params.delete(key);
+      }
     }
     
     // Always navigate to page 1 on filter changes
