@@ -51,7 +51,7 @@ export default async function QuotesPage({
   });
 
   const now = new Date();
-  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const defaultMonth = "all";
   const targetMonth = month !== undefined ? month : defaultMonth;
   
   let dateFilter = {};
@@ -105,12 +105,13 @@ export default async function QuotesPage({
   const startDate = new Date(currentYear, currentMonth, 1);
   const endDate = new Date(currentYear, currentMonth + 1, 0);
 
-  const quotesThisMonth = await prisma.quote.findMany({
+  const activeQuotes = await prisma.quote.findMany({
     where: {
       active: true,
       OR: [
         { createdAt: { gte: startDate, lte: endDate } },
-        { updatedAt: { gte: startDate, lte: endDate } }
+        { updatedAt: { gte: startDate, lte: endDate } },
+        { status: { notIn: ["DELIVERED", "CANCELLED", "REJECTED"] } }
       ]
     },
     include: {
@@ -166,10 +167,10 @@ export default async function QuotesPage({
       {/* Kanban Board Section */}
       <div className="space-y-4">
          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 px-2">
-           Flujo de Trabajo (Mes Actual)
+           Flujo de Trabajo (Activos y Recientes)
          </h3>
          <div className="-mx-4 px-4 pb-4 overflow-x-auto hide-scrollbar">
-           <KanbanBoard initialQuotes={quotesThisMonth} columns={columns} />
+          <KanbanBoard initialQuotes={activeQuotes} columns={columns} />
          </div>
       </div>
 
