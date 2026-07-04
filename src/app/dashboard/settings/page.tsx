@@ -220,9 +220,17 @@ export default async function SettingsPage() {
           <p className="text-2xl font-black text-gray-900 flex items-baseline justify-center gap-1">
             {dbSize} <span className="text-sm font-bold text-gray-400">MB</span>
           </p>
-          <p className="text-[10px] text-gray-400 mt-3 font-bold uppercase tracking-widest bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+          <p className="text-[10px] text-gray-400 mt-3 font-bold uppercase tracking-widest bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100 mb-4">
             Límite: ~3 GB (MySQL)
           </p>
+          <a
+            href="/api/backup"
+            download
+            className="mt-2 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700 font-bold text-xs uppercase tracking-widest rounded-xl transition-colors"
+          >
+            <Save className="w-3.5 h-3.5" />
+            Descargar Respaldo (JSON)
+          </a>
         </div>
 
         {/* Gráfico Archivos */}
