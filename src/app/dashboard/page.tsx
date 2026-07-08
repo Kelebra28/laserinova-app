@@ -160,6 +160,10 @@ export default async function DashboardPage() {
     }
   }
 
+  const chartTotalRevenue = chartData.reduce((sum, data) => sum + data.revenue, 0);
+  const chartTotalProfit = chartData.reduce((sum, data) => sum + data.profit, 0);
+  const chartDateRange = `${last6Months[0].toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })} a ${last6Months[5].toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })}`;
+
   // Order Stats (Cotizaciones con mis estatus)
   const draftCount = quotesThisMonth.filter(q => q.status === 'DRAFT').length;
   const sentCount = quotesThisMonth.filter(q => q.status === 'SENT').length;
@@ -353,9 +357,9 @@ export default async function DashboardPage() {
       <div className="flex flex-col xl:flex-row gap-6">
         <div className="xl:w-2/3 flex flex-col gap-6">
           <InvoiceOverview 
-            totalRevenue={totalAmountWithAnticipo} 
-            netProfit={totalUtilityReal} 
-            dateRange="Ene 20, 2026 a Jul, 2026"
+            totalRevenue={chartTotalRevenue} 
+            netProfit={chartTotalProfit} 
+            dateRange={chartDateRange}
             chartData={chartData}
           />
           <div className="flex flex-col lg:flex-row gap-6">

@@ -37,23 +37,23 @@ export default function CalculationAudit({ concepts, margin }: CalculationAuditP
                 {(c.type === "CORTE" || c.type === "GRABADO") && (
                   <>
                     <div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase mb-1 flex items-center gap-1"><Scissors className="w-3 h-3 text-blue-400"/> Base Mat. (c/IVA+Transp)</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase mb-1 flex items-center gap-1"><Scissors className="w-3 h-3 text-blue-400"/> Base Mat. (Por Pieza)</p>
                       <p className="text-sm font-mono text-blue-400 font-bold">${c.calculated?.materialBaseCost?.toFixed(2) || "0.00"}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase mb-1 flex items-center gap-1"><Scissors className="w-3 h-3 text-red-400"/> Merma de Corte</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase mb-1 flex items-center gap-1"><Scissors className="w-3 h-3 text-red-400"/> Merma (Por Pieza)</p>
                       <p className="text-sm font-mono text-red-400 font-bold">${c.calculated?.materialWastageCost?.toFixed(2) || "0.00"}</p>
                     </div>
                   </>
                 )}
                 
                 <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1 flex items-center gap-1"><Zap className="w-3 h-3 text-orange-400"/> Operación</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1 flex items-center gap-1"><Zap className="w-3 h-3 text-orange-400"/> Operación (Por Pieza)</p>
                   <p className="text-sm font-mono text-orange-400 font-bold">${c.calculated?.productionCost?.toFixed(2) || (c.type === "SERVICIO_SITIO" ? c.calculated?.realCost?.toFixed(2) : "0.00")}</p>
                 </div>
 
                 <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3 text-emerald-400"/> Costo Total</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3 text-emerald-400"/> Costo Total (Por Pieza)</p>
                   <p className="text-sm font-mono text-emerald-400 font-bold">${c.calculated?.realCost?.toFixed(2) || "0.00"}</p>
                 </div>
               </div>

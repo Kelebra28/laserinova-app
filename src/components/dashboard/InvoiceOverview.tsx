@@ -62,13 +62,14 @@ export default function InvoiceOverview({
            <span className="text-xs font-semibold text-gray-400">Ordenar Por: Anual</span>
         </div>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+          <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
             <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }} dy={10} />
             <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }} />
             <Tooltip 
               cursor={{ fill: '#f8fafc' }}
               contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+              formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             />
             <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={24} />
             <Bar dataKey="profit" fill="#e2e8f0" radius={[4, 4, 0, 0]} barSize={24} />

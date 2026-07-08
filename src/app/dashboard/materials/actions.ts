@@ -10,13 +10,21 @@ export async function createMaterial(formData: FormData) {
   const brand = formData.get("brand") as string;
   const family = formData.get("family") as string;
   const color = formData.get("color") as string;
-  const thickness = formData.get("thickness") ? parseFloat(formData.get("thickness") as string) : null;
-  const length = formData.get("length") ? parseFloat(formData.get("length") as string) : null;
-  const width = formData.get("width") ? parseFloat(formData.get("width") as string) : null;
-  const sheetPrice = formData.get("sheetPrice") ? parseFloat(formData.get("sheetPrice") as string) : null;
-  const guardPercentage = formData.get("guardPercentage") ? parseFloat(formData.get("guardPercentage") as string) : null;
-  const productionPrice = formData.get("productionPrice") ? parseFloat(formData.get("productionPrice") as string) : null;
-  const pricePerCm2 = formData.get("pricePerCm2") ? parseFloat(formData.get("pricePerCm2") as string) : null;
+  const parseNumber = (val: FormDataEntryValue | null) => {
+    if (!val) return null;
+    if (typeof val !== 'string') return null;
+    const cleanStr = val.replace(/,/g, '');
+    const num = parseFloat(cleanStr);
+    return isNaN(num) ? null : num;
+  };
+
+  const thickness = parseNumber(formData.get("thickness"));
+  const length = parseNumber(formData.get("length"));
+  const width = parseNumber(formData.get("width"));
+  const sheetPrice = parseNumber(formData.get("sheetPrice"));
+  const guardPercentage = parseNumber(formData.get("guardPercentage"));
+  const productionPrice = parseNumber(formData.get("productionPrice"));
+  const pricePerCm2 = parseNumber(formData.get("pricePerCm2"));
   const notes = formData.get("notes") as string;
 
   if (!name || !categoryId) {
@@ -62,10 +70,18 @@ export async function updateMaterial(formData: FormData) {
   const name = formData.get("name") as string;
   const brand = formData.get("brand") as string;
   const color = formData.get("color") as string;
-  const length = formData.get("length") ? parseFloat(formData.get("length") as string) : null;
-  const width = formData.get("width") ? parseFloat(formData.get("width") as string) : null;
-  const thickness = formData.get("thickness") ? parseFloat(formData.get("thickness") as string) : null;
-  const sheetPrice = formData.get("sheetPrice") ? parseFloat(formData.get("sheetPrice") as string) : null;
+  const parseNumber = (val: FormDataEntryValue | null) => {
+    if (!val) return null;
+    if (typeof val !== 'string') return null;
+    const cleanStr = val.replace(/,/g, '');
+    const num = parseFloat(cleanStr);
+    return isNaN(num) ? null : num;
+  };
+
+  const length = parseNumber(formData.get("length"));
+  const width = parseNumber(formData.get("width"));
+  const thickness = parseNumber(formData.get("thickness"));
+  const sheetPrice = parseNumber(formData.get("sheetPrice"));
   
   if (!id || !name || !categoryId) return;
 

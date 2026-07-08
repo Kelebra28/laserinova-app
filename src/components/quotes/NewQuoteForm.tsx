@@ -103,68 +103,77 @@ export default function NewQuoteForm({ clients, materials, products = [], global
   };
 
   const updateConcept = (id: string, field: string, value: any) => {
-    setConcepts(concepts.map(c => {
+    setConcepts(prevConcepts => prevConcepts.map(c => {
       if (c.id === id) {
         const updated = { ...c, [field]: value };
+        
+        // Al cambiar parámetros de la fórmula (tiempo, ancho, material, etc.), reseteamos el precio manual para forzar recálculo
+        if (["materialId", "partWidth", "partHeight", "timeMin", "clientProvidesMaterial", "serviceDays", "serviceHours", "transportCost", "operatorCost", "installCost", "laserUseCost", "consumablesCost", "viaticsCost"].includes(field)) {
+          updated.manualUnitPrice = "";
+          updated.manualUnitCost = "";
+        }
+
+        // Auto-calcular si cambia algún valor relevante a la fórmula
+        if (["quantity", "materialId", "partWidth", "partHeight", "timeMin", "clientProvidesMaterial", "manualUnitPrice", "manualUnitCost", "serviceDays", "serviceHours", "operatorCost", "transportCost", "installCost", "laserUseCost", "consumablesCost", "viaticsCost", "margin"].includes(field)) {
+          const mat = materials.find(m => m.id === (field === "materialId" ? value : updated.materialId));
+          const result = calculateConcept(
+            {
+              type: updated.type,
+              quantity: Number(updated.quantity),
+              material: mat ? {
+                length: mat.length,
+                width: mat.width,
+                sheetPrice: mat.sheetPrice,
+                guardPercentage: mat.guardPercentage,
+                pricePerCm2: mat.pricePerCm2,
+              } : undefined,
+              partWidth: Number(updated.partWidth),
+              partHeight: Number(updated.partHeight),
+              timeMin: Number(updated.timeMin),
+              clientProvidesMaterial: updated.clientProvidesMaterial,
+              isWholesale: isWholesale,
+              manualUnitPrice: Number(updated.manualUnitPrice) || 0,
+              manualCost: Number(updated.manualUnitCost) || 0,
+              serviceDays: Number(updated.serviceDays) || 0,
+              serviceHours: Number(updated.serviceHours) || 0,
+              operatorCost: updated.operatorCost !== undefined && updated.operatorCost !== "" ? Number(updated.operatorCost) : undefined,
+              transportCost: updated.transportCost !== undefined && updated.transportCost !== "" ? Number(updated.transportCost) : undefined,
+              installCost: updated.installCost !== undefined && updated.installCost !== "" ? Number(updated.installCost) : undefined,
+              laserUseCost: updated.laserUseCost !== undefined && updated.laserUseCost !== "" ? Number(updated.laserUseCost) : undefined,
+              consumablesCost: updated.consumablesCost !== undefined && updated.consumablesCost !== "" ? Number(updated.consumablesCost) : undefined,
+              viaticsCost: updated.viaticsCost !== undefined && updated.viaticsCost !== "" ? Number(updated.viaticsCost) : undefined,
+              margin: updated.margin !== undefined && updated.margin !== "" ? Number(updated.margin) : undefined,
+            },
+            { ...globalCosts, margen_default: Number(margin) || 35 } // Usar el margen actual
+          );
+
+          const suggestedUnit = result.suggestedPrice / (Number(updated.quantity) || 1);
+          // Si cambian parámetros de la fórmula (que no sean cantidad), forzamos a actualizar el precio final
+          const isParameterChange = field !== "quantity";
+          const finalUnit = (isParameterChange || !updated.finalUnitPrice || Number(updated.finalUnitPrice) <= 0)
+            ? suggestedUnit
+            : updated.finalUnitPrice;
+          const finalUnitNum = Number(finalUnit) || 0;
+          const totalAmount = finalUnitNum * (Number(updated.quantity) || 1);
+          return { ...updated, calculated: { ...result, utility: totalAmount - result.realCost }, finalUnitPrice: finalUnit, totalAmount: totalAmount };
+        }
+        
+        // Si se cambia el precio final manualmente
+        if (field === "finalUnitPrice") {
+          const finalPrice = Number(parseFloat(value)) || 0;
+          const totalAmount = finalPrice * Number(updated.quantity || 0);
+          const utility = totalAmount - (Number(updated.calculated?.realCost) || 0);
+          return { ...updated, finalUnitPrice: finalPrice, totalAmount, calculated: { ...updated.calculated, finalUnitPrice: finalPrice, totalAmount, utility } };
+        }
+
         return updated;
       }
       return c;
     }));
   };
 
-  const calculateConceptTotals = (concept: any) => {
-    const input: CalculationInput = {
-      type: concept.type,
-      quantity: Number(concept.quantity) || 1,
-      partWidth: Number(concept.partWidth) || 0,
-      partHeight: Number(concept.partHeight) || 0,
-      timeMin: Number(concept.timeMin) || 0,
-      clientProvidesMaterial: concept.clientProvidesMaterial,
-      isWholesale: isWholesale,
-      manualUnitPrice: Number(concept.manualUnitPrice) || 0,
-      manualCost: Number(concept.manualUnitCost) || 0,
-      serviceDays: Number(concept.serviceDays) || 0,
-      serviceHours: Number(concept.serviceHours) || 0,
-      operatorCost: concept.operatorCost !== undefined && concept.operatorCost !== "" ? Number(concept.operatorCost) : undefined,
-      transportCost: concept.transportCost !== undefined && concept.transportCost !== "" ? Number(concept.transportCost) : undefined,
-      installCost: concept.installCost !== undefined && concept.installCost !== "" ? Number(concept.installCost) : undefined,
-      laserUseCost: concept.laserUseCost !== undefined && concept.laserUseCost !== "" ? Number(concept.laserUseCost) : undefined,
-      consumablesCost: concept.consumablesCost !== undefined && concept.consumablesCost !== "" ? Number(concept.consumablesCost) : undefined,
-      viaticsCost: concept.viaticsCost !== undefined && concept.viaticsCost !== "" ? Number(concept.viaticsCost) : undefined,
-      margin: concept.margin !== undefined && concept.margin !== "" ? Number(concept.margin) : undefined,
-    };
-
-    if (concept.materialId) {
-      const mat = materials.find(m => m.id === concept.materialId);
-      if (mat) {
-        input.material = {
-          length: mat.length,
-          width: mat.width,
-          sheetPrice: mat.sheetPrice,
-          guardPercentage: mat.guardPercentage,
-          pricePerCm2: mat.pricePerCm2,
-        };
-      }
-    }
-
-    // Usar el margen configurado en el form
-    const result = calculateConcept(input, { ...globalCosts, margen_default: Number(margin) || 35 });
-    
-    // Si no han fijado un precio unitario final manualmente, usar el precio unitario sugerido (suggestedPrice / quantity)
-    const suggestedUnit = result.suggestedPrice / input.quantity;
-    const finalUnit = concept.finalUnitPrice && Number(concept.finalUnitPrice) > 0 ? concept.finalUnitPrice : suggestedUnit;
-    const finalUnitNum = Number(finalUnit) || 0;
-    const totalAmount = finalUnitNum * input.quantity;
-
-    updateConcept(concept.id, "calculated", {
-      ...result,
-      finalUnitPrice: Number(finalUnitNum.toFixed(2)),
-      totalAmount: Number(totalAmount.toFixed(2))
-    });
-  };
-
   const calculateAll = () => {
-    concepts.forEach(c => calculateConceptTotals(c));
+    // Ya no es necesario recalcular todo porque se autocalcula en updateConcept
   };
 
 
@@ -173,7 +182,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
     let conceptsSum = 0;
     let real = 0;
     concepts.forEach(c => {
-      conceptsSum += (Number(c.calculated?.totalAmount) || 0);
+      conceptsSum += (Number(c.totalAmount) || 0);
       real += (Number(c.calculated?.realCost) || 0);
     });
 
@@ -421,7 +430,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                     <input
                       type="number"
                       min="1"
-                      value={concept.quantity === 0 && String(concept.quantity) !== "0" ? "" : concept.quantity}
+                      value={concept.quantity === 0 && String(concept.quantity) !== "0" ? "" : (concept.quantity ?? "")}
                       onChange={e => updateConcept(concept.id, "quantity", e.target.value === "" ? "" : Number(e.target.value))}
                       className="mt-1 block w-full sm:text-sm border-gray-300 rounded-md py-1.5 px-2 border"
                     />
@@ -456,7 +465,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                         <label className="block text-xs font-medium text-gray-700">Largo (cm)</label>
                         <input
                           type="number"
-                          value={concept.partWidth === 0 && String(concept.partWidth) !== "0" ? "" : concept.partWidth}
+                          value={concept.partWidth === 0 && String(concept.partWidth) !== "0" ? "" : (concept.partWidth ?? "")}
                           onChange={e => updateConcept(concept.id, "partWidth", e.target.value === "" ? "" : Number(e.target.value))}
                           disabled={concept.clientProvidesMaterial}
                           className="mt-1 block w-full sm:text-sm border-gray-300 rounded-md py-1.5 px-2 border disabled:bg-gray-100"
@@ -466,7 +475,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                         <label className="block text-xs font-medium text-gray-700">Ancho (cm)</label>
                         <input
                           type="number"
-                          value={concept.partHeight === 0 && String(concept.partHeight) !== "0" ? "" : concept.partHeight}
+                          value={concept.partHeight === 0 && String(concept.partHeight) !== "0" ? "" : (concept.partHeight ?? "")}
                           onChange={e => updateConcept(concept.id, "partHeight", e.target.value === "" ? "" : Number(e.target.value))}
                           disabled={concept.clientProvidesMaterial}
                           className="mt-1 block w-full sm:text-sm border-gray-300 rounded-md py-1.5 px-2 border disabled:bg-gray-100"
@@ -476,7 +485,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                         <label className="block text-xs font-medium text-gray-700">Tiempo total (minutos)</label>
                         <input
                           type="number"
-                          value={concept.timeMin === 0 && String(concept.timeMin) !== "0" ? "" : concept.timeMin}
+                          value={concept.timeMin === 0 && String(concept.timeMin) !== "0" ? "" : (concept.timeMin ?? "")}
                           onChange={e => updateConcept(concept.id, "timeMin", e.target.value === "" ? "" : Number(e.target.value))}
                           className="mt-1 block w-full sm:text-sm border-gray-300 rounded-md py-1.5 px-2 border"
                         />
@@ -493,11 +502,11 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                         </div>
                         <div className="col-span-1">
                           <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Días</label>
-                          <input type="number" step="0.1" value={concept.serviceDays === 0 && String(concept.serviceDays) !== "0" ? "" : concept.serviceDays} onChange={e => updateConcept(concept.id, "serviceDays", e.target.value === "" ? "" : Number(e.target.value))} className="w-full text-sm border-gray-200 rounded-lg p-2.5 border" />
+                          <input type="number" step="0.1" value={concept.serviceDays === 0 && String(concept.serviceDays) !== "0" ? "" : (concept.serviceDays ?? "")} onChange={e => updateConcept(concept.id, "serviceDays", e.target.value === "" ? "" : Number(e.target.value))} className="w-full text-sm border-gray-200 rounded-lg p-2.5 border" />
                         </div>
                         <div className="col-span-1">
                           <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Horas/Día</label>
-                          <input type="number" step="0.5" value={concept.serviceHours === 0 && String(concept.serviceHours) !== "0" ? "" : concept.serviceHours} onChange={e => updateConcept(concept.id, "serviceHours", e.target.value === "" ? "" : Number(e.target.value))} placeholder="8" className="w-full text-sm border-gray-200 rounded-lg p-2.5 border" />
+                          <input type="number" step="0.5" value={concept.serviceHours === 0 && String(concept.serviceHours) !== "0" ? "" : (concept.serviceHours ?? "")} onChange={e => updateConcept(concept.id, "serviceHours", e.target.value === "" ? "" : Number(e.target.value))} placeholder="8" className="w-full text-sm border-gray-200 rounded-lg p-2.5 border" />
                         </div>
                         
                         <div className="col-span-1">
@@ -544,24 +553,24 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                     </>
                   )}
 
-                  {/* Campos para IMPRESION, PRODUCTO, OTRO, RESALE (Manuales) */}
+                  {/* Campos para IMPRESION, PRODUCTO, OTRO, RESALE, CORTE, GRABADO (Manuales/Sobrescritura) */}
                   {(concept.type === "IMPRESION" || concept.type === "PRODUCTO" || concept.type === "OTRO" || concept.type === "RESALE" || concept.type === "CORTE" || concept.type === "GRABADO" || concept.type === "SERVICIO_SITIO") && (
                     <>
                       <div className="sm:col-span-2">
-                        <label className="block text-xs font-medium text-gray-700">Precio Unitario Venta ($)</label>
+                        <label className="block text-xs font-medium text-gray-700">Precio Venta Unitario (Sobrescribir $)</label>
                         <input
                           type="number"
-                          value={concept.manualUnitPrice === 0 && String(concept.manualUnitPrice) !== "0" ? "" : concept.manualUnitPrice}
+                          value={concept.manualUnitPrice === 0 && String(concept.manualUnitPrice) !== "0" ? "" : (concept.manualUnitPrice ?? "")}
                           onChange={e => updateConcept(concept.id, "manualUnitPrice", e.target.value === "" ? "" : Number(e.target.value))}
                           className="mt-1 block w-full sm:text-sm border-gray-300 rounded-md py-1.5 px-2 border font-bold text-emerald-700"
                           placeholder="0.00"
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="block text-xs font-medium text-gray-700">Costo Real Unitario ($)</label>
+                        <label className="block text-xs font-medium text-gray-700">Costo Real Unitario (Sobrescribir $)</label>
                         <input
                           type="number"
-                          value={concept.manualUnitCost === 0 && String(concept.manualUnitCost) !== "0" ? "" : concept.manualUnitCost}
+                          value={concept.manualUnitCost === 0 && String(concept.manualUnitCost) !== "0" ? "" : (concept.manualUnitCost ?? "")}
                           onChange={e => updateConcept(concept.id, "manualUnitCost", e.target.value === "" ? "" : Number(e.target.value))}
                           className="mt-1 block w-full sm:text-sm border-gray-300 rounded-md py-1.5 px-2 border font-bold text-red-600 bg-red-50"
                           placeholder="0.00"
@@ -585,11 +594,11 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                   {concept.calculated && (
                     <div className="sm:col-span-4 bg-white p-3 rounded border border-gray-200 mt-2 text-sm grid grid-cols-4 gap-4">
                       <div>
-                        <p className="text-xs text-gray-500">Costo Real Total</p>
+                        <p className="text-xs text-gray-500">Costo Real (Total)</p>
                         <p className="font-medium text-gray-900">${concept.calculated.realCost}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500">Precio Sugerido Total</p>
+                        <p className="text-xs text-gray-500">Precio Sugerido (Total)</p>
                         <p className="font-medium text-gray-900">${concept.calculated.suggestedPrice}</p>
                       </div>
                       <div>
@@ -597,7 +606,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                         <input 
                           type="number" 
                           step="0.01"
-                          value={concept.finalUnitPrice || concept.calculated.finalUnitPrice}
+                          value={concept.finalUnitPrice || concept.calculated.finalUnitPrice || ""}
                           onChange={e => {
                             updateConcept(concept.id, "finalUnitPrice", e.target.value);
                             // Recalcular total amount basado en el nuevo precio final unitario
