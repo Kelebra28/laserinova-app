@@ -45,6 +45,8 @@ export default async function NewReceiptPage() {
     project: q.project,
     description: q.description,
     total: q.total,
+    subtotal: q.subtotal,
+    taxable: q.taxable,
     status: q.status,
     createdAt: q.createdAt.toISOString(),
     client: q.client ? {

@@ -34,6 +34,8 @@ interface QuoteItem {
   project: string;
   description?: string | null;
   total: number;
+  subtotal: number;
+  taxable: boolean;
   status: string;
   createdAt: string;
   client?: ClientData | null;
@@ -124,12 +126,25 @@ export default function NewReceiptForm({ clients = [], quotes = [] }: NewReceipt
     setDescription(quote.description || "");
     setQuoteId(quote.id);
 
-    // Map concepts
+    // Map concepts with tax factor if the quote was taxable
+    const conceptsSum = quote.concepts.reduce((sum, c) => sum + (c.finalUnitPrice * c.quantity), 0);
+    const isOldFormat = quote.taxable && Math.abs(conceptsSum - quote.total) < 0.05;
+    
     const mapped = quote.concepts.map((c) => ({
       description: c.description,
       quantity: c.quantity,
       unitPrice: c.finalUnitPrice,
     }));
+
+    // If it's a new format taxable quote, append an IVA row automatically
+    if (quote.taxable && !isOldFormat && conceptsSum > 0) {
+      mapped.push({
+        description: "IVA 16%",
+        quantity: 1,
+        unitPrice: Number((conceptsSum * 0.16).toFixed(2)),
+      });
+    }
+
     setConcepts(mapped.length > 0 ? mapped : [{ description: "", quantity: 1, unitPrice: 0 }]);
 
     setIsQuoteModalOpen(false);

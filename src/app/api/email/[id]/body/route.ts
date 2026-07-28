@@ -2,82 +2,19 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { loadEmailFromDisk, saveEmailToDisk, getStorageBasePath } from '@/lib/emailStorage';
+import { loadEmailFromDisk, saveEmailToDisk } from '@/lib/emailStorage';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { decrypt } from '@/lib/encryption';
-import fs from 'fs';
-import path from 'path';
 
-function readBodyFromDisk(storagePath: string): { html: string; text: string } | null {
-  try {
-    const basePath = getStorageBasePath();
-    const htmlPath = path.join(basePath, storagePath, 'body.html');
-    const txtPath = path.join(basePath, storagePath, 'body.txt');
-    if (!fs.existsSync(htmlPath) && !fs.existsSync(txtPath)) return null;
-    const result = loadEmailFromDisk(storagePath);
-    if (!result.html && !result.text) return null;
-    return result;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchBodyFromImap(
-  em: { id: string; messageId: string; subject: string; folder: string; from: string },
-  cfg: { host: string; user: string; pass: string }
-): Promise<{ html: string; text: string } | null> {
-  const client = new ImapFlow({
-    host: cfg.host,
-    port: 993,
-    secure: true,
-    auth: { user: cfg.user, pass: cfg.pass },
-    logger: false,
-    connectionTimeout: 8000,
-  });
-
-  try {
-    await client.connect();
-    const cleanMsgId = em.messageId.replace(/^<|>$/g, '');
-    const foldersToTry = em.folder === 'SENT' ? ['INBOX.Sent', 'INBOX'] : ['INBOX', 'INBOX.Sent'];
-
-    for (const folder of foldersToTry) {
-      try {
-        const lock = await client.getMailboxLock(folder);
-        try {
-          let uids = await client.search({ header: { 'message-id': em.messageId } });
-          if (!uids || uids.length === 0) {
-            uids = await client.search({ header: { 'message-id': cleanMsgId } });
-          }
-          if (uids && uids.length > 0) {
-            const fetchResult = await client.fetchOne(uids[0], { source: true }) as any;
-            if (fetchResult && fetchResult.source) {
-              const parsed = await simpleParser(fetchResult.source as Buffer);
-              const html = parsed.html || (parsed.text ? `<p style="white-space:pre-wrap">${parsed.text}</p>` : '');
-              const text = parsed.text || '';
-              if (html || text) {
-                try {
-                  const savedPath = saveEmailToDisk(em.messageId, html, text);
-                  await prisma.email.update({ where: { id: em.id }, data: { storagePath: savedPath } });
-                } catch { /* ignore write errors */ }
-                return { html, text };
-              }
-            }
-          }
-        } finally {
-          lock.release();
-        }
-      } catch (folderErr) {
-        console.warn(`IMAP folder ${folder} error:`, folderErr);
-      }
-    }
-    return null;
-  } finally {
-    try { await client.logout(); } catch { /* ignore */ }
-  }
-}
+const IMAP_FOLDERS: Record<string, string> = {
+  INBOX: 'INBOX',
+  SENT: 'INBOX.Sent',
+  SPAM: 'INBOX.Junk',
+  TRASH: 'INBOX.Trash'
+};
 
 export async function GET(
   request: Request,
@@ -93,7 +30,7 @@ export async function GET(
     }
     const currentUserId = (session.user as any).id;
 
-    // Obtener SOLO el correo solicitado — sin agrupación de hilos que causa mezclas
+    // 1. Obtener el correo de la DB
     const targetEmail = await prisma.email.findFirst({
       where: { id, userId: currentUserId },
       include: { attachments: true },
@@ -103,46 +40,98 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Email not found' }, { status: 404 });
     }
 
-    // 1. Leer del disco si fue guardado durante el sync
+    // 2. Si ya está descargado, leer de caché local
     if (targetEmail.storagePath) {
-      const disk = readBodyFromDisk(targetEmail.storagePath);
-      if (disk) {
+      const disk = loadEmailFromDisk(targetEmail.storagePath);
+      if (disk && (disk.html || disk.text)) {
         return NextResponse.json({ success: true, thread: [{ ...targetEmail, ...disk }] });
       }
     }
 
-    // 2. Descargar de IMAP por messageId exacto (sin fallbacks contaminantes)
-    const isMock = process.env.EMAIL_MOCK === 'true' || targetEmail.messageId.includes('mock');
-    if (!isMock) {
+    // 3. Mock fallback
+    const isMock = process.env.EMAIL_MOCK === 'true' || targetEmail.messageId.includes('mock') || (targetEmail.uid && targetEmail.uid < 0);
+    if (isMock) {
+       const mockBody = `<div style="padding:20px;font-family:sans-serif;">${targetEmail.snippet} <br><br> (Contenido Mock Simulado)</div>`;
+       return NextResponse.json({
+         success: true,
+         thread: [{ ...targetEmail, html: mockBody, text: targetEmail.snippet || '' }]
+       });
+    }
+
+    // 4. Descargar "On-Demand" directo desde IMAP usando UID
+    if (!targetEmail.uid) {
+       return NextResponse.json({ success: false, error: 'Email no tiene UID para descargar.' }, { status: 400 });
+    }
+
+    const dbUser = await prisma.user.findUnique({ where: { id: currentUserId } });
+    let user = dbUser?.email || '';
+    let pass = '';
+    let host = dbUser?.emailIncomingServer || 'imap.hostinger.com';
+
+    if (dbUser?.emailPasswordEncrypted) {
+      try { pass = decrypt(dbUser.emailPasswordEncrypted); } catch { /* ignore */ }
+    }
+    if (!pass) {
+      user = process.env.SMTP_USER || '';
+      pass = process.env.SMTP_PASS || '';
+      host = process.env.SMTP_HOST?.replace('smtp', 'imap') || 'imap.hostinger.com';
+    }
+
+    if (user && pass) {
+      const client = new ImapFlow({
+        host, port: 993, secure: true,
+        auth: { user, pass },
+        logger: false, connectionTimeout: 8000,
+      });
+
       try {
-        const dbUser = await prisma.user.findUnique({ where: { id: currentUserId } });
-        let user = dbUser?.email || '';
-        let pass = '';
-        let host = dbUser?.emailIncomingServer || 'imap.hostinger.com';
+        await client.connect();
+        const folderName = IMAP_FOLDERS[targetEmail.folder] || 'INBOX';
+        const lock = await client.getMailboxLock(folderName);
+        
+        try {
+          const fetchResult = await client.fetchOne(targetEmail.uid.toString(), { source: true }, { uid: true }) as any;
+          
+          if (fetchResult && fetchResult.source) {
+            const parsed = await simpleParser(fetchResult.source as Buffer);
+            const html = parsed.html || (parsed.text ? `<p style="white-space:pre-wrap">${parsed.text}</p>` : '');
+            const text = parsed.text || '';
+            
+            // Guardar adjuntos si existen y no se guardaron antes
+            if (parsed.attachments && parsed.attachments.length > 0 && targetEmail.attachments.length === 0) {
+               await prisma.attachment.createMany({
+                 data: parsed.attachments.map(att => ({
+                   emailId: targetEmail.id,
+                   filename: att.filename || 'adjunto',
+                   mimeType: att.contentType || 'application/octet-stream',
+                   size: att.size || 0,
+                   contentId: att.contentId,
+                 })),
+               });
+               // Recargar targetEmail para incluir los nuevos adjuntos
+               const updatedAttachments = await prisma.attachment.findMany({ where: { emailId: targetEmail.id } });
+               targetEmail.attachments = updatedAttachments;
+            }
 
-        if (dbUser?.emailPasswordEncrypted) {
-          try { pass = decrypt(dbUser.emailPasswordEncrypted); } catch { /* ignore */ }
-        }
-        if (!pass) {
-          user = process.env.SMTP_USER || '';
-          pass = process.env.SMTP_PASS || '';
-          host = process.env.SMTP_HOST?.replace('smtp', 'imap') || 'imap.hostinger.com';
-        }
+            // Guardar HTML a disco usando el ID único de BD
+            const savedPath = saveEmailToDisk(targetEmail.id, html, text);
+            await prisma.email.update({ where: { id: targetEmail.id }, data: { storagePath: savedPath } });
 
-        if (user && pass) {
-          const imapContent = await fetchBodyFromImap(targetEmail, { host, user, pass });
-          if (imapContent) {
-            return NextResponse.json({ success: true, thread: [{ ...targetEmail, ...imapContent }] });
+            return NextResponse.json({ success: true, thread: [{ ...targetEmail, html, text }] });
           }
+        } finally {
+          lock.release();
         }
-      } catch (err) {
-        console.warn('IMAP fetch error for', targetEmail.messageId, err);
+      } catch (err: any) {
+        console.warn('IMAP On-Demand fetch error:', err.message);
+      } finally {
+        try { await client.logout(); } catch { /* ignore */ }
       }
     }
 
-    // 3. Último recurso: snippet del correo correcto (nunca el de otro correo)
+    // 5. Último recurso (Fallback de Snippet)
     const snippetHtml = `<div style="font-family: sans-serif; padding: 16px; border-left: 3px solid #e2e8f0; color: #64748b;">
-      <p style="margin: 0 0 8px 0; font-size: 12px; color: #94a3b8;">Vista previa — Presiona Sincronizar para ver el contenido completo</p>
+      <p style="margin: 0 0 8px 0; font-size: 12px; color: #94a3b8;">No se pudo conectar a IMAP para descargar el cuerpo completo.</p>
       <p style="margin:0; white-space: pre-wrap;">${targetEmail.snippet || 'Sin contenido disponible.'}</p>
     </div>`;
 

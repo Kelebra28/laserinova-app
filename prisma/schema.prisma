@@ -366,7 +366,8 @@ model MachineProcess {
 
 model Email {
   id          String       @id @default(uuid())
-  messageId   String       @unique
+  messageId   String       @db.Text
+  uid         Int?
   threadId    String?
   subject     String       @db.Text
   from        String       @db.Text
@@ -392,6 +393,7 @@ model Email {
   @@index([folder])
   @@index([threadId])
   @@index([receivedAt])
+  @@unique([userId, folder, uid])
 }
 
 model Attachment {
