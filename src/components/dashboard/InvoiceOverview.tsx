@@ -69,7 +69,7 @@ export default function InvoiceOverview({
             <Tooltip 
               cursor={{ fill: '#f8fafc' }}
               contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-              formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              formatter={(value: any) => `$${Number(value || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             />
             <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={24} />
             <Bar dataKey="profit" fill="#e2e8f0" radius={[4, 4, 0, 0]} barSize={24} />
