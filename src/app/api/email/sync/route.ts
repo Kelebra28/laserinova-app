@@ -5,8 +5,8 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { decrypt } from '@/lib/encryption';
 
-function extractAddress(addrArray: any[]) {
-  if (!addrArray || !addrArray.length) return '';
+function extractAddress(addrArray: any) {
+  if (!addrArray || !Array.isArray(addrArray) || !addrArray.length) return '';
   return addrArray.map(a => `${a.name ? `"${a.name}" ` : ''}<${a.address}>`).join(', ');
 }
 
