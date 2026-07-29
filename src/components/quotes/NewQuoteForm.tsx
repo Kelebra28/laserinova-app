@@ -580,14 +580,6 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                   )}
 
                   <div className="sm:col-span-4 mt-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => calculateConceptTotals(concept)}
-                      className="inline-flex items-center text-xs font-medium text-blue-600 bg-blue-50 py-1 px-3 rounded hover:bg-blue-100"
-                    >
-                      <Calculator className="w-3 h-3 mr-1" />
-                      Calcular Fila
-                    </button>
                   </div>
 
                   {/* Resultados del cálculo de la fila */}
