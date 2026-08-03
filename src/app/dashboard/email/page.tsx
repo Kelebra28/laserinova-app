@@ -79,6 +79,7 @@ export default function EmailPage() {
   const [replyData, setReplyData] = useState<{ to: string; subject: string; text: string; quotedText: string } | null>(null);
   const [isLoadingBody, setIsLoadingBody] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   const handleSelectEmail = async (email: Email) => {
     setSelectedEmail(email);
@@ -533,25 +534,58 @@ export default function EmailPage() {
                               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
                                 Adjuntos ({em.attachments.length})
                               </p>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                {em.attachments.map((att: any, i: number) => (
-                                  <div
-                                    key={i}
-                                    className="flex items-center justify-between p-3 border border-slate-200 hover:border-slate-300 bg-slate-50 rounded-xl transition-all"
-                                  >
-                                    <div className="min-w-0 flex-1 pr-2">
-                                      <p className="text-xs font-semibold text-slate-700 truncate">{att.filename}</p>
-                                      <p className="text-[10px] text-slate-400 mt-0.5">{(att.size / 1024).toFixed(1)} KB</p>
-                                    </div>
-                                    <button
-                                      onClick={() => downloadAttachment(em.messageId, att.filename)}
-                                      className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all"
-                                      title="Descargar"
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {em.attachments.map((att: any, i: number) => {
+                                  const isImage = att.filename.toLowerCase().match(/\.(jpeg|jpg|gif|png|webp)$/i);
+                                  const url = `/api/email/attachment?messageId=${encodeURIComponent(em.messageId)}&filename=${encodeURIComponent(att.filename)}`;
+                                  
+                                  if (isImage) {
+                                    return (
+                                      <div key={i} className="group relative rounded-xl border border-slate-200 overflow-hidden bg-slate-50 h-48 flex items-center justify-center">
+                                        <img src={url} alt={att.filename} className="w-full h-full object-contain cursor-pointer" onClick={() => setZoomedImage(url)} />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 pointer-events-none">
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); setZoomedImage(url); }}
+                                            className="p-2.5 bg-white text-slate-700 hover:text-indigo-600 rounded-full shadow-lg transition-all transform hover:scale-110 pointer-events-auto"
+                                            title="Ver completo"
+                                          >
+                                            <Search className="w-4 h-4" />
+                                          </button>
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); downloadAttachment(em.messageId, att.filename); }}
+                                            className="p-2.5 bg-white text-slate-700 hover:text-red-600 rounded-full shadow-lg transition-all transform hover:scale-110 pointer-events-auto"
+                                            title="Descargar"
+                                          >
+                                            <Download className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 pt-6 pointer-events-none">
+                                          <p className="text-xs font-semibold text-white truncate">{att.filename}</p>
+                                          <p className="text-[10px] text-slate-200 mt-0.5">{(att.size / 1024).toFixed(1)} KB</p>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+
+                                  return (
+                                    <div
+                                      key={i}
+                                      className="flex items-center justify-between p-3 border border-slate-200 hover:border-slate-300 bg-slate-50 rounded-xl transition-all"
                                     >
-                                      <Download className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                ))}
+                                      <div className="min-w-0 flex-1 pr-2">
+                                        <p className="text-xs font-semibold text-slate-700 truncate">{att.filename}</p>
+                                        <p className="text-[10px] text-slate-400 mt-0.5">{(att.size / 1024).toFixed(1)} KB</p>
+                                      </div>
+                                      <button
+                                        onClick={() => downloadAttachment(em.messageId, att.filename)}
+                                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all"
+                                        title="Descargar"
+                                      >
+                                        <Download className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
@@ -588,6 +622,28 @@ export default function EmailPage() {
         initialText={replyData?.text || ''}
         initialQuotedText={replyData?.quotedText || ''}
       />
+
+      {/* Image Zoom Modal */}
+      {zoomedImage && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 md:p-8"
+          onClick={() => setZoomedImage(null)}
+        >
+          <button 
+            onClick={() => setZoomedImage(null)}
+            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
+            title="Cerrar"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img 
+            src={zoomedImage} 
+            alt="Zoomed attachment" 
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" 
+            onClick={(e) => e.stopPropagation()} 
+          />
+        </div>
+      )}
     </div>
   );
 }

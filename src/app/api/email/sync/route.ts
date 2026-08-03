@@ -81,77 +81,83 @@ export async function POST(req: Request) {
 
           await client.connect();
 
-          const syncFolder = async (folderName: string, dbFolderName: string, maxCount: number) => {
-            try {
-              const lock = await client.getMailboxLock(folderName);
+          const syncFolder = async (folderNames: string[], dbFolderName: string, maxCount: number) => {
+            for (const folderName of folderNames) {
               try {
-                const totalMessages = client.mailbox ? (client.mailbox as any).exists : 0;
-                debugInfo[folderName] = totalMessages;
-                if (totalMessages > 0) {
-                  const startRange = Math.max(1, totalMessages - (maxCount - 1));
-                  const messages = client.fetch(`${startRange}:*`, { uid: true, envelope: true, internalDate: true });
-                  
-                  const msgList = [];
-                  for await (const msg of messages) {
-                    msgList.push(msg);
-                  }
-
-                  // Process newest first
-                  for (const msg of msgList.reverse()) {
-                    if (!msg.uid) continue;
-
-                    // Verify if it already exists by unique combination
-                    const exists = await prisma.email.findFirst({ 
-                      where: { 
-                        userId: currentUserId,
-                        folder: dbFolderName,
-                        uid: msg.uid
-                      } 
-                    });
-
-                    if (exists) {
-                      continue; 
+                const lock = await client.getMailboxLock(folderName);
+                try {
+                  const totalMessages = client.mailbox ? (client.mailbox as any).exists : 0;
+                  debugInfo[folderName] = totalMessages;
+                  if (totalMessages > 0) {
+                    const startRange = Math.max(1, totalMessages - (maxCount - 1));
+                    const messages = client.fetch(`${startRange}:*`, { uid: true, envelope: true, internalDate: true });
+                    
+                    const msgList = [];
+                    for await (const msg of messages) {
+                      msgList.push(msg);
                     }
 
-                    const messageId = msg.envelope?.messageId || `${msg.uid}@local-${dbFolderName.toLowerCase()}`;
-                    const subject = msg.envelope?.subject || '(Sin Asunto)';
-                    const from = extractAddress(msg.envelope?.from) || '';
-                    const to = extractAddress(msg.envelope?.to) || '';
-                    const cc = extractAddress(msg.envelope?.cc) || '';
-                    const bcc = extractAddress(msg.envelope?.bcc) || '';
-                    const receivedAt = msg.internalDate || msg.envelope?.date || new Date();
+                    // Process newest first
+                    for (const msg of msgList.reverse()) {
+                      if (!msg.uid) continue;
 
-                    await prisma.email.create({
-                      data: {
-                        userId: currentUserId,
-                        uid: msg.uid,
-                        messageId,
-                        subject,
-                        from,
-                        to,
-                        cc,
-                        bcc,
-                        snippet: 'Abre el correo para ver el contenido...', // Placeholder
-                        receivedAt,
-                        folder: dbFolderName,
-                      },
-                    });
-                    syncedCount++;
+                      // Check if already in DB
+                      const exists = await prisma.email.findUnique({
+                        where: {
+                          uid_folder_userId: {
+                            uid: msg.uid,
+                            folder: dbFolderName,
+                            userId: currentUserId,
+                          }
+                        }
+                      });
+
+                      if (exists) {
+                        continue; 
+                      }
+
+                      const messageId = msg.envelope?.messageId || `${msg.uid}@local-${dbFolderName.toLowerCase()}`;
+                      const subject = msg.envelope?.subject || '(Sin Asunto)';
+                      const from = extractAddress(msg.envelope?.from) || '';
+                      const to = extractAddress(msg.envelope?.to) || '';
+                      const cc = extractAddress(msg.envelope?.cc) || '';
+                      const bcc = extractAddress(msg.envelope?.bcc) || '';
+                      const receivedAt = msg.internalDate || msg.envelope?.date || new Date();
+
+                      await prisma.email.create({
+                        data: {
+                          userId: currentUserId,
+                          uid: msg.uid,
+                          messageId,
+                          subject,
+                          from,
+                          to,
+                          cc,
+                          bcc,
+                          snippet: 'Abre el correo para ver el contenido...', // Placeholder
+                          receivedAt,
+                          folder: dbFolderName,
+                        },
+                      });
+                      syncedCount++;
+                    }
                   }
+                } finally {
+                  lock.release();
                 }
-              } finally {
-                lock.release();
+                // If we succeeded, don't try the other folder names for this category
+                break;
+              } catch (folderErr: any) {
+                console.warn(`Folder ${folderName} sync error:`, folderErr.message);
+                debugInfo[`${folderName}_error`] = folderErr.message;
               }
-            } catch (folderErr: any) {
-              console.warn(`Folder ${folderName} sync error:`, folderErr.message);
-              debugInfo[`${folderName}_error`] = folderErr.message;
             }
           };
 
-          await syncFolder('INBOX', 'INBOX', 50);
-          await syncFolder('INBOX.Sent', 'SENT', 30);
-          await syncFolder('INBOX.Junk', 'SPAM', 20);
-          await syncFolder('INBOX.Trash', 'TRASH', 20);
+          await syncFolder(['INBOX'], 'INBOX', 50);
+          await syncFolder(['Sent', 'Sent Messages', 'INBOX.Sent', 'Enviados'], 'SENT', 30);
+          await syncFolder(['Junk', 'Spam', 'INBOX.Junk', 'INBOX.Spam', 'Correo no deseado'], 'SPAM', 20);
+          await syncFolder(['Trash', 'Deleted Messages', 'INBOX.Trash', 'Papelera'], 'TRASH', 20);
 
           await client.logout();
         };
