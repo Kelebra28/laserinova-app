@@ -80,7 +80,7 @@ export default function PaymentRequestForm({ clients, onSuccess, onCancel }: { c
       return;
     }
     
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       setError("No se pudo obtener el usuario actual.");
       return;
     }
@@ -93,7 +93,7 @@ export default function PaymentRequestForm({ clients, onSuccess, onCancel }: { c
       quoteId,
       amountRequested: Number(amountRequested),
       notes,
-      createdById: session.user.id
+      createdById: (session!.user as any).id
     });
 
     if (res.success) {

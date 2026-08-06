@@ -104,7 +104,7 @@ export async function POST(req: Request) {
                       // Check if already in DB
                       const exists = await prisma.email.findUnique({
                         where: {
-                          uid_folder_userId: {
+                          userId_folder_uid: {
                             uid: msg.uid,
                             folder: dbFolderName,
                             userId: currentUserId,

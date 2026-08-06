@@ -55,7 +55,7 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
           setIsDrawerOpen(false);
           toast.success("Proveedor actualizado correctamente");
         } else {
-          toast.error(res.error || "Hubo un error al guardar los datos del proveedor.");
+          toast.error((res as any).error || "Hubo un error al guardar los datos del proveedor.");
         }
       } else {
         // Create Mode
@@ -65,7 +65,7 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
           setIsDrawerOpen(false);
           toast.success("Proveedor creado correctamente");
         } else {
-          toast.error(res.error || "Hubo un error al guardar los datos del proveedor.");
+          toast.error((res as any).error || "Hubo un error al guardar los datos del proveedor.");
         }
       }
     } catch (err) {

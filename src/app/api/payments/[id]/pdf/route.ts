@@ -42,7 +42,7 @@ export async function GET(
 
     const filename = `Nota_Cargo_${paymentReq.quote?.folio || paymentReq.overrideQuoteFolio || "Preview"}.pdf`;
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(pdfBuffer as unknown as BodyInit, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",

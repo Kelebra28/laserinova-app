@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Calculator, Save, Trash2, Info, DollarSign, Check } from "lucide-react";
+import { Calculator, Save, Plus, Trash2, Info, DollarSign, Check, Loader2 } from "lucide-react";
 import Link from "next/link";
 import SubmitButton from "@/components/ui/SubmitButton";
 import { calculateConcept, CalculationInput, GlobalCosts, MaterialData } from "@/lib/calculations";
