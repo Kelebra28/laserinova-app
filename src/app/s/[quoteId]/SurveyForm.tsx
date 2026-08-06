@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Star, MessageSquare, MapPin, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function SurveyForm({ 
   quoteId, 
@@ -24,7 +25,7 @@ export default function SurveyForm({
 
   const handleSubmit = async () => {
     if (Object.keys(answers).length < questions.length) {
-      alert('Por favor califica todas las preguntas antes de enviar.');
+      toast.error('Por favor califica todas las preguntas antes de enviar.');
       return;
     }
 
@@ -48,11 +49,11 @@ export default function SurveyForm({
         setAverageScore(data.averageScore);
         setSubmitted(true);
       } else {
-        alert(data.error || 'Error al enviar la encuesta.');
+        toast.error(data.error || 'Error al enviar la encuesta.');
       }
     } catch (err) {
       console.error(err);
-      alert('Error de conexión al enviar la encuesta.');
+      toast.error('Error de conexión al enviar la encuesta.');
     } finally {
       setSubmitting(false);
     }
@@ -63,6 +64,7 @@ export default function SurveyForm({
 
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <Toaster position="top-right" />
         <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 md:p-12 shadow-2xl border border-slate-100 text-center relative overflow-hidden">
           {isGoodReview && (
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-teal-400" />

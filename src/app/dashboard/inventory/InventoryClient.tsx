@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { Plus, Save, Trash2, Edit2, Check, X, Box, Settings2, PackagePlus } from "lucide-react";
 import { createProductCategory, createProduct, updateProductStock, deleteProduct } from "./actions";
+import toast from "react-hot-toast";
 
 export default function InventoryClient({ initialCategories, autoDeductInitial }: { initialCategories: any[], autoDeductInitial: boolean }) {
   const [categories, setCategories] = useState(initialCategories);
@@ -52,7 +53,7 @@ export default function InventoryClient({ initialCategories, autoDeductInitial }
       setUploadedImageUrl(data.url);
     } catch (err) {
       console.error(err);
-      alert("Error al subir la imagen.");
+      toast.error("Error al subir la imagen.");
     } finally {
       setIsUploading(false);
     }
@@ -78,7 +79,7 @@ export default function InventoryClient({ initialCategories, autoDeductInitial }
       setUploadedImageUrl(data.url);
     } catch (err) {
       console.error(err);
-      alert("Error al subir la imagen.");
+      toast.error("Error al subir la imagen.");
     } finally {
       setIsUploading(false);
     }

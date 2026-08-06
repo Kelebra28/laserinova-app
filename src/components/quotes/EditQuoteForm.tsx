@@ -20,11 +20,14 @@ interface EditQuoteFormProps {
   materials: any[];
   products?: any[];
   globalCosts: GlobalCosts;
+  userId?: string;
 }
 
-export default function EditQuoteForm({ quote, clients, materials, products = [], globalCosts }: EditQuoteFormProps) {
+export default function EditQuoteForm({ quote, clients, materials, products = [], globalCosts, userId }: EditQuoteFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
   const [clientId, setClientId] = useState(quote.clientId || "");
   const [prospectName, setProspectName] = useState((quote as any).prospectName || "");
@@ -815,29 +818,34 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
             <div className="mt-12 flex justify-end gap-4">
               <Link
                 href={`/dashboard/quotes/${quote.id}`}
-                className="inline-flex items-center justify-center py-3 px-8 border border-gray-700 text-gray-400 text-sm font-bold rounded-lg hover:bg-gray-800 transition-all active:scale-95"
+                className="inline-flex items-center justify-center py-4 px-8 border border-gray-200 text-gray-600 text-sm font-bold rounded-lg hover:bg-gray-50 transition-all active:scale-95"
               >
                 Cancelar
               </Link>
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setShowConfirm(true)}
-                className="py-3 px-12 text-sm font-black uppercase tracking-widest rounded-lg shadow-lg shadow-red-900/20 bg-red-600 hover:bg-red-700 transition-all active:scale-95 text-white"
+                className="flex items-center py-4 px-12 text-sm font-black uppercase tracking-widest rounded-lg shadow-lg shadow-blue-900/20 bg-blue-600 hover:bg-blue-700 transition-all active:scale-95 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save className="mr-2 h-5 w-5" />
-                Guardar Cambios
+                {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
+                {isSubmitting ? "Guardando..." : "Guardar Cambios"}
               </button>
             </div>
           </div>
         </div>
       </div>
+      <button type="submit" ref={submitBtnRef} className="hidden" />
     </form>
 
     <ConfirmSaveModal
       isOpen={showConfirm}
       onConfirm={() => {
         setShowConfirm(false);
-        formRef.current?.requestSubmit();
+        setIsSubmitting(true);
+        setTimeout(() => {
+          submitBtnRef.current?.click();
+        }, 50);
       }}
       onCancel={() => setShowConfirm(false)}
       title="¿Guardar cambios en cotización?"

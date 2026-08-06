@@ -801,28 +801,169 @@ export async function generateReceiptPDF(receipt: any, showSignatures: boolean =
     currentTextY += (splitNotes.length * 5) + 5;
   }
 
-  // Add signature lines if requested
+  // Firmas si corresponde
   if (showSignatures) {
-    if (currentTextY > marginThreshold - 30) {
+    if (currentTextY > marginThreshold - 25) {
       doc.addPage();
       drawHeader(doc);
       drawWatermark(doc);
       drawFooter(doc);
       currentTextY = 40;
     }
-
-    currentTextY += 18;
-    doc.setDrawColor(200);
+    currentTextY += 10;
+    
+    const sigWidth = 60;
+    
+    // Firma elaboró
+    doc.setDrawColor(0);
     doc.setLineWidth(0.5);
-    doc.line(30, currentTextY, 90, currentTextY);
-    doc.line(pageWidth - 90, currentTextY, pageWidth - 30, currentTextY);
-
+    doc.line(14, currentTextY, 14 + sigWidth, currentTextY);
+    doc.setFont("helvetica", "bold");
+    doc.text("Elaboró", 14 + (sigWidth / 2), currentTextY + 5, { align: "center" });
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(80);
-    doc.text("Firma de Conformidad Cliente", 60, currentTextY + 5, { align: "center" });
-    doc.text("Entregado por / Laser Inova", pageWidth - 60, currentTextY + 5, { align: "center" });
+    doc.text(receipt.user?.name || "", 14 + (sigWidth / 2), currentTextY + 9, { align: "center" });
+
+    // Firma cliente
+    const rightMarginX = pageWidth - 14 - sigWidth;
+    doc.line(rightMarginX, currentTextY, rightMarginX + sigWidth, currentTextY);
+    doc.setFont("helvetica", "bold");
+    doc.text("Autorización / Recibí de Conformidad", rightMarginX + (sigWidth / 2), currentTextY + 5, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.text(receipt.client?.name || receipt.prospectName || "", rightMarginX + (sigWidth / 2), currentTextY + 9, { align: "center" });
   }
+
+  const buffer = Buffer.from(doc.output("arraybuffer"));
+  return buffer;
+}
+
+export async function generateChargeNotePDF(paymentReq: any): Promise<Buffer> {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.width;
+  const pageHeight = doc.internal.pageSize.height;
+
+  const drawHeader = (d: jsPDF, isFirstPage: boolean = false) => {
+    try {
+      const logoPath = path.join(process.cwd(), "public", "logo_pdf.png");
+      const logoBuffer = fs.readFileSync(logoPath);
+      const logoBase64 = `data:image/png;base64,${logoBuffer.toString("base64")}`;
+      d.addImage(logoBase64, "PNG", 14, 10, 50, 15);
+    } catch (error) {
+      if (isFirstPage) console.error("No se pudo cargar el logo para el PDF", error);
+      d.setFont("helvetica", "bold");
+      d.setFontSize(24);
+      d.setTextColor(0, 0, 0);
+      d.text("LASER INOVA", 14, 22);
+    }
+    d.setFont("helvetica", "bold");
+    d.setFontSize(22);
+    d.setTextColor(0, 0, 0);
+    d.text("NOTA DE CARGO", pageWidth / 2, 22, { align: "center" });
+    d.setDrawColor(0);
+    d.setLineWidth(0.5);
+    d.line(14, 30, pageWidth - 14, 30);
+  };
+
+  const drawFooter = (d: jsPDF) => {
+    const pHeight = d.internal.pageSize.height;
+    const footerY = pHeight - 30;
+    d.setDrawColor(0);
+    d.setLineWidth(0.5);
+    d.line(14, footerY, pageWidth - 14, footerY);
+    d.setFont("helvetica", "bold");
+    d.setFontSize(9);
+    d.setTextColor(0);
+    d.text("www.laserinova.com", 14, footerY + 6);
+    d.text("info@laserinova.com", pageWidth - 14, footerY + 6, { align: "right" });
+  };
+
+  drawHeader(doc, true);
+
+  // Top Right Details (Fecha)
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  const formattedDate = new Date(paymentReq.createdAt || Date.now()).toLocaleDateString("es-MX");
+  doc.text(`Fecha:   ${formattedDate}`, pageWidth - 14, 38, { align: "right" });
+
+  let folioText = paymentReq.quote?.folio || paymentReq.overrideQuoteFolio || "N/A";
+  doc.text(`Ref. Cotización:   ${folioText}`, pageWidth - 14, 44, { align: "right" });
+
+  // Top Left Details (Client & Project)
+  let currentY = 38;
+
+  const displayName = paymentReq.client?.name || paymentReq.overrideClientName;
+  if (displayName) {
+    doc.setFont("helvetica", "normal");
+    doc.text("PARA:", 14, currentY);
+    doc.setFont("helvetica", "bold");
+    doc.text(displayName, 35, currentY);
+    currentY += 6;
+  }
+
+  doc.setFont("helvetica", "normal");
+  doc.text("Proyecto:", 14, currentY);
+  doc.text(paymentReq.quote?.project || paymentReq.overrideProjectName || "", 35, currentY);
+  currentY += 12;
+
+  // Description 
+  doc.setFont("helvetica", "bold");
+  doc.text("Descripción del Cargo:", 14, currentY);
+  currentY += 6;
+  doc.setFont("helvetica", "normal");
+  
+  let notes = paymentReq.notes || "Solicitud de pago correspondiente al saldo pendiente de la cotización.";
+  const splitNotes = doc.splitTextToSize(notes, pageWidth - 28);
+  doc.text(splitNotes, 14, currentY);
+  currentY += (splitNotes.length * 5) + 15;
+
+  // Amount Block
+  doc.setDrawColor(200);
+  doc.setLineWidth(0.5);
+  doc.rect(14, currentY, pageWidth - 28, 25);
+  
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text("TOTAL A PAGAR:", 20, currentY + 16);
+  
+  doc.setFontSize(14);
+  const fmt = (n: number) => `$${Number(n).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  doc.text(fmt(paymentReq.amountRequested), pageWidth - 20, currentY + 16, { align: "right" });
+
+  currentY += 30;
+
+  // Warning text
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  const warningText = "El monto de la presente Nota de Cargo deberá ser pagado en su totalidad, sin descuentos de comisiones por transferencias o cargos bancarios.";
+  const splitWarning = doc.splitTextToSize(warningText, pageWidth - 28);
+  doc.text(splitWarning, 14, currentY);
+  currentY += (splitWarning.length * 4) + 2;
+
+  // Bank table
+  autoTable(doc, {
+    startY: currentY,
+    theme: "plain",
+    styles: { fontSize: 8, cellPadding: 3, lineColor: [150, 150, 150], lineWidth: 0.1 },
+    headStyles: { fontStyle: "bold", fillColor: [240, 240, 240], textColor: [0, 0, 0] },
+    head: [["Pago por Transferencia Nacional (MXN)", "Pago por Transferencia Internacional (USD)"]],
+    body: [
+      [
+        "Banco beneficiario: [Tu Banco MXN]\nNombre del beneficiario: Laser Inova\nCuenta: 0000000000\nCLABE: 000000000000000000\nTipo de moneda: Pesos Mexicanos",
+        "Banco beneficiario: [Tu Banco USD]\nSwift No.: XXXXXX\nNombre del beneficiario: Laser Inova\nABA Number: 000000000\nNúmero de cuenta: 000000000\nTipo de moneda: Dólares Americanos"
+      ]
+    ],
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text("Por favor incluya el folio de la Nota de Cargo pagada y notifique su pago a info@laserinova.com", 14, currentY);
+
+  currentY += 15;
+  doc.setFontSize(10);
+  doc.text(`Solicitado por: ${paymentReq.createdBy?.name || paymentReq.overrideCreatorName || 'Administración'}`, 14, currentY);
+
+  drawFooter(doc);
 
   const buffer = Buffer.from(doc.output("arraybuffer"));
   return buffer;

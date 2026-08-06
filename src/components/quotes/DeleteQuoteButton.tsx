@@ -14,12 +14,13 @@ export default function DeleteQuoteButton({ quoteId }: DeleteQuoteButtonProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
 
   const handleConfirm = async () => {
     setIsDeleting(true);
-    if (formRef.current) {
-      formRef.current.requestSubmit();
-    }
+    setTimeout(() => {
+      submitBtnRef.current?.click();
+    }, 50);
     // No reseteamos isDeleting porque se redirigirá la página
   };
 
@@ -35,6 +36,7 @@ export default function DeleteQuoteButton({ quoteId }: DeleteQuoteButtonProps) {
           <Trash2 className="mr-2 h-4 w-4" />
           Borrar
         </button>
+        <button type="submit" ref={submitBtnRef} className="hidden" />
       </form>
 
       <ConfirmationModal

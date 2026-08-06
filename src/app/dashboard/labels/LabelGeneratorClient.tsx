@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { Download, RefreshCw, Smartphone, Globe } from "lucide-react";
 import * as htmlToImage from "html-to-image";
+import toast from "react-hot-toast";
 
 export default function LabelGeneratorClient() {
   const [labelMode, setLabelMode] = useState<"digital" | "manual">("digital");
@@ -29,7 +30,7 @@ export default function LabelGeneratorClient() {
       link.click();
     } catch (err) {
       console.error("Error exporting label", err);
-      alert("Hubo un error al generar la etiqueta.");
+      toast.error("Hubo un error al generar la etiqueta.");
     } finally {
       setIsExporting(false);
     }

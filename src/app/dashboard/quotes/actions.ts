@@ -148,6 +148,32 @@ export async function createQuoteAction(formData: FormData) {
     }
   }
 
+  // Create automatic task for follow-up
+  try {
+    let tag = await prisma.taskTag.findUnique({ where: { name: "Seguimiento" } });
+    if (!tag) {
+      tag = await prisma.taskTag.create({ data: { name: "Seguimiento", color: "blue" } });
+    }
+
+    await prisma.task.create({
+      data: {
+        title: `Seguimiento de Cotización - ${quote.folio}`,
+        description: `Cotización recién creada para el proyecto: ${project}.`,
+        status: "PENDING",
+        priority: "MEDIUM",
+        createdById: userId,
+        tags: { connect: [{ id: tag.id }] },
+        assignees: {
+          create: [{
+            userId: userId
+          }]
+        }
+      }
+    });
+  } catch (taskErr) {
+    console.error("No se pudo crear la tarea de seguimiento:", taskErr);
+  }
+
   revalidatePath("/dashboard", "layout");
   redirect(`/dashboard/quotes/${quote!.id}`);
 }

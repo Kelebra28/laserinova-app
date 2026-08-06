@@ -24,6 +24,7 @@ model User {
   deletedTransactions    FinancialTransaction[] @relation("TransactionDeletedBy")
   createdTasks           Task[]                 @relation("TaskCreatedBy")
   taskAssignments        TaskAssignee[]
+  paymentRequests        PaymentRequest[]       @relation("PaymentRequestCreatedBy")
   providers              Provider[]
   emails                 Email[]
   receipts               Receipt[]
@@ -45,6 +46,7 @@ model Client {
   financialTransactions FinancialTransaction[]
   emails                Email[]
   receipts              Receipt[]
+  paymentRequests       PaymentRequest[]
 }
 
 model MaterialCategory {
@@ -161,6 +163,7 @@ model Quote {
   concepts              QuoteConcept[]
   financialTransactions FinancialTransaction[]
   surveyResponse        SurveyResponse?
+  paymentRequests       PaymentRequest[]
 
   @@index([clientId], map: "Quote_clientId_fkey")
   @@index([userId], map: "Quote_userId_fkey")
@@ -525,4 +528,27 @@ model SurveyAnswer {
 
   @@index([responseId])
   @@index([questionId])
+}
+
+model PaymentRequest {
+  id              String   @id @default(uuid())
+  amountRequested Float
+  status          String   @default("PENDING") // PENDING, PAID, CANCELED
+  notes           String?  @db.Text
+  
+  quoteId         String
+  quote           Quote    @relation(fields: [quoteId], references: [id])
+  
+  clientId        String
+  client          Client   @relation(fields: [clientId], references: [id])
+  
+  createdById     String
+  createdBy       User     @relation("PaymentRequestCreatedBy", fields: [createdById], references: [id])
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([quoteId])
+  @@index([clientId])
+  @@index([createdById])
 }

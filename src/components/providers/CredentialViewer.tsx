@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { Eye, EyeOff, Loader2, Copy, Check } from "lucide-react";
+import toast from "react-hot-toast";
 import { decryptPasswordAction } from "@/app/dashboard/providers/actions";
 
 interface CredentialViewerProps {
@@ -32,11 +33,11 @@ export default function CredentialViewer({ encryptedValue }: CredentialViewerPro
         setDecryptedValue(res.decrypted);
         setShowPassword(true);
       } else {
-        alert(res.error || "No se pudo descifrar la credencial");
+        toast.error(res.error || "No se pudo descifrar la credencial");
       }
     } catch (err) {
       console.error(err);
-      alert("Error al conectar con el servidor");
+      toast.error("Error al conectar con el servidor");
     } finally {
       setIsLoading(false);
     }

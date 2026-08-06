@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import { Calculator, Save, Plus, Trash2, Info, DollarSign, Check } from "lucide-react";
-import SubmitButton from "@/components/ui/SubmitButton";
+import { Calculator, Save, Plus, Trash2, Info, DollarSign, Check, Loader2 } from "lucide-react";
 import { calculateConcept, CalculationInput, GlobalCosts, MaterialData } from "@/lib/calculations";
 import { createQuoteAction } from "@/app/dashboard/quotes/actions";
 import MaterialSelector from "@/components/quotes/MaterialSelector";
@@ -24,7 +23,9 @@ interface NewQuoteFormProps {
 
 export default function NewQuoteForm({ clients, materials, products = [], globalCosts, userId }: NewQuoteFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
   const [clientId, setClientId] = useState("");
   const [prospectName, setProspectName] = useState("");
@@ -769,23 +770,28 @@ export default function NewQuoteForm({ clients, materials, products = [], global
             <div className="mt-12 flex justify-end">
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setShowConfirm(true)}
-                className="flex items-center py-4 px-12 text-sm font-black uppercase tracking-widest rounded-lg shadow-lg shadow-red-900/20 bg-red-600 hover:bg-red-700 transition-all active:scale-95 text-white"
+                className="flex items-center py-4 px-12 text-sm font-black uppercase tracking-widest rounded-lg shadow-lg shadow-red-900/20 bg-red-600 hover:bg-red-700 transition-all active:scale-95 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save className="mr-2 h-5 w-5" />
-                Guardar Cotización
+                {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
+                {isSubmitting ? "Guardando..." : "Guardar Cotización"}
               </button>
             </div>
           </div>
         </div>
       </div>
+      <button type="submit" ref={submitBtnRef} className="hidden" />
     </form>
 
     <ConfirmSaveModal
       isOpen={showConfirm}
       onConfirm={() => {
         setShowConfirm(false);
-        formRef.current?.requestSubmit();
+        setIsSubmitting(true);
+        setTimeout(() => {
+          submitBtnRef.current?.click();
+        }, 50);
       }}
       onCancel={() => setShowConfirm(false)}
       title="¿Guardar cotización?"

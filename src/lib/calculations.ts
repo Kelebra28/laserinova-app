@@ -139,7 +139,9 @@ export function calculateConcept(input: CalculationInput, globals: GlobalCosts):
       
       // El usuario solicitó Precio Sugerido = Costo Total / (1 - Margen)
       // Si se proporciona un precio manual, se usa ese
-      const marginFactor = (100 - (globals.margen_default || 50)) / 100;
+      let marginDefault = globals.margen_default || 50;
+      if (marginDefault >= 100) marginDefault = 99; // Prevención de división por cero
+      const marginFactor = (100 - marginDefault) / 100;
       suggestedPrice = input.manualUnitPrice || (realCost / marginFactor);
       break;
 

@@ -6,6 +6,7 @@ import {
   Phone, Key, Trash2, Edit3, MessageCircle, AlertCircle 
 } from "lucide-react";
 import { ProviderInput, createProviderAction, updateProviderAction, deleteProviderAction } from "@/app/dashboard/providers/actions";
+import toast from "react-hot-toast";
 import ProviderDrawer from "./ProviderDrawer";
 import CredentialViewer from "./CredentialViewer";
 
@@ -52,6 +53,9 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
             providers.map((p) => (p.id === selectedProvider.id ? res.provider : p))
           );
           setIsDrawerOpen(false);
+          toast.success("Proveedor actualizado correctamente");
+        } else {
+          toast.error(res.error || "Hubo un error al guardar los datos del proveedor.");
         }
       } else {
         // Create Mode
@@ -59,11 +63,14 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
         if (res.success && res.provider) {
           setProviders([res.provider, ...providers]);
           setIsDrawerOpen(false);
+          toast.success("Proveedor creado correctamente");
+        } else {
+          toast.error(res.error || "Hubo un error al guardar los datos del proveedor.");
         }
       }
     } catch (err) {
       console.error(err);
-      alert("Hubo un error al guardar los datos del proveedor.");
+      toast.error("Hubo un error al guardar los datos del proveedor.");
     } finally {
       setIsSaving(false);
     }
@@ -78,10 +85,13 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
       const res = await deleteProviderAction(id);
       if (res.success) {
         setProviders(providers.filter((p) => p.id !== id));
+        toast.success("Proveedor eliminado");
+      } else {
+        toast.error("No se pudo eliminar al proveedor.");
       }
     } catch (err) {
       console.error(err);
-      alert("No se pudo eliminar al proveedor.");
+      toast.error("No se pudo eliminar al proveedor.");
     }
   };
 
