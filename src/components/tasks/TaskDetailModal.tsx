@@ -142,7 +142,7 @@ export function TaskDetailModal({
 
   const canModify = currentUserRole === "ADMIN" || task.createdBy?.id === currentUserId;
   const sm = STATUS_META[task.status];
-  const pm = PRIORITY_META[task.priority];
+  const pm = PRIORITY_META[task.priority] || PRIORITY_META["NORMAL"];
   const overdue = isOverdue(task.dueDate, task.status);
 
   const showProgressBar = task.status === "IN_PROGRESS" || task.status === "BLOCKED";

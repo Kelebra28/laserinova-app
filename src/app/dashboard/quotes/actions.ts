@@ -160,7 +160,7 @@ export async function createQuoteAction(formData: FormData) {
         title: `Seguimiento de Cotización - ${quote.folio}`,
         description: `Cotización recién creada para el proyecto: ${project}.`,
         status: "PENDING",
-        priority: "MEDIUM",
+        priority: "NORMAL",
         createdById: userId,
         tags: { connect: [{ id: tag.id }] },
         assignees: {

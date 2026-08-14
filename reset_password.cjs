@@ -4,13 +4,15 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = 'ricardob@laserinova.com';
-  const passwordHash = await bcrypt.hash('ricardo123', 10);
+  const email = 'raball@laserinova.com';
+  console.log(`Resetting password for: ${email}`);
+  const hashedPassword = await bcrypt.hash('LaserInova2026', 10);
   
   await prisma.user.update({
-    where: { email },
-    data: { passwordHash }
+    where: { email: email },
+    data: { passwordHash: hashedPassword }
   });
-  console.log('Password reset successfully');
+  console.log(`Success! Password reset for ${email}`);
 }
+
 main().catch(console.error).finally(() => prisma.$disconnect());

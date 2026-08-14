@@ -66,7 +66,7 @@ export default async function TasksPage() {
     // Sort by priority (HIGH first) then by order within each column
     .sort((a, b) => {
       if (a.status !== b.status) return 0;
-      const pd = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+      const pd = (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1);
       return pd !== 0 ? pd : a.order - b.order;
     });
 

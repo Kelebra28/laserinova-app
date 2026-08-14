@@ -104,7 +104,7 @@ function TaskCard({
   onDragStart: (e: React.DragEvent, t: Task) => void;
   onCardClick: (t: Task) => void;
 }) {
-  const p = PRIORITY_META[task.priority];
+  const p = PRIORITY_META[task.priority] || PRIORITY_META["NORMAL"];
   const overdue = isOverdue(task.dueDate, task.status);
   const canModify = currentUserRole === "ADMIN" || task.createdById === currentUserId;
   const isBlocked = task.status === "BLOCKED";
