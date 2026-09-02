@@ -4,7 +4,7 @@ import { useState } from "react";
 import { CreditCard } from "lucide-react";
 import SubmitButton from "@/components/ui/SubmitButton";
 import Select from "@/components/ui/Select";
-import { updateQuotePayment } from "@/app/dashboard/quotes/[id]/actions";
+import { updateQuotePayment } from "@/server/actions/quote.actions";
 
 interface PaymentStatusFormProps {
   quoteId: string;
@@ -13,12 +13,7 @@ interface PaymentStatusFormProps {
   totalAmount: number;
 }
 
-const paymentStatusLabels: Record<string, string> = {
-  PENDING: "Por cobrar",
-  PARTIAL: "Con adelanto",
-  PAID: "Pagada",
-  REFUNDED: "Reembolsada",
-};
+import { PAYMENT_STATUS_LABELS } from "@/lib/constants";
 
 export default function PaymentStatusForm({ quoteId, currentStatus, currentAmount, totalAmount }: PaymentStatusFormProps) {
   const [status, setStatus] = useState(currentStatus || "PENDING");
@@ -47,7 +42,7 @@ export default function PaymentStatusForm({ quoteId, currentStatus, currentAmoun
         <div>
           <Select
             label="Estatus de Cobro"
-            options={Object.entries(paymentStatusLabels).map(([key, label]) => ({ value: key, label }))}
+            options={Object.entries(PAYMENT_STATUS_LABELS).map(([key, label]) => ({ value: key, label }))}
             value={status}
             onChange={handleStatusChange}
           />

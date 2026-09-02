@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Copy, Loader2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import ClientSelector from "@/components/quotes/ClientSelector";
-import { cloneQuoteAction } from "@/app/dashboard/quotes/actions";
+import { cloneQuoteAction } from "@/server/actions/quote.actions";
 
 interface CloneQuoteButtonProps {
   quoteId: string;

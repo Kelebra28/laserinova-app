@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { FileText, Plus, Trash2, Download, RefreshCw, Save, Check } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { saveQuickQuoteAction } from "@/app/dashboard/quotes/actions";
+import { saveQuickQuoteAction } from "@/server/actions/quote.actions";
 import { useRouter } from "next/navigation";
 import StatusModal from "@/components/ui/StatusModal";
 import ConfirmSaveModal from "@/components/ui/ConfirmSaveModal";

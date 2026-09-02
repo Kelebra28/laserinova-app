@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "@/components/providers/SessionProvider";
+import QueryProvider from "@/components/providers/QueryProvider";
 import { Toaster } from "react-hot-toast";
 
 const geistSans = Geist({
@@ -31,8 +32,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-gray-50 text-gray-900">
         <SessionProvider>
-          {children}
-          <Toaster position="top-right" />
+          <QueryProvider>
+            {children}
+            <Toaster position="top-right" />
+          </QueryProvider>
         </SessionProvider>
       </body>
     </html>
