@@ -137,12 +137,17 @@ export function calculateConcept(input: CalculationInput, globals: GlobalCosts):
       // Si se proporciona un costo manual, se usa ese (para casos "especiales")
       realCost = input.manualCost || (materialCost + productionCost); 
       
-      // El usuario solicitó Precio Sugerido = Costo Total / (1 - Margen)
-      // Si se proporciona un precio manual, se usa ese
-      let marginDefault = globals.margen_default || 50;
-      if (marginDefault >= 100) marginDefault = 99; // Prevención de división por cero
-      const marginFactor = (100 - marginDefault) / 100;
-      suggestedPrice = input.manualUnitPrice || (realCost / marginFactor);
+      if (input.isWholesale) {
+        // Cálculo por Mayoreo: Costo de Material + (Tiempo * Costo Minuto Mayoreo)
+        const mayoreoPrice = materialCost + (totalTime * (globals.costo_minuto_mayoreo || 8.5));
+        suggestedPrice = input.manualUnitPrice || mayoreoPrice;
+      } else {
+        // Cálculo Normal: Precio Sugerido = Costo Total / (1 - Margen)
+        let marginDefault = globals.margen_default || 50;
+        if (marginDefault >= 100) marginDefault = 99; // Prevención de división por cero
+        const marginFactor = (100 - marginDefault) / 100;
+        suggestedPrice = input.manualUnitPrice || (realCost / marginFactor);
+      }
       break;
 
     case "RESALE":

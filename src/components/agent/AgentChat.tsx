@@ -144,6 +144,21 @@ export function AgentChat() {
                             ))}
                           </div>
                         )}
+                        
+                        {/* Enlace directo a la cotización */}
+                        {data.id && (
+                          <div className="mt-4 border-t border-amber-200/50 pt-4">
+                            <a 
+                              href={`/dashboard/quotes/${data.id}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-center w-full py-3 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold uppercase tracking-wider rounded-lg text-xs transition-colors shadow-sm"
+                            >
+                              <FileText className="w-4 h-4 mr-2" />
+                              Ver Detalles de Cotización
+                            </a>
+                          </div>
+                        )}
                       </div>
                     );
                   }
