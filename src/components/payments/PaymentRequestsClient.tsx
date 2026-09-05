@@ -2,19 +2,43 @@
 
 import { useState } from "react";
 import { Plus, FileDown, Trash2, Pencil } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import PaymentRequestForm from "./PaymentRequestForm";
 import ChargeNotePreviewModal from "./ChargeNotePreviewModal";
-import { updatePaymentRequestStatus, deletePaymentRequest, updatePaymentRequest } from "@/app/actions/paymentRequests";
+import { 
+  updatePaymentRequestStatus, 
+  deletePaymentRequest, 
+  updatePaymentRequest,
+  getPaymentRequests,
+  getClientsForPayments 
+} from "@/server/actions/payment.actions";
 import toast from "react-hot-toast";
+import { GlobalLoader } from "@/components/ui/GlobalLoader";
 
-export default function PaymentRequestsClient({
-  initialRequests,
-  clients
-}: {
-  initialRequests: any[];
-  clients: any[];
-}) {
-  const [requests, setRequests] = useState(initialRequests);
+export default function PaymentRequestsClient() {
+  const queryClient = useQueryClient();
+
+  // Queries (TanStack Query)
+  const { data: requestsData, isLoading: isLoadingRequests } = useQuery({
+    queryKey: ["paymentRequests"],
+    queryFn: async () => {
+      const res = await getPaymentRequests();
+      if (!res.success) throw new Error(res.error);
+      return res.data;
+    },
+  });
+
+  const { data: clientsData, isLoading: isLoadingClients } = useQuery({
+    queryKey: ["clientsForPayments"],
+    queryFn: async () => {
+      const res = await getClientsForPayments();
+      if (!res.success) throw new Error(res.error);
+      return res.data;
+    },
+  });
+
+  const requests = requestsData || [];
+  const clients = clientsData || [];
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
@@ -25,7 +49,7 @@ export default function PaymentRequestsClient({
   const handleStatusChange = async (id: string, newStatus: string) => {
     const res = await updatePaymentRequestStatus(id, newStatus);
     if (res.success) {
-      setRequests(requests.map(r => r.id === id ? { ...r, status: newStatus } : r));
+      queryClient.invalidateQueries({ queryKey: ["paymentRequests"] });
       toast.success("Estatus actualizado");
     } else {
       toast.error("Error: " + res.error);
@@ -41,7 +65,7 @@ export default function PaymentRequestsClient({
     if (confirm("¿Estás seguro de que deseas eliminar esta solicitud de pago? Esta acción afectará los saldos pendientes si ya estaba pagada.")) {
       const res = await deletePaymentRequest(id);
       if (res.success) {
-        setRequests(requests.filter(r => r.id !== id));
+        queryClient.invalidateQueries({ queryKey: ["paymentRequests"] });
         toast.success("Solicitud eliminada");
       } else {
         toast.error("Error al eliminar: " + res.error);
@@ -63,7 +87,7 @@ export default function PaymentRequestsClient({
       notes: editNotes
     });
     if (res.success) {
-      setRequests(requests.map(r => r.id === selectedRequest.id ? { ...r, amountRequested: Number(editAmount), notes: editNotes } : r));
+      queryClient.invalidateQueries({ queryKey: ["paymentRequests"] });
       setIsEditModalOpen(false);
       toast.success("Solicitud actualizada");
     } else {
@@ -73,9 +97,13 @@ export default function PaymentRequestsClient({
 
   const handleFormSuccess = () => {
     setIsFormOpen(false);
-    // Reload to get the newest requests and updated balances
-    window.location.reload();
+    queryClient.invalidateQueries({ queryKey: ["paymentRequests"] });
+    toast.success("Solicitud creada con éxito");
   };
+
+  if (isLoadingRequests || isLoadingClients) {
+    return <GlobalLoader label="Cargando Cobranza" subLabel="Por favor espera..." />;
+  }
 
   return (
     <div className="space-y-6">

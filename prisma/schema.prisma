@@ -47,6 +47,7 @@ model Client {
   emails                Email[]
   receipts              Receipt[]
   paymentRequests       PaymentRequest[]
+  whatsappContacts      WhatsAppContact[]
 }
 
 model MaterialCategory {
@@ -552,3 +553,35 @@ model PaymentRequest {
   @@index([clientId])
   @@index([createdById])
 }
+
+model WhatsAppContact {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  name      String?
+  botMode   Boolean  @default(true) // Si está en true, la IA responde automáticamente
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  messages  WhatsAppMessage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+}
+
+model WhatsAppMessage {
+  id         String   @id @default(uuid())
+  contactId  String
+  messageId  String   @unique // ID provisto por Meta
+  direction  String   // 'INBOUND' o 'OUTBOUND'
+  type       String   // 'TEXT', 'IMAGE', 'AUDIO', 'DOCUMENT'
+  content    String?  @db.Text
+  mediaUrl   String?  @db.Text // Ruta local (ej. public/uploads/whatsapp/...)
+  mimeType   String?
+  status     String   @default("SENT") // SENT, DELIVERED, READ, FAILED
+  timestamp  DateTime @default(now())
+  contact    WhatsAppContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+  @@index([timestamp])
+}
+

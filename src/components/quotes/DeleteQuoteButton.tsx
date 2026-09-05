@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { Trash2 } from "lucide-react";
 import SubmitButton from "@/components/ui/SubmitButton";
-import { deleteQuote } from "@/app/dashboard/quotes/[id]/actions";
+import { deleteQuote } from "@/server/actions/quote.actions";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
 
 interface DeleteQuoteButtonProps {

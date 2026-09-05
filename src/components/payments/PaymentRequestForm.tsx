@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { getPendingQuotesByClient, createPaymentRequest } from "@/app/actions/paymentRequests";
+import { X, Search, Loader2 } from "lucide-react";
+import toast from "react-hot-toast";
+import { Client } from "@prisma/client";
+import { getPendingQuotesByClient, createPaymentRequest } from "@/server/actions/payment.actions";
 
 export default function PaymentRequestForm({ clients, onSuccess, onCancel }: { clients: any[], onSuccess: () => void, onCancel: () => void }) {
   const { data: session } = useSession();
@@ -92,8 +95,7 @@ export default function PaymentRequestForm({ clients, onSuccess, onCancel }: { c
       clientId,
       quoteId,
       amountRequested: Number(amountRequested),
-      notes,
-      createdById: (session!.user as any).id
+      notes
     });
 
     if (res.success) {

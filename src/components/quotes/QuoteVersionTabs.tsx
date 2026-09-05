@@ -4,7 +4,8 @@ import { useTransition } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Copy, CheckCircle, Loader2 } from "lucide-react";
-import { duplicateQuoteAsVersion, approveQuoteVersion } from "@/app/dashboard/quotes/[id]/actions";
+import { duplicateQuoteAsVersion, approveQuoteVersion } from "@/server/actions/quote.actions";
+import { useRouter } from "next/navigation";
 
 type Version = {
   id: string;
@@ -28,9 +29,14 @@ export default function QuoteVersionTabs({
   const isEditPage = pathname?.endsWith("/edit");
   const getHref = (id: string) => isEditPage ? `/dashboard/quotes/${id}/edit` : `/dashboard/quotes/${id}`;
 
+  const router = useRouter();
+
   const handleDuplicate = () => {
-    startTransition(() => {
-      duplicateQuoteAsVersion(currentQuoteId);
+    startTransition(async () => {
+      const res = await duplicateQuoteAsVersion(currentQuoteId);
+      if (res?.success && res.redirectUrl) {
+        router.push(res.redirectUrl);
+      }
     });
   };
 

@@ -1,8 +1,7 @@
-import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { ArrowLeft, Download, Mail, FileText, Settings, User, TrendingUp, TrendingDown, Clock, Loader2, Trash2, Edit, CreditCard, DollarSign, Briefcase, AlertCircle } from "lucide-react";
 import { notFound } from "next/navigation";
-import { updateQuoteStatus, updateQuoteConsiderations, updateQuotePayment, deleteQuote } from "./actions";
+import { updateQuoteStatus, updateQuoteConsiderations } from "@/server/actions/quote.actions";
 import SubmitButton from "@/components/ui/SubmitButton";
 import StatusGridButton from "@/components/quotes/StatusGridButton";
 import DeleteQuoteButton from "@/components/quotes/DeleteQuoteButton";
@@ -12,77 +11,27 @@ import QuoteVersionTabs from "@/components/quotes/QuoteVersionTabs";
 import CloneQuoteButton from "@/components/quotes/CloneQuoteButton";
 import { SendQuoteMailButton } from "@/components/quotes/SendQuoteMailButton";
 import SurveyLinkButton from "@/components/quotes/SurveyLinkButton";
+import { getQuoteDetailService, getActiveClientsService } from "@/server/services/quote.service";
 
-const statusLabels: Record<string, string> = {
-  DRAFT: "Borrador",
-  CALCULATED: "Calculada",
-  SENT: "Enviada",
-  APPROVED: "Aprobada",
-  REJECTED: "Rechazada",
-  IN_PRODUCTION: "En Producción",
-  DELIVERED: "Entregada",
-  CANCELLED: "Cancelada",
-};
-
-const paymentStatusLabels: Record<string, string> = {
-  PENDING: "Por cobrar",
-  PARTIAL: "Con adelanto",
-  PAID: "Pagada",
-  REFUNDED: "Reembolsada",
-};
-
-const paymentStatusColors: Record<string, string> = {
-  PENDING: "text-red-600 bg-red-50 border-red-100",
-  PARTIAL: "text-orange-600 bg-orange-50 border-orange-100",
-  PAID: "text-emerald-600 bg-emerald-50 border-emerald-100",
-  REFUNDED: "text-gray-600 bg-gray-50 border-gray-200",
-};
-
-const statusColors: Record<string, string> = {
-  DRAFT: "bg-gray-100 text-gray-800 border-gray-200",
-  CALCULATED: "bg-blue-100 text-blue-800 border-blue-200",
-  SENT: "bg-purple-100 text-purple-800 border-purple-200",
-  APPROVED: "bg-green-100 text-green-800 border-green-200",
-  REJECTED: "bg-red-100 text-red-800 border-red-200",
-  IN_PRODUCTION: "bg-orange-100 text-orange-800 border-orange-200",
-  DELIVERED: "bg-teal-100 text-teal-800 border-teal-200",
-  CANCELLED: "bg-black text-white border-black",
-};
+import { 
+  QUOTE_STATUS_LABELS, 
+  QUOTE_STATUS_COLORS, 
+  PAYMENT_STATUS_LABELS, 
+  PAYMENT_STATUS_COLORS 
+} from "@/lib/constants";
 
 export default async function QuoteDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const quoteId = params.id;
 
-  const quote = await prisma.quote.findUnique({
-    where: { id: quoteId },
-    include: {
-      client: true,
-      user: true,
-      concepts: {
-        orderBy: { order: 'asc' },
-        include: { material: true }
-      }
-    }
-  });
+  const data = await getQuoteDetailService(quoteId);
 
-  if (!quote) {
+  if (!data || !data.quote) {
     notFound();
   }
 
-  const clients = await prisma.client.findMany({
-    where: { active: true },
-    orderBy: { name: "asc" }
-  });
-
-  // Fetch sibling versions if this is part of a group
-  let versions = [quote];
-  if (quote.versionGroupId) {
-    versions = await prisma.quote.findMany({
-      where: { versionGroupId: quote.versionGroupId },
-      select: { id: true, versionName: true, status: true, total: true, folio: true },
-      orderBy: { createdAt: 'asc' }
-    }) as any;
-  }
+  const { quote, versions } = data;
+  const clients = await getActiveClientsService();
 
   const defaultConsiderations = "- Tiempo de entrega: de 4 a 5 días hábiles.\n- Formato de diseño: Se solicita que el cliente proporcione los diseños en formato vectorial (AI, CDR, SVG, PDF), o en alta resolución (JPG, PNG) si no es vectorial, para garantizar la calidad del grabado, corte e impresión.\n- 50% anticipo, 50% al programar envío o entrega.\n- El costo puede variar si hay cambios en medidas o diseño.\n- No incluye gastos de envío.\n- Vigencia de cotización 7 días.";
 
@@ -110,11 +59,11 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
                 {quote.folio}
               </h1>
               <div className="flex gap-2">
-                <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm ${statusColors[quote.status]}`}>
-                  {statusLabels[quote.status]}
+                <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm ${QUOTE_STATUS_COLORS[quote.status]}`}>
+                  {QUOTE_STATUS_LABELS[quote.status]}
                 </span>
-                <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm ${paymentStatusColors[quote.paymentStatus || "PENDING"]}`}>
-                  {paymentStatusLabels[quote.paymentStatus || "PENDING"]}
+                <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm ${PAYMENT_STATUS_COLORS[quote.paymentStatus || "PENDING"]}`}>
+                  {PAYMENT_STATUS_LABELS[quote.paymentStatus || "PENDING"]}
                 </span>
               </div>
             </div>
@@ -399,14 +348,14 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
               <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">Estado del Trabajo</h3>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              {Object.entries(statusLabels).map(([key, label]) => (
+              {Object.entries(QUOTE_STATUS_LABELS).map(([key, label]) => (
                 <form key={key} action={updateQuoteStatus} className="w-full">
                   <input type="hidden" name="quoteId" value={quote.id} />
                   <input type="hidden" name="status" value={key} />
                   <StatusGridButton
                     label={label}
                     isActive={quote.status === key}
-                    colorClass={statusColors[key]}
+                    colorClass={QUOTE_STATUS_COLORS[key]}
                   />
                 </form>
               ))}

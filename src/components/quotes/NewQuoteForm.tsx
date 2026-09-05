@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Calculator, Save, Plus, Trash2, Info, DollarSign, Check, Loader2 } from "lucide-react";
 import { calculateConcept, CalculationInput, GlobalCosts, MaterialData } from "@/lib/calculations";
-import { createQuoteAction } from "@/app/dashboard/quotes/actions";
+import { createQuoteAction } from "@/server/actions/quote.actions";
 import MaterialSelector from "@/components/quotes/MaterialSelector";
 import ClientSelector from "@/components/quotes/ClientSelector";
 import ConfirmSaveModal from "@/components/ui/ConfirmSaveModal";
@@ -177,7 +177,50 @@ export default function NewQuoteForm({ clients, materials, products = [], global
     // Ya no es necesario recalcular todo porque se autocalcula en updateConcept
   };
 
-
+  // Recalcular todo si cambia el margen o el tipo de venta
+  useEffect(() => {
+    if (concepts.length === 0) return;
+    setConcepts(prev => prev.map(c => {
+      const mat = materials.find(m => m.id === c.materialId);
+      const result = calculateConcept(
+        {
+          type: c.type,
+          quantity: Number(c.quantity),
+          material: mat ? {
+            length: mat.length,
+            width: mat.width,
+            sheetPrice: mat.sheetPrice,
+            guardPercentage: mat.guardPercentage,
+            pricePerCm2: mat.pricePerCm2,
+          } : undefined,
+          partWidth: Number(c.partWidth),
+          partHeight: Number(c.partHeight),
+          timeMin: Number(c.timeMin),
+          clientProvidesMaterial: c.clientProvidesMaterial,
+          isWholesale: isWholesale,
+          manualUnitPrice: Number(c.manualUnitPrice) || 0,
+          manualCost: Number(c.manualUnitCost) || 0,
+          serviceDays: Number(c.serviceDays) || 0,
+          serviceHours: Number(c.serviceHours) || 0,
+          operatorCost: c.operatorCost !== undefined && c.operatorCost !== "" ? Number(c.operatorCost) : undefined,
+          transportCost: c.transportCost !== undefined && c.transportCost !== "" ? Number(c.transportCost) : undefined,
+          installCost: c.installCost !== undefined && c.installCost !== "" ? Number(c.installCost) : undefined,
+          laserUseCost: c.laserUseCost !== undefined && c.laserUseCost !== "" ? Number(c.laserUseCost) : undefined,
+          consumablesCost: c.consumablesCost !== undefined && c.consumablesCost !== "" ? Number(c.consumablesCost) : undefined,
+          viaticsCost: c.viaticsCost !== undefined && c.viaticsCost !== "" ? Number(c.viaticsCost) : undefined,
+          margin: c.margin !== undefined && c.margin !== "" ? Number(c.margin) : undefined,
+        },
+        { ...globalCosts, margen_default: Number(margin) || 35 }
+      );
+      const suggestedUnit = result.suggestedPrice / (Number(c.quantity) || 1);
+      // Si cambia el margen global o mayoreo, actualizamos el precio final unitario de los conceptos de fórmula
+      const isFormulaType = ["CORTE", "GRABADO", "SERVICIO_SITIO"].includes(c.type);
+      const finalUnit = (isFormulaType || !c.finalUnitPrice || Number(c.finalUnitPrice) <= 0) ? suggestedUnit : c.finalUnitPrice;
+      const finalUnitNum = Number(finalUnit) || 0;
+      const totalAmount = finalUnitNum * (Number(c.quantity) || 1);
+      return { ...c, calculated: { ...result, utility: totalAmount - result.realCost }, finalUnitPrice: finalUnit, totalAmount: totalAmount };
+    }));
+  }, [margin, isWholesale, globalCosts, materials]);
   // Totales — respeta el toggle de IVA
   const { subtotal, iva, total, costoReal, utilidad } = useMemo(() => {
     let conceptsSum = 0;

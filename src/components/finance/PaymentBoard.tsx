@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { DollarSign, Loader2 } from "lucide-react";
-import { updateQuotePaymentAction } from "@/app/dashboard/quotes/actions";
+import { updateQuotePaymentAction } from "@/server/actions/quote.actions";
 
 export default function PaymentBoard({ 
   initialQuotes,

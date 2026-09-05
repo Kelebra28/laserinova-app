@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Package, CheckSquare } from "lucide-react";
-import { updateQuoteStatusAction } from "@/app/dashboard/quotes/actions";
+import { updateQuoteStatusAction } from "@/server/actions/quote.actions";
 
 const statusLabels: Record<string, string> = {
   DRAFT: "Borrador",

@@ -19,12 +19,16 @@ import {
   Building2,
   Receipt,
   Star,
-  Banknote
+  Banknote,
+  Bot,
+  MessageCircle
 } from "lucide-react";
 import { useSession } from "next-auth/react";
  
 const menuItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Chats", href: "/dashboard/chats", icon: MessageCircle },
+  { name: "Agente IA", href: "/dashboard/agent", icon: Bot },
   { name: "Correo", href: "/dashboard/email", icon: Mail },
   { name: "Cotizaciones", href: "/dashboard/quotes", icon: FileText },
   { name: "Recibos", href: "/dashboard/receipts", icon: Receipt },
@@ -64,23 +68,23 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       {/* Sidebar Container */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-black text-white flex flex-col transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:flex
+        fixed inset-y-0 left-0 z-50 w-64 bg-black/95 backdrop-blur-xl border-r border-white/10 text-white flex flex-col transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:flex
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
-        <div className="flex items-center justify-between p-4 border-b border-gray-800">
-          <Link href="/dashboard" className="block w-full">
+        <div className="flex items-center justify-between p-4 border-b border-white/10">
+          <Link href="/dashboard" className="block w-full transition-transform hover:scale-105 duration-300">
             <img
               src="/logo_sidebar.png"
               alt="Laser Inova Logo"
-              className="w-full h-auto max-h-16 object-contain mx-auto"
+              className="w-full h-auto max-h-16 object-contain mx-auto drop-shadow-md"
             />
           </Link>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:text-white md:hidden">
+          <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white md:hidden transition-colors">
             <X className="h-6 w-6" />
           </button>
         </div>
 
-        <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto custom-scrollbar">
+        <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto custom-scrollbar">
           {menuItems.map((item) => {
             if (item.adminOnly && !isAdmin) return null;
             
@@ -94,16 +98,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 href={item.href}
                 onClick={() => onClose?.()}
                 className={`
-                  group flex items-center px-3 py-3 text-sm font-bold rounded-xl transition-all duration-200 uppercase tracking-widest
+                  group flex items-center px-3 py-3 text-xs font-bold rounded-xl transition-all duration-300 uppercase tracking-widest
                   ${isActive 
-                    ? "bg-red-600 text-white shadow-lg shadow-red-600/20" 
-                    : "text-gray-400 hover:bg-gray-900 hover:text-white"
+                    ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-[0_0_15px_rgba(220,38,38,0.4)] border border-red-500/50 scale-[1.02]" 
+                    : "text-zinc-400 hover:bg-white/5 hover:text-zinc-100 hover:scale-[1.02]"
                   }
                 `}
               >
                 <item.icon
-                  className={`mr-3 h-5 w-5 transition-colors ${
-                    isActive ? "text-white" : "text-gray-500 group-hover:text-gray-300"
+                  className={`mr-3 h-5 w-5 transition-colors duration-300 ${
+                    isActive ? "text-white" : "text-zinc-500 group-hover:text-red-400"
                   }`}
                   aria-hidden="true"
                 />

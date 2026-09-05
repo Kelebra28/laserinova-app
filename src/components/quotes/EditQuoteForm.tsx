@@ -5,7 +5,7 @@ import { Calculator, Save, Plus, Trash2, Info, DollarSign, Check, Loader2 } from
 import Link from "next/link";
 import SubmitButton from "@/components/ui/SubmitButton";
 import { calculateConcept, CalculationInput, GlobalCosts, MaterialData } from "@/lib/calculations";
-import { updateQuoteAction } from "@/app/dashboard/quotes/actions";
+import { updateQuoteAction } from "@/server/actions/quote.actions";
 import MaterialSelector from "@/components/quotes/MaterialSelector";
 import ClientSelector from "@/components/quotes/ClientSelector";
 import ConfirmSaveModal from "@/components/ui/ConfirmSaveModal";
