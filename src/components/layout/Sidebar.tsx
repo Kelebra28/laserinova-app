@@ -20,12 +20,14 @@ import {
   Receipt,
   Star,
   Banknote,
-  Bot
+  Bot,
+  MessageCircle
 } from "lucide-react";
 import { useSession } from "next-auth/react";
  
 const menuItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Chats", href: "/dashboard/chats", icon: MessageCircle },
   { name: "Agente IA", href: "/dashboard/agent", icon: Bot },
   { name: "Correo", href: "/dashboard/email", icon: Mail },
   { name: "Cotizaciones", href: "/dashboard/quotes", icon: FileText },

@@ -65,3 +65,12 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   },
 };
+
+export async function requireAuth() {
+  const { getServerSession } = await import("next-auth/next");
+  const session = await getServerSession(authOptions);
+  if (!(session?.user as any)?.id) {
+    throw new Error("No autorizado");
+  }
+  return session!.user as any;
+}
