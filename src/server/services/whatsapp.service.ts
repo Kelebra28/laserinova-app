@@ -216,43 +216,6 @@ export async function processAIAgentResponse(contactId: string) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // MODELO 2: "El Chalán" (Calcula cosas si es necesario)
-    const chalanModel = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
-    const historyText = recentMessages.map(msg => `${msg.direction === 'INBOUND' ? 'Cliente' : 'Agente'}: ${msg.content}`).join('\n');
-    const chalanPrompt = `Eres "El Chalán", el sistema interno de cálculo de Laser Inova.
-Historial reciente:
-${historyText}
-
-Analiza el último mensaje del cliente. Si pregunta por costos, precios de maquila o tiempos de entrega, inventa información realista detallada para el simulador.
-Si no pide costos, responde estrictamente con: "NO_ACTION_NEEDED".`;
-
-    let chalanContext = "";
-    try {
-      const chalanResult = await chalanModel.generateContent(chalanPrompt);
-      const chalanResponse = chalanResult.response.text().trim();
-      if (chalanResponse !== "NO_ACTION_NEEDED") {
-        chalanContext = `\n--- INFO DEL CHALÁN ---\n${chalanResponse}\n-------------------------------\n(Usa esta info técnica para informar al cliente sin dar precios finales).`;
-      }
-      
-      if (chalanResult.response.usageMetadata) {
-        const inputTokens = chalanResult.response.usageMetadata.promptTokenCount || 0;
-        const outputTokens = chalanResult.response.usageMetadata.candidatesTokenCount || 0;
-        const estimatedCost = (inputTokens * 0.075 / 1000000) + (outputTokens * 0.30 / 1000000);
-        await prisma.aiUsageLog.create({
-          data: {
-            agentName: "El Chalán",
-            contactId: contact.id,
-            inputTokens,
-            outputTokens,
-            totalTokens: inputTokens + outputTokens,
-            estimatedCost,
-          }
-        });
-      }
-    } catch (e) {
-      console.warn("Error en El Chalán (ignorado para no afectar al bot principal):", e);
-    }
 
     // Definición de Herramientas (Function Calling)
     const notificar_solicitud_cotizacion: FunctionDeclaration = {
@@ -309,15 +272,7 @@ Si no pide costos, responde estrictamente con: "NO_ACTION_NEEDED".`;
       tools: [{ functionDeclarations: [notificar_solicitud_cotizacion, transferir_a_humano] }]
     });
 
-    // Inyectar contexto del chalán al último mensaje del usuario si existe
-    if (chalanContext) {
-      for (let i = contents.length - 1; i >= 0; i--) {
-        if (contents[i].role === 'user') {
-          contents[i].parts[0].text += `\n${chalanContext}`;
-          break;
-        }
-      }
-    }
+
 
     // Soporte Multimodal: Revisar si el último mensaje del cliente tiene audio/imagen
     const lastClientMessage = recentMessages[recentMessages.length - 1];
@@ -362,6 +317,43 @@ Si no pide costos, responde estrictamente con: "NO_ACTION_NEEDED".`;
         } else if (call.name === 'notificar_solicitud_cotizacion') {
           const args = call.args as any;
           
+          // 1. Invocar al Chalán AHORA que ya tenemos toda la info, para que haga el cálculo interno
+          let chalanEstimate = "No se pudo calcular el estimado.";
+          try {
+            const chalanModel = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
+            const chalanPrompt = `Eres "El Chalán", el calculista interno de Laser Inova. La secretaria recopiló esta información del cliente:
+Proyecto: ${args.project_name}
+Material: ${args.material}
+Grosor: ${args.grosor || 'N/A'}
+Medidas: ${args.medidas || 'N/A'}
+Cantidad: ${args.cantidad}
+Diseño: ${args.diseno_incluido ? 'Sí' : 'No'}
+
+Analiza estos datos y genera un precio estimado o rango de precios de maquila realista para que el administrador lo vea (en MXN). Sé muy breve y directo, solo da el número y una pequeñísima justificación.`;
+
+            const chalanResult = await chalanModel.generateContent(chalanPrompt);
+            chalanEstimate = chalanResult.response.text().trim();
+            
+            // Log tokens for Chalan
+            if (chalanResult.response.usageMetadata) {
+              const inputTokens = chalanResult.response.usageMetadata.promptTokenCount || 0;
+              const outputTokens = chalanResult.response.usageMetadata.candidatesTokenCount || 0;
+              const estimatedCost = (inputTokens * 0.075 / 1000000) + (outputTokens * 0.30 / 1000000);
+              await prisma.aiUsageLog.create({
+                data: {
+                  agentName: "El Chalán",
+                  contactId: contact.id,
+                  inputTokens,
+                  outputTokens,
+                  totalTokens: inputTokens + outputTokens,
+                  estimatedCost,
+                }
+              });
+            }
+          } catch (e) {
+            console.error("Error en estimación final del Chalán:", e);
+          }
+
           const adminAlertMsg = `🚨 *Nueva Solicitud de Cotización* 🚨
 Cliente: ${contact.name || contact.phone} (${contact.phone})
 Proyecto: ${args.project_name}
@@ -370,6 +362,9 @@ Grosor: ${args.grosor || 'N/A'}
 Medidas: ${args.medidas || 'N/A'}
 Cantidad: ${args.cantidad}
 Diseño: ${args.diseno_incluido ? 'Sí' : 'No'}
+
+🤖 *Estimación Previa del Chalán (IA):*
+${chalanEstimate}
 
 _Para responder, busca este cliente en el CRM o comunícate con él directamente._`;
 

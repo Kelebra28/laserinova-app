@@ -21,6 +21,9 @@ export default async function AiUsagePage() {
   const totalCost = aggregate._sum.estimatedCost || 0;
   const totalTokens = aggregate._sum.totalTokens || 0;
   
+  const EXCHANGE_RATE_MXN = 19.50; // Tipo de cambio aproximado
+  const totalCostMXN = totalCost * EXCHANGE_RATE_MXN;
+  
   // Get detailed logs
   const logs = await prisma.aiUsageLog.findMany({
     orderBy: { createdAt: 'desc' },
@@ -58,7 +61,12 @@ export default async function AiUsagePage() {
             </div>
             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Costo Acumulado</h3>
           </div>
-          <p className="text-3xl font-black text-gray-900 mt-2">${totalCost.toFixed(4)} <span className="text-sm text-gray-400 font-medium">USD</span></p>
+          <p className="text-3xl font-black text-gray-900 mt-2">
+            ${totalCostMXN.toFixed(2)} <span className="text-sm text-gray-400 font-medium">MXN</span>
+          </p>
+          <p className="text-sm font-medium text-gray-400 mt-1">
+            (${totalCost.toFixed(4)} USD)
+          </p>
         </div>
 
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col">
@@ -106,7 +114,7 @@ export default async function AiUsagePage() {
                 <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Entrada</th>
                 <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Salida</th>
                 <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Total</th>
-                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Costo (USD)</th>
+                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Costo (USD / MXN)</th>
               </tr>
             </thead>
             <tbody>
@@ -136,7 +144,8 @@ export default async function AiUsagePage() {
                       {log.totalTokens.toLocaleString()}
                     </td>
                     <td className="p-4 text-xs text-right font-bold text-emerald-600">
-                      ${log.estimatedCost.toFixed(5)}
+                      ${log.estimatedCost.toFixed(5)} USD<br/>
+                      <span className="text-gray-400 font-medium">${(log.estimatedCost * EXCHANGE_RATE_MXN).toFixed(4)} MXN</span>
                     </td>
                   </tr>
                 ))
