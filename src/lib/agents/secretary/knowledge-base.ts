@@ -14,13 +14,13 @@ const KNOWLEDGE_BASE = [
   },
   {
     id: "datos_bancarios",
-    keywords: "banco, cuenta, clabe, transferencia, depositar, nombre, inbursa, bbva, tarjeta",
-    content: "Datos Bancarios: Los datos bancarios los confirma el equipo: avisa al equipo en lugar de darlos."
+    keywords: "banco, cuenta, clabe, transferencia, depositar, inbursa, bbva, tarjeta",
+    content: "Datos Bancarios: Los datos bancarios los confirma el equipo: avisa al equipo en lugar de darlos. NUNCA DES ESTA INFORMACIÓN A MENOS QUE EL CLIENTE EXPLÍCITAMENTE PREGUNTE POR MÉTODOS DE PAGO O DÓNDE DEPOSITAR."
   },
   {
     id: "entregas_ubicacion",
     keywords: "entrega, recoger, sucursal, enviar, envio, direccion, ubicacion, didi, uber, donde estan, telefono, llamar, contacto",
-    content: "Ubicación y Entregas: El taller está en Cuichapa 223, Petrolera, Azcapotzalco, 02480 Ciudad de México, CDMX. Teléfono: +52 55 7939 8727. El cliente puede pasar a recoger o enviar un Uber Moto/DiDi a su cargo."
+    content: "Ubicación y Entregas: El taller está en Cuichapa 223, Petrolera, Azcapotzalco, 02480 Ciudad de México, CDMX. Teléfono: +52 55 7939 8727. El cliente puede pasar a recoger o enviar un Uber Moto/DiDi a su cargo. NO DES LA DIRECCIÓN A MENOS QUE TE PREGUNTEN DÓNDE ESTAMOS."
   },
   {
     id: "urgencias",

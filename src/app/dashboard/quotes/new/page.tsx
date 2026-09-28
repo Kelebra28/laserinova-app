@@ -5,7 +5,12 @@ import NewQuoteForm from "@/components/quotes/NewQuoteForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewQuotePage() {
+export default async function NewQuotePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
+  const resolvedParams = await searchParams;
   const session = await getServerSession(authOptions);
   
   const clients = await prisma.client.findMany({
@@ -51,7 +56,8 @@ export default async function NewQuotePage() {
         materials={materials} 
         products={products}
         globalCosts={safeGlobals} 
-        userId={(session?.user as any)?.id} 
+        userId={(session?.user as any)?.id}
+        initialData={resolvedParams}
       />
     </div>
   );

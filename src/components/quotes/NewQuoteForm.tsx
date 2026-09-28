@@ -19,9 +19,10 @@ interface NewQuoteFormProps {
   products?: any[];
   globalCosts: GlobalCosts;
   userId: string;
+  initialData?: any;
 }
 
-export default function NewQuoteForm({ clients, materials, products = [], globalCosts, userId }: NewQuoteFormProps) {
+export default function NewQuoteForm({ clients, materials, products = [], globalCosts, userId, initialData }: NewQuoteFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -29,6 +30,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
   const [showAudit, setShowAudit] = useState(false);
   const [clientId, setClientId] = useState("");
   const [prospectName, setProspectName] = useState("");
+  const [prospectEmail, setProspectEmail] = useState("");
   const [project, setProject] = useState("");
   const [description, setDescription] = useState("");
   const [isWholesale, setIsWholesale] = useState(false);
@@ -63,6 +65,115 @@ export default function NewQuoteForm({ clients, materials, products = [], global
   };
 
   const [concepts, setConcepts] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (initialData) {
+      if (initialData.contactId && !clientId) {
+        // Here we could map contactId to clientId if we had it, but for now we'll just try to match it or leave it empty.
+        // If we want to strictly match, we need contactId -> clientId mapping. Let's just set the project for now.
+      }
+      if (initialData.project) setProject(initialData.project);
+      if (initialData.name) setProspectName(initialData.name);
+      if (initialData.email) setProspectEmail(initialData.email);
+      
+      // If there's width, height, or qty, create a default concept
+      if ((initialData.w || initialData.h || initialData.qty) && concepts.length === 0) {
+        let matchedMaterialId = "";
+        if (initialData.material) {
+          const searchName = initialData.material.toLowerCase().trim();
+          const searchTokens = searchName.split(/\s+/);
+          let bestMatch = null;
+          let highestScore = 0;
+          
+          for (const m of materials) {
+            const matName = m.name.toLowerCase();
+            if (matName === searchName) {
+              bestMatch = m;
+              break; // exact match wins
+            }
+            let score = 0;
+            searchTokens.forEach((token: string) => {
+              // Only score meaningful tokens, avoid just matching "mm"
+              if (token.length > 1 && matName.includes(token)) score++;
+            });
+            
+            // Penalty for extra words in the material name (e.g. "blanca")
+            const lengthDiff = Math.abs(matName.length - searchName.length);
+            const finalScore = score - (lengthDiff * 0.01);
+
+            if (finalScore > highestScore) {
+              highestScore = finalScore;
+              bestMatch = m;
+            }
+          }
+          if (bestMatch) matchedMaterialId = bestMatch.id;
+        }
+
+        const initQuantity = Number(initialData.qty) || 1;
+        const initMaterial = matchedMaterialId ? materials.find(m => m.id === matchedMaterialId) : undefined;
+        
+        let calculated = null;
+        let finalUnitPrice = "";
+        let totalAmount = 0;
+        
+        if (initMaterial) {
+           const result = calculateConcept({
+             type: "CORTE",
+             quantity: initQuantity,
+             material: {
+               length: initMaterial.length,
+               width: initMaterial.width,
+               sheetPrice: initMaterial.sheetPrice,
+               guardPercentage: initMaterial.guardPercentage,
+               pricePerCm2: initMaterial.pricePerCm2,
+             },
+             partWidth: Number(initialData.w) || 0,
+             partHeight: Number(initialData.h) || 0,
+             timeMin: 0,
+             clientProvidesMaterial: false,
+             isWholesale: isWholesale,
+           }, { ...globalCosts, margen_default: Number(margin) || 35 });
+           
+           calculated = { ...result, utility: (result.suggestedPrice) - result.realCost };
+           finalUnitPrice = String(result.suggestedPrice / initQuantity);
+           totalAmount = result.suggestedPrice;
+        }
+
+        setConcepts([
+          {
+            id: crypto.randomUUID(),
+            type: "CORTE",
+            description: initialData.project || "",
+            quantity: initQuantity,
+            materialId: matchedMaterialId,
+            clientProvidesMaterial: false,
+            partWidth: initialData.w || "",
+            partHeight: initialData.h || "",
+            timeMin: "",
+            manualUnitPrice: "",
+            manualUnitCost: "",
+            materialCost: calculated ? calculated.materialCost : 0,
+            productionCost: calculated ? calculated.productionCost : 0,
+            realCost: calculated ? calculated.realCost : 0,
+            suggestedPrice: calculated ? calculated.suggestedPrice : 0,
+            totalAmount: totalAmount,
+            calculated: calculated,
+            finalUnitPrice: finalUnitPrice,
+            details: "",
+            serviceDays: "",
+            serviceHours: "",
+            operatorCost: "",
+            transportCost: "",
+            installCost: "",
+            laserUseCost: "",
+            consumablesCost: "",
+            viaticsCost: "",
+            margin: "",
+          }
+        ]);
+      }
+    }
+  }, [initialData]);
 
   const addConcept = (type: "CORTE" | "GRABADO" | "IMPRESION" | "PRODUCTO" | "OTRO" | "RESALE" | "SERVICIO_SITIO") => {
     setConcepts([
@@ -259,8 +370,10 @@ export default function NewQuoteForm({ clients, materials, products = [], global
       <input type="hidden" name="estimatedUtility" value={utilidad} />
       <input type="hidden" name="conceptsData" value={JSON.stringify(concepts)} />
       <input type="hidden" name="prospectName" value={prospectName} />
+      <input type="hidden" name="prospectEmail" value={prospectEmail} />
       <input type="hidden" name="globalCostsSnapshot" value={JSON.stringify(globalCosts)} />
       <input type="hidden" name="images" value={JSON.stringify(images)} />
+      <input type="hidden" name="contactId" value={initialData?.contactId || ""} />
       {/* 1. Datos Generales */}
       <div className="bg-white shadow-sm border border-gray-100 rounded-lg p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-6">Datos Generales</h2>

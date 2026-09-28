@@ -135,6 +135,7 @@ export async function sendMediaMessageAction(formData: FormData) {
     const file = formData.get('file') as File;
     const contactId = formData.get('contactId') as string;
     const isSimulator = formData.get('simulatorMode') === 'true';
+    const caption = formData.get('caption') as string;
 
     if (!file || !contactId) return { success: false, error: 'Faltan datos' };
 
@@ -173,7 +174,7 @@ export async function sendMediaMessageAction(formData: FormData) {
         messageId: fakeMessageId,
         direction,
         type,
-        content: isSimulator ? file.name : (type === 'IMAGE' ? '📷 Imagen adjunta' : '📄 Archivo adjunto'),
+        content: caption ? caption : (isSimulator && type !== 'AUDIO' ? file.name : (type === 'IMAGE' ? '📷 Imagen adjunta' : type === 'AUDIO' ? '🎤 Mensaje de voz' : '📄 Archivo adjunto')),
         mediaUrl,
         mimeType: file.type,
         status: isSimulator ? 'DELIVERED' : (process.env.WHATSAPP_TOKEN ? 'SENT' : 'SENT_LOCAL_SIMULATION')

@@ -182,7 +182,36 @@ export async function processIncomingMessage(entry: any) {
   return { type: 'message', message: savedMessage, contact };
 }
 
+const aiProcessingTimers = new Map<string, NodeJS.Timeout>();
+
 export async function processAIAgentResponse(contactId: string) {
+  // Clear any existing timer for this contact
+  if (aiProcessingTimers.has(contactId)) {
+    clearTimeout(aiProcessingTimers.get(contactId)!);
+  }
+
+  // Fetch contact to know if it's a simulator or real case
+  const contact = await prisma.whatsAppContact.findUnique({
+    where: { id: contactId }
+  });
+  
+  if (!contact) return;
+
+  // Si es el simulador local, espera 4 segundos para ser rápido.
+  // Si es WhatsApp real, espera 2 minutos (120000 ms) para asegurar que el cliente termine.
+  const isSimulator = !process.env.WHATSAPP_TOKEN || (contact.name && contact.name.includes("Simulador"));
+  const delayMs = isSimulator ? 4000 : 120000;
+
+  // Set a new timer to wait before processing
+  const timer = setTimeout(() => {
+    aiProcessingTimers.delete(contactId);
+    executeAIAgentResponse(contactId).catch(console.error);
+  }, delayMs);
+
+  aiProcessingTimers.set(contactId, timer);
+}
+
+async function executeAIAgentResponse(contactId: string) {
   try {
     const contact = await prisma.whatsAppContact.findUnique({
       where: { id: contactId }
@@ -220,7 +249,7 @@ export async function processAIAgentResponse(contactId: string) {
     // Definición de Herramientas (Function Calling)
     const notificar_solicitud_cotizacion: FunctionDeclaration = {
       name: 'notificar_solicitud_cotizacion',
-      description: 'Envía los datos recolectados al administrador humano para que autorice y genere la cotización final. IMPORTANTE: NO puedes usar esta herramienta hasta que le hayas preguntado al cliente y tengas TODOS los siguientes datos obligatorios: Material, Ancho, Alto y Cantidad. Si falta algo, pregúntale al cliente antes de llamar a esta función.',
+      description: 'Envía los datos recolectados al administrador humano para que autorice y genere la cotización final. IMPORTANTE: NO puedes usar esta herramienta hasta que le hayas preguntado al cliente y tengas TODOS los siguientes datos obligatorios: Material, Ancho, Alto, Cantidad y Nombre del Cliente. Si falta algo, pregúntale al cliente antes de llamar a esta función.',
       parameters: {
         type: SchemaType.OBJECT,
         properties: {
@@ -231,8 +260,10 @@ export async function processAIAgentResponse(contactId: string) {
           alto_cm: { type: SchemaType.NUMBER, description: 'Medida del ALTO en centímetros exactos (Obligatorio)' },
           cantidad: { type: SchemaType.INTEGER, description: 'Cantidad de piezas solicitadas por el cliente (Obligatorio)' },
           diseno_incluido: { type: SchemaType.BOOLEAN, description: 'True si el cliente tiene diseño en vectores, False si no.' },
+          nombre_cliente: { type: SchemaType.STRING, description: 'Nombre de la persona con la que estás hablando (Obligatorio)' },
+          correo_cliente: { type: SchemaType.STRING, description: 'Correo electrónico del cliente (Opcional, puede venir vacío)' },
         },
-        required: ['project_name', 'material', 'ancho_cm', 'alto_cm', 'cantidad'],
+        required: ['project_name', 'material', 'ancho_cm', 'alto_cm', 'cantidad', 'nombre_cliente'],
       }
     };
 
@@ -319,15 +350,42 @@ export async function processAIAgentResponse(contactId: string) {
           const args = call.args as any;
           
           // Obtener lista de precios reales de la BD
-          let priceListContext = "No hay lista de precios disponible.";
+          let productListContext = "";
+          let materialListContext = "";
+          let machineCostMin = 0.70; // Fallback
+
           try {
             const products = await prisma.product.findMany({
               where: { active: true },
               select: { name: true, unitPrice: true }
             });
             if (products.length > 0) {
-              priceListContext = products.map(p => `- ${p.name}: $${p.unitPrice} MXN`).join('\n');
+              productListContext = products.map(p => `- ${p.name}: $${p.unitPrice} MXN`).join('\n');
             }
+
+            const materials = await prisma.material.findMany({
+              select: { name: true, pricePerCm2: true, sheetPrice: true, length: true, width: true }
+            });
+            if (materials.length > 0) {
+              materialListContext = materials.map(m => {
+                let costArea = m.pricePerCm2 || 0;
+                if (!costArea && m.sheetPrice && m.length && m.width) {
+                  costArea = m.sheetPrice / (m.length * m.width);
+                }
+                // Añadirle el 20% de transporte y 20% de merma (simplificado a factor 1.44 para el estimado bruto)
+                const costFinal = (costArea * 1.44).toFixed(4);
+                return `- ${m.name}: $${costFinal} MXN por cm2 (ya incluye transporte y merma)`;
+              }).join('\n');
+            }
+
+            const costConfigs = await prisma.costConfiguration.findMany();
+            let tubePrice = 250000;
+            let tubeLife = 6000;
+            costConfigs.forEach(c => {
+              if (c.key === 'precio_tubo') tubePrice = c.value;
+              if (c.key === 'vida_util_tubo') tubeLife = c.value;
+            });
+            machineCostMin = (tubePrice / tubeLife) / 60;
           } catch(e) {}
 
           // 1. Invocar al Chalán AHORA que ya tenemos toda la info, para que haga el cálculo interno
@@ -343,14 +401,27 @@ Alto: ${args.alto_cm} cm
 Cantidad: ${args.cantidad}
 Diseño: ${args.diseno_incluido ? 'Sí' : 'No'}
 
-**PRECIOS DE LA BASE DE DATOS PARA REFERENCIA:**
-${priceListContext}
+**CATÁLOGO DE PRODUCTOS (Para Reventa/Grabado de Producto):**
+${productListContext || "No disponible"}
 
-Analiza estos datos (calcula el área multiplicando alto x ancho) y utiliza los precios de la base de datos para generar un estimado.
+**CATÁLOGO DE MATERIALES (Para Corte/Grabado desde cero):**
+${materialListContext || "No disponible"}
+
+**COSTO DE MÁQUINA LÁSER:**
+$${machineCostMin.toFixed(2)} MXN por Minuto.
+
+REGLA CRÍTICA DE CÁLCULO: TIENES ESTRICTAMENTE PROHIBIDO INVENTAR PRECIOS.
+Debes usar ÚNICAMENTE los catálogos provistos arriba.
+1. Calcula el Área de la pieza (Ancho x Alto).
+2. Costo Material = Área x (Costo por cm2 del material más similar). Si no lo encuentras, usa $0.05.
+3. Costo Máquina = (Minutos estimados) x (Costo por Minuto). Para grabados/cortes promedio, estima 1 a 3 minutos por pieza de 10x10.
+4. Costo Total = Costo Material + Costo Máquina.
+5. El "TOTAL ESTIMADO" de venta al público debe ser aprox el (Costo Total x 2).
 
 REGLAS ESTRICTAS DE FORMATO:
 1. DEBES iniciar tu respuesta EXACTAMENTE con la palabra "Jefe" (sin saludos extra).
 2. NO uses párrafos, explicaciones largas ni hables. Solo devuelve datos crudos en una lista de viñetas.
+3. Al FINAL de tu mensaje, DEBES incluir un bloque de datos técnicos en formato JSON envuelto exactamente entre las etiquetas ||JSON|| ... ||JSON|| con el tiempo de máquina estimado por cada 1 pieza (en minutos).
 
 Ejemplo exacto del formato que debes usar:
 Jefe
@@ -358,7 +429,10 @@ Jefe
 - Costo Material: $X MXN
 - Costo Corte/Grabado: $X MXN
 - Costo Diseño: $X MXN
-- TOTAL ESTIMADO: $X - $Y MXN`;
+- TOTAL ESTIMADO: $X - $Y MXN
+||JSON||
+{"estimatedTimeMin": 1.5}
+||JSON||`;
 
             const chalanResult = await chalanModel.generateContent(chalanPrompt);
             chalanEstimate = chalanResult.response.text().trim();
@@ -383,6 +457,22 @@ Jefe
             console.error("Error en estimación final del Chalán:", e);
           }
 
+          // Procesar el mensaje del chalán para extraer el JSON oculto y limpiar el texto
+          let cleanChalanEstimate = chalanEstimate;
+          let parsedChalanData: any = {};
+          
+          if (chalanEstimate.includes("||JSON||")) {
+            const parts = chalanEstimate.split("||JSON||");
+            cleanChalanEstimate = parts[0].trim();
+            try {
+              if (parts[1]) {
+                parsedChalanData = JSON.parse(parts[1].trim());
+              }
+            } catch(e) {
+              console.error("Error parseando JSON del Chalán:", e);
+            }
+          }
+
           const adminAlertMsg = `🚨 *Nueva Solicitud de Cotización* 🚨
 Cliente: ${contact.name || contact.phone} (${contact.phone})
 Proyecto: ${args.project_name}
@@ -394,19 +484,32 @@ Cantidad: ${args.cantidad}
 Diseño: ${args.diseno_incluido ? 'Sí' : 'No'}
 
 🤖 *Estimación Previa del Chalán (IA):*
-${chalanEstimate}
+${cleanChalanEstimate}
 
 _Para responder, busca este cliente en el CRM o comunícate con él directamente._`;
 
           // Guardar el mensaje interno del Chalán en la BD para que se vea en el UI del chat
           try {
+            const fullMaterialName = args.grosor ? `${args.material} ${args.grosor}` : args.material;
+            const quoteData = {
+              project: args.project_name,
+              material: fullMaterialName,
+              width: args.ancho_cm,
+              height: args.alto_cm,
+              qty: args.cantidad,
+              estimatedTimeMin: parsedChalanData.estimatedTimeMin || "",
+              name: args.nombre_cliente || "",
+              email: args.correo_cliente || ""
+            };
+            const payload = `|||${encodeURIComponent(JSON.stringify(quoteData))}|||`;
+
             const internalMessage = await prisma.whatsAppMessage.create({
               data: {
                 contactId: contact.id,
                 messageId: `chalan_${Date.now()}`,
                 direction: 'INTERNAL',
                 type: 'TEXT',
-                content: `Estimación del Chalán:\n${chalanEstimate}`,
+                content: `Estimación del Chalán:\n${cleanChalanEstimate}\n${payload}`,
                 status: 'DELIVERED'
               }
             });

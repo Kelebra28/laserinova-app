@@ -128,6 +128,7 @@ model Quote {
   id                    String                 @id @default(uuid())
   folio                 String                 @unique
   clientId              String?
+  contactId             String?
   prospectName          String?
   userId                String
   project               String
@@ -160,6 +161,7 @@ model Quote {
   snapshot              CalculationSnapshot?
   emailLogs             EmailLog[]
   client                Client?                @relation(fields: [clientId], references: [id])
+  contact               WhatsAppContact?       @relation(fields: [contactId], references: [id])
   user                  User                   @relation(fields: [userId], references: [id])
   concepts              QuoteConcept[]
   financialTransactions FinancialTransaction[]
@@ -167,6 +169,7 @@ model Quote {
   paymentRequests       PaymentRequest[]
 
   @@index([clientId], map: "Quote_clientId_fkey")
+  @@index([contactId], map: "Quote_contactId_fkey")
   @@index([userId], map: "Quote_userId_fkey")
 }
 
@@ -562,6 +565,7 @@ model WhatsAppContact {
   clientId  String?
   client    Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
   messages  WhatsAppMessage[]
+  quotes    Quote[]
   aiUsageLogs AiUsageLog[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

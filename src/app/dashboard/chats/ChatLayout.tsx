@@ -7,7 +7,7 @@ import { useWhatsAppEvents } from '@/hooks/useWhatsAppEvents';
 import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simulateIncomingMessageAction, createDummyContactAction, sendMediaMessageAction } from '@/server/actions/whatsapp.actions';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply } from 'lucide-react';
+import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 type Contact = any;
@@ -21,6 +21,7 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [inputText, setInputText] = useState('');
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [simulatorMode, setSimulatorMode] = useState(false);
@@ -30,6 +31,17 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
   const [reactionMenuFor, setReactionMenuFor] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Audio Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [recordedAudio, setRecordedAudio] = useState<Blob | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   useWhatsAppEvents({
     onNewMessage: (data) => {
@@ -85,26 +97,195 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') audioContextRef.current.close();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setRecordedAudio(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      // Web Audio API para ondas sonoras
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioContext();
+      audioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256; // We need time domain data for volume
+      source.connect(analyser);
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      // History array for rolling waveform
+      const volumeHistory: number[] = [];
+      let lastPushTime = performance.now();
+
+      const draw = (time: number) => {
+        if (!canvasRef.current) {
+          animationFrameRef.current = requestAnimationFrame(draw);
+          return;
+        }
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        animationFrameRef.current = requestAnimationFrame(draw);
+        analyser.getByteTimeDomainData(dataArray);
+
+        // Calculate RMS (volume)
+        let sumSquares = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const norm = (dataArray[i] / 128.0) - 1.0;
+          sumSquares += norm * norm;
+        }
+        const rms = Math.sqrt(sumSquares / bufferLength);
+        
+        // Push to history every 50ms
+        if (time - lastPushTime > 50) {
+          volumeHistory.push(rms);
+          // Keep only enough history to fill the canvas
+          const maxBars = Math.floor(canvas.width / 4); // 2px bar + 2px gap = 4px
+          if (volumeHistory.length > maxBars) {
+            volumeHistory.shift();
+          }
+          lastPushTime = time;
+        }
+
+        // Handle Retina/high-DPI displays for crisp rendering
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        
+        // Update internal canvas resolution if needed
+        if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+          canvas.width = rect.width * dpr;
+          canvas.height = rect.height * dpr;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Parametros estilo WhatsApp Web, escalados por DPR para verse nítidos
+        const barWidth = 2 * dpr;
+        const gap = 2 * dpr;
+        const step = barWidth + gap;
+        
+        // Start drawing from the right side
+        let x = canvas.width - barWidth;
+
+        ctx.fillStyle = '#8696a0'; // Gray color like WA
+
+        for (let i = volumeHistory.length - 1; i >= 0; i--) {
+          if (x < 0) break;
+          
+          let vol = volumeHistory[i];
+          // Scale volume to canvas height (exaggerate low volumes slightly)
+          let barHeight = Math.min(canvas.height * 0.9, Math.max(2, vol * canvas.height * 3));
+          
+          const y = (canvas.height - barHeight) / 2;
+
+          ctx.beginPath();
+          ctx.roundRect(x, y, barWidth, barHeight, barWidth / 2);
+          ctx.fill();
+
+          x -= step;
+        }
+      };
+
+      draw(performance.now());
+
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error("Error al acceder al micrófono:", err);
+      toast.error("No se pudo acceder al micrófono.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') audioContextRef.current.close();
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    setRecordedAudio(null);
+    setRecordingDuration(0);
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') audioContextRef.current.close();
+  };
+
+  const formatDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if ((!inputText.trim() && !stagedFile) || !activeContact) return;
+    if ((!inputText.trim() && !stagedFile && !recordedAudio) || !activeContact) return;
 
     const textToSend = inputText;
     const fileToSend = stagedFile;
+    const audioToSend = recordedAudio;
     const replyingToMessage = replyingTo;
     
     setInputText('');
     setStagedFile(null);
+    setRecordedAudio(null);
     setReplyingTo(null);
 
-    // Si hay un archivo, lo manejamos con sendMediaMessageAction
-    if (fileToSend) {
+    // Si hay un archivo o audio, lo manejamos con sendMediaMessageAction
+    if (fileToSend || audioToSend) {
       const formData = new FormData();
-      formData.append('file', fileToSend);
+      if (fileToSend) {
+        formData.append('file', fileToSend);
+      } else if (audioToSend) {
+        // Convert Blob to File
+        const audioFile = new File([audioToSend], `audio_message_${Date.now()}.webm`, { type: 'audio/webm' });
+        formData.append('file', audioFile);
+      }
       formData.append('contactId', activeContact.id);
       formData.append('simulatorMode', String(simulatorMode));
-      // NOTA: Para un sistema completo, deberíamos enviar también el texto (caption) 
-      // y context (replyingTo) al endpoint de media si tu backend lo soporta.
+      if (textToSend.trim()) {
+        formData.append('caption', textToSend);
+      }
 
       setIsUploading(true);
       try {
@@ -114,11 +295,6 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
             if (prev.some(m => m.id === res.message.id)) return prev;
             return [...prev, res.message];
           });
-          
-          // Si además hay texto, lo enviamos como mensaje separado si el backend de media no soporta caption
-          if (textToSend.trim()) {
-            await handleTextSend(textToSend, replyingToMessage);
-          }
         } else {
           toast.error(res.error || 'Error al subir archivo');
         }
@@ -239,7 +415,12 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
       {/* Sidebar */}
       <div className="w-1/3 flex flex-col bg-[#111b21] overflow-hidden">
         <div className="p-3 bg-[#111b21] flex gap-2 border-b border-[#313d45]">
-          <Input placeholder="Buscar contacto..." className="bg-[#202c33] border-none text-[#e9edef] focus-visible:ring-[#00a884] placeholder:text-[#8696a0] flex-1 rounded-lg" />
+          <Input 
+            placeholder="Buscar contacto..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="bg-[#202c33] border-none !text-white focus-visible:ring-[#00a884] placeholder:text-[#8696a0] flex-1 rounded-lg" 
+          />
           <Button type="button" onClick={createDummyContact} variant="outline" size="icon" title="Crear contacto de prueba" className="shrink-0 bg-transparent border-none hover:bg-[#202c33] text-[#8696a0] rounded-full">
             <Plus size={20} />
           </Button>
@@ -254,7 +435,12 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
               </Button>
             </div>
           ) : (
-            contacts.map(contact => (
+            contacts
+              .filter(c => 
+                (c.name && c.name.toLowerCase().includes(searchQuery.toLowerCase())) || 
+                (c.phone && c.phone.includes(searchQuery))
+              )
+              .map(contact => (
               <div 
                 key={contact.id} 
                 onClick={() => loadMessages(contact)}
@@ -370,19 +556,49 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                 const alignRight = isInternal ? false : isSimulatorChat ? (msg.direction === 'INBOUND') : (msg.direction === 'OUTBOUND');
                 
                 if (isInternal) {
+                  const parts = msg.content?.split('|||') || [];
+                  const displayContent = parts[0];
+                  let buttonLink = null;
+                  let buttonText = "";
+                  
+                  if (parts[1]) {
+                    if (parts[1].startsWith('QUOTE:')) {
+                      const quoteId = parts[1].replace('QUOTE:', '');
+                      buttonLink = `/dashboard/quotes/${quoteId}`;
+                      buttonText = "Ver Cotización";
+                    } else {
+                      try {
+                        const data = JSON.parse(decodeURIComponent(parts[1]));
+                        let queryParams = `?contactId=${activeContact.id}`;
+                        if (data.project) queryParams += `&project=${encodeURIComponent(data.project)}`;
+                        if (data.material) queryParams += `&material=${encodeURIComponent(data.material)}`;
+                        if (data.width) queryParams += `&w=${data.width}`;
+                        if (data.height) queryParams += `&h=${data.height}`;
+                        if (data.qty) queryParams += `&qty=${data.qty}`;
+                        if (data.estimatedTimeMin) queryParams += `&t=${data.estimatedTimeMin}`;
+                        if (data.name) queryParams += `&name=${encodeURIComponent(data.name)}`;
+                        if (data.email) queryParams += `&email=${encodeURIComponent(data.email)}`;
+                        buttonLink = `/dashboard/quotes/new${queryParams}`;
+                        buttonText = "Generar Cotización";
+                      } catch(e) {}
+                    }
+                  }
+
                   return (
                     <div key={msg.id} className="flex justify-center w-full my-2">
                       <div className="bg-[#ffeb3b]/10 border border-[#ffeb3b]/30 text-[#ffeb3b] px-4 py-2 rounded-lg text-sm max-w-[85%] text-center shadow-sm">
                         <div className="font-bold mb-1 flex items-center justify-center gap-2">
-                          <Bot size={14} /> Nota Interna (Chalán)
+                          <Bot size={14} /> Nota Interna (Sistema)
                         </div>
-                        <p className="whitespace-pre-wrap text-left break-words mb-2">{msg.content}</p>
-                        <Link 
-                          href={`/dashboard/quotes/new?contactId=${activeContact.id}`}
-                          className="mt-2 inline-flex items-center gap-1 bg-[#ffeb3b]/20 hover:bg-[#ffeb3b]/30 text-[#ffeb3b] px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
-                        >
-                          <FileText size={14} /> Generar Cotización
-                        </Link>
+                        <p className="whitespace-pre-wrap text-left break-words mb-2">{displayContent}</p>
+                        {buttonLink && (
+                          <Link 
+                            href={buttonLink}
+                            className="mt-2 inline-flex items-center gap-1 bg-[#ffeb3b]/20 hover:bg-[#ffeb3b]/30 text-[#ffeb3b] px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
+                          >
+                            <FileText size={14} /> {buttonText}
+                          </Link>
+                        )}
                       </div>
                     </div>
                   );
@@ -480,19 +696,32 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                 )}
                 
                 {stagedFile && (
-                  <div className="flex items-center justify-between bg-[#2a3942] p-3 rounded-lg shadow-sm mx-2">
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <div className="w-10 h-10 bg-[#202c33] rounded-lg flex items-center justify-center shrink-0">
-                        {stagedFile.type.startsWith('image/') ? <ImageIcon size={20} className="text-[#8696a0]"/> : <FileText size={20} className="text-[#8696a0]"/>}
-                      </div>
-                      <div className="flex flex-col overflow-hidden">
-                        <span className="text-sm font-medium text-[#e9edef] truncate">{stagedFile.name}</span>
-                        <span className="text-xs text-[#8696a0]">{(stagedFile.size / 1024 / 1024).toFixed(2)} MB</span>
-                      </div>
+                  <div className="flex flex-col bg-[#2a3942] rounded-lg shadow-sm mx-2 overflow-hidden border border-[#313d45]">
+                    <div className="flex justify-between items-center bg-[#202c33] px-2 py-1 border-b border-[#313d45]">
+                      <span className="text-xs text-[#8696a0]">Vista previa adjunto</span>
+                      <button type="button" onClick={() => setStagedFile(null)} className="text-[#8696a0] hover:text-[#e9edef] p-1">
+                        <X size={18} />
+                      </button>
                     </div>
-                    <button type="button" onClick={() => setStagedFile(null)} className="text-[#8696a0] hover:text-[#e9edef] p-1">
-                      <X size={18} />
-                    </button>
+                    {stagedFile.type.startsWith('image/') ? (
+                      <div className="flex justify-center bg-[#111b21] p-4 max-h-[250px]">
+                        <img 
+                          src={URL.createObjectURL(stagedFile)} 
+                          alt="Preview" 
+                          className="object-contain max-h-full rounded-md shadow-md"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 p-4">
+                        <div className="w-12 h-12 bg-[#202c33] rounded-lg flex items-center justify-center shrink-0">
+                          <FileText size={24} className="text-[#8696a0]"/>
+                        </div>
+                        <div className="flex flex-col overflow-hidden">
+                          <span className="text-sm font-medium text-[#e9edef] truncate">{stagedFile.name}</span>
+                          <span className="text-xs text-[#8696a0]">{(stagedFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -517,29 +746,81 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                 <Plus size={24} />
               </Button>
               
-              <textarea
-                value={inputText}
-                onChange={e => {
-                  setInputText(e.target.value);
-                  e.target.style.height = 'auto';
-                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-                }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    if (inputText.trim() || stagedFile) handleSendMessage();
-                  }
-                }}
-                rows={1}
-                placeholder={isUploading ? "Enviando..." : (simulatorMode ? "Escribe un mensaje como cliente..." : "Escribe un mensaje...")}
-                className="flex-1 bg-[#2a3942] border-none focus:outline-none text-[#e9edef] placeholder-[#8696a0] px-4 py-2.5 max-h-[120px] resize-none overflow-y-auto rounded-lg shadow-sm"
-                style={{ color: '#e9edef' }}
-                disabled={isUploading}
-              />
+              {/* If we have a recorded audio, show a preview of it instead of textarea */}
+              {recordedAudio ? (
+                <div className="flex-1 flex items-center justify-between bg-[#2a3942] rounded-lg px-4 py-2">
+                  <div className="flex items-center gap-2">
+                    <Mic className="text-red-500 animate-pulse" size={18} />
+                    <span className="text-[#e9edef] text-sm">Audio grabado</span>
+                  </div>
+                  <button type="button" onClick={cancelRecording} className="text-[#8696a0] hover:text-red-400">
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              ) : isRecording ? (
+                <div className="flex-1 flex items-center gap-3">
+                  <button type="button" onClick={cancelRecording} className="text-[#8696a0] hover:text-red-400 p-2 shrink-0">
+                    <Trash2 size={20} />
+                  </button>
+                  <div className="flex-1 flex items-center bg-[#202c33] rounded-full px-4 py-2 border border-[#313d45]">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></div>
+                      <span className="text-[#8696a0] font-mono text-sm tracking-wide">{formatDuration(recordingDuration)}</span>
+                    </div>
+                    <div className="flex-1 px-4 h-8 flex items-center">
+                      <canvas ref={canvasRef} style={{ width: '100%', height: '32px' }} className="rounded-md" />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <textarea
+                  value={inputText}
+                  onChange={e => {
+                    setInputText(e.target.value);
+                    e.target.style.height = 'auto';
+                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (inputText.trim() || stagedFile) handleSendMessage();
+                    }
+                  }}
+                  onPaste={e => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    for (let i = 0; i < items.length; i++) {
+                      if (items[i].type.indexOf('image') !== -1) {
+                        const file = items[i].getAsFile();
+                        if (file) {
+                          setStagedFile(file);
+                          e.preventDefault();
+                          break;
+                        }
+                      }
+                    }
+                  }}
+                  rows={1}
+                  placeholder={isUploading ? "Enviando..." : (simulatorMode ? "Escribe un mensaje como cliente..." : "Añade un comentario...")}
+                  className="flex-1 bg-[#2a3942] border-none focus:outline-none !text-white placeholder-[#8696a0] px-4 py-2.5 max-h-[120px] resize-none overflow-y-auto rounded-lg shadow-sm"
+                  disabled={isUploading}
+                />
+              )}
 
-              <Button type="submit" size="icon" className="shrink-0 rounded-full bg-[#00a884] hover:bg-[#008f6f] text-[#111b21] w-10 h-10 mb-1 ml-1 shadow-sm" disabled={(!inputText.trim() && !stagedFile) || isUploading}>
-                <Send size={18} className={cn("transition-transform", (inputText.trim() || stagedFile) ? "translate-x-0.5 -translate-y-0.5" : "")} />
-              </Button>
+              {/* Action Buttons: Send or Mic */}
+              {inputText.trim() || stagedFile || recordedAudio ? (
+                <Button type="submit" size="icon" className="shrink-0 rounded-full bg-[#00a884] hover:bg-[#008f6f] text-[#111b21] w-10 h-10 mb-1 ml-1 shadow-sm" disabled={isUploading}>
+                  <Send size={18} className="transition-transform translate-x-0.5 -translate-y-0.5" />
+                </Button>
+              ) : isRecording ? (
+                <Button type="button" onClick={stopRecording} size="icon" className="shrink-0 rounded-full bg-red-500 hover:bg-red-600 text-white w-10 h-10 mb-1 ml-1 shadow-sm">
+                  <Square size={16} fill="currentColor" />
+                </Button>
+              ) : (
+                <Button type="button" onClick={startRecording} size="icon" className="shrink-0 rounded-full bg-[#00a884] hover:bg-[#008f6f] text-[#111b21] w-10 h-10 mb-1 ml-1 shadow-sm">
+                  <Mic size={20} />
+                </Button>
+              )}
             </form>
           </div>
         </div>

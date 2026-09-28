@@ -394,7 +394,11 @@ export async function createQuoteService(userId: string, data: any) {
 
   if (data.saveAsClient && data.prospectName && !data.clientId) {
     const newClient = await prisma.client.create({
-      data: { name: data.prospectName }
+      data: { 
+        name: data.prospectName,
+        email: data.prospectEmail || null,
+        phone: data.prospectPhone || null
+      }
     });
     finalClientId = newClient.id;
     finalProspectName = null;
@@ -411,6 +415,7 @@ export async function createQuoteService(userId: string, data: any) {
         data: {
           folio,
           clientId: finalClientId,
+          contactId: data.contactId || null,
           prospectName: finalProspectName,
           userId,
           project: data.project,

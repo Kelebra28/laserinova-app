@@ -17,10 +17,15 @@ import {
   updateQuoteDataService,
   createQuickQuoteService,
   cloneQuoteFullService,
-  updateQuotePaymentKanbanService
+  updateQuotePaymentKanbanService,
 } from "../services/quote.service";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { generateQuotePDF } from "@/lib/pdf";
+import fs from "fs";
+import path from "path";
+import { processAIAgentResponse } from "../services/whatsapp.service";
 
 async function requireAuth() {
   const session = await getServerSession(authOptions);
@@ -138,7 +143,10 @@ export async function createQuoteAction(formData: FormData) {
   const user = await requireAuth();
   const data = {
     clientId: formData.get("clientId") as string,
+    contactId: formData.get("contactId") as string || null,
     prospectName: (formData.get("prospectName") as string) || null,
+    prospectEmail: (formData.get("prospectEmail") as string) || null,
+    prospectPhone: (formData.get("prospectPhone") as string) || null,
     project: formData.get("project") as string,
     description: formData.get("description") as string,
     imagesStr: formData.get("images") as string,
@@ -158,6 +166,25 @@ export async function createQuoteAction(formData: FormData) {
   if (!data.project || !data.conceptsDataStr) throw new Error("Faltan datos requeridos (Proyecto y Conceptos)");
 
   const quoteId = await createQuoteService(user.id, data);
+
+  const contactId = formData.get("contactId") as string;
+  if (contactId) {
+    try {
+      await prisma.whatsAppMessage.create({
+        data: {
+          contactId,
+          messageId: `internal_quote_${Date.now()}`,
+          direction: 'INTERNAL',
+          type: 'TEXT',
+          content: `Cotización Creada Exitosamente. Puedes verla dando clic en el botón.|||QUOTE:${quoteId}|||`,
+          status: 'DELIVERED'
+        }
+      });
+    } catch (e) {
+      console.error("Error creating internal message for quote creation:", e);
+    }
+  }
+
   revalidatePath("/dashboard", "layout");
   redirect(`/dashboard/quotes/${quoteId}`);
 }
@@ -226,4 +253,89 @@ export async function updateQuotePaymentAction(quoteId: string, type: 'unpaid' |
   revalidatePath("/dashboard/finance");
   revalidatePath("/dashboard/quotes");
   revalidatePath(`/dashboard/quotes/${quoteId}`);
+}
+
+export async function sendQuoteViaWhatsAppAction(quoteId: string) {
+  try {
+    await requireAuth();
+    
+    const quote = await prisma.quote.findUnique({
+      where: { id: quoteId },
+      include: {
+        client: true,
+        concepts: {
+          orderBy: { order: 'asc' },
+          include: { material: true }
+        }
+      }
+    });
+
+    if (!quote || (!quote.clientId && !quote.contactId)) {
+      throw new Error("Cotización no encontrada o sin cliente asociado");
+    }
+
+    const contact = await prisma.whatsAppContact.findFirst({
+      where: quote.contactId ? { id: quote.contactId } : { clientId: quote.clientId }
+    });
+
+    if (!contact) {
+      throw new Error("El cliente no tiene un número de WhatsApp registrado en el sistema");
+    }
+
+    // 1. Generar PDF localmente
+    const pdfBuffer = await generateQuotePDF([quote]);
+    
+    // Guardar en public/uploads/pdf/
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'pdf');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    const filename = `Cotizacion_${quote.folio}_${Date.now()}.pdf`;
+    const filepath = path.join(uploadsDir, filename);
+    fs.writeFileSync(filepath, pdfBuffer as Buffer);
+    const publicUrl = `/uploads/pdf/${filename}`;
+
+    // 2. Insertar mensaje tipo DOCUMENT que simula el envío del PDF
+    await prisma.whatsAppMessage.create({
+      data: {
+        contactId: contact.id,
+        messageId: `local_pdf_${Date.now()}`,
+        direction: 'OUTBOUND',
+        type: 'DOCUMENT',
+        content: `Cotización ${quote.folio}`,
+        mediaUrl: publicUrl,
+        mimeType: 'application/pdf',
+        status: 'DELIVERED'
+      }
+    });
+
+    // 3. Insertar instrucción INTERNAL para la IA
+    const internalPrompt = `[INSTRUCCIÓN INTERNA DEL SISTEMA]: Acabo de enviarle al cliente la Cotización Aprobada ${quote.folio} en formato PDF. El total es de $${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN. 
+Por favor, escríbele un mensaje corto y amigable avisándole que ya tiene la cotización oficial arriba, y pregúntale qué le parece.
+REGLA CRÍTICA: Recuerda que tienes prohibido desglosar costos en materiales y horas. Solo menciona el precio final que acabo de darte.`;
+
+    const internalMsg = await prisma.whatsAppMessage.create({
+      data: {
+        contactId: contact.id,
+        messageId: `internal_instruction_${Date.now()}`,
+        direction: 'INTERNAL',
+        type: 'TEXT',
+        content: internalPrompt,
+        status: 'DELIVERED'
+      }
+    });
+
+    // 4. Detonar la respuesta de la IA
+    if (contact.botMode) {
+      // Usar setTimeout para no bloquear el request de la UI
+      setTimeout(() => {
+        processAIAgentResponse(contact.id).catch(err => console.error("Error AI in WhatsApp Action:", err));
+      }, 100);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error enviando cotización por WA:", error);
+    return { success: false, error: error.message || "Error interno al enviar por WhatsApp" };
+  }
 }
