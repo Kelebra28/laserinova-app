@@ -220,18 +220,19 @@ export async function processAIAgentResponse(contactId: string) {
     // Definición de Herramientas (Function Calling)
     const notificar_solicitud_cotizacion: FunctionDeclaration = {
       name: 'notificar_solicitud_cotizacion',
-      description: 'Envía los datos recolectados al administrador humano para que autorice y genere la cotización final. IMPORTANTE: NO puedes usar esta herramienta hasta que le hayas preguntado al cliente y tengas TODOS los siguientes datos obligatorios: Material, Medidas exactas, y Cantidad. Si falta algo, pregúntale al cliente antes de llamar a esta función.',
+      description: 'Envía los datos recolectados al administrador humano para que autorice y genere la cotización final. IMPORTANTE: NO puedes usar esta herramienta hasta que le hayas preguntado al cliente y tengas TODOS los siguientes datos obligatorios: Material, Ancho, Alto y Cantidad. Si falta algo, pregúntale al cliente antes de llamar a esta función.',
       parameters: {
         type: SchemaType.OBJECT,
         properties: {
-          project_name: { type: SchemaType.STRING, description: 'Nombre corto del proyecto (ej. "Termos Grabados", "Corte Acrílico 3mm")' },
+          project_name: { type: SchemaType.STRING, description: 'Nombre corto del proyecto (ej. "Termos Grabados", "Corte Acrílico")' },
           material: { type: SchemaType.STRING, description: 'Material solicitado por el cliente (Obligatorio)' },
           grosor: { type: SchemaType.STRING, description: 'Grosor del material si aplica (ej. 3mm)' },
-          medidas: { type: SchemaType.STRING, description: 'Dimensiones o medidas exactas solicitadas por el cliente (Obligatorio)' },
+          ancho_cm: { type: SchemaType.NUMBER, description: 'Medida del ANCHO en centímetros exactos (Obligatorio)' },
+          alto_cm: { type: SchemaType.NUMBER, description: 'Medida del ALTO en centímetros exactos (Obligatorio)' },
           cantidad: { type: SchemaType.INTEGER, description: 'Cantidad de piezas solicitadas por el cliente (Obligatorio)' },
           diseno_incluido: { type: SchemaType.BOOLEAN, description: 'True si el cliente tiene diseño en vectores, False si no.' },
         },
-        required: ['project_name', 'material', 'medidas', 'cantidad'],
+        required: ['project_name', 'material', 'ancho_cm', 'alto_cm', 'cantidad'],
       }
     };
 
@@ -317,6 +318,18 @@ export async function processAIAgentResponse(contactId: string) {
         } else if (call.name === 'notificar_solicitud_cotizacion') {
           const args = call.args as any;
           
+          // Obtener lista de precios reales de la BD
+          let priceListContext = "No hay lista de precios disponible.";
+          try {
+            const products = await prisma.product.findMany({
+              where: { active: true },
+              select: { name: true, unitPrice: true }
+            });
+            if (products.length > 0) {
+              priceListContext = products.map(p => `- ${p.name}: $${p.unitPrice} MXN`).join('\n');
+            }
+          } catch(e) {}
+
           // 1. Invocar al Chalán AHORA que ya tenemos toda la info, para que haga el cálculo interno
           let chalanEstimate = "No se pudo calcular el estimado.";
           try {
@@ -325,11 +338,27 @@ export async function processAIAgentResponse(contactId: string) {
 Proyecto: ${args.project_name}
 Material: ${args.material}
 Grosor: ${args.grosor || 'N/A'}
-Medidas: ${args.medidas || 'N/A'}
+Ancho: ${args.ancho_cm} cm
+Alto: ${args.alto_cm} cm
 Cantidad: ${args.cantidad}
 Diseño: ${args.diseno_incluido ? 'Sí' : 'No'}
 
-Analiza estos datos y genera un precio estimado o rango de precios de maquila realista para que el administrador lo vea (en MXN). Sé muy breve y directo, solo da el número y una pequeñísima justificación.`;
+**PRECIOS DE LA BASE DE DATOS PARA REFERENCIA:**
+${priceListContext}
+
+Analiza estos datos (calcula el área multiplicando alto x ancho) y utiliza los precios de la base de datos para generar un estimado.
+
+REGLAS ESTRICTAS DE FORMATO:
+1. DEBES iniciar tu respuesta EXACTAMENTE con la palabra "Jefe" (sin saludos extra).
+2. NO uses párrafos, explicaciones largas ni hables. Solo devuelve datos crudos en una lista de viñetas.
+
+Ejemplo exacto del formato que debes usar:
+Jefe
+- Área por pieza: X cm2
+- Costo Material: $X MXN
+- Costo Corte/Grabado: $X MXN
+- Costo Diseño: $X MXN
+- TOTAL ESTIMADO: $X - $Y MXN`;
 
             const chalanResult = await chalanModel.generateContent(chalanPrompt);
             chalanEstimate = chalanResult.response.text().trim();
@@ -359,7 +388,8 @@ Cliente: ${contact.name || contact.phone} (${contact.phone})
 Proyecto: ${args.project_name}
 Material: ${args.material}
 Grosor: ${args.grosor || 'N/A'}
-Medidas: ${args.medidas || 'N/A'}
+Ancho: ${args.ancho_cm} cm
+Alto: ${args.alto_cm} cm
 Cantidad: ${args.cantidad}
 Diseño: ${args.diseno_incluido ? 'Sí' : 'No'}
 
@@ -368,11 +398,35 @@ ${chalanEstimate}
 
 _Para responder, busca este cliente en el CRM o comunícate con él directamente._`;
 
-          // Alertar al admin
-          await sendMessageToMeta('52XXXXXXXXXX', {
-            type: 'text',
-            text: { body: adminAlertMsg }
-          });
+          // Guardar el mensaje interno del Chalán en la BD para que se vea en el UI del chat
+          try {
+            const internalMessage = await prisma.whatsAppMessage.create({
+              data: {
+                contactId: contact.id,
+                messageId: `chalan_${Date.now()}`,
+                direction: 'INTERNAL',
+                type: 'TEXT',
+                content: `Estimación del Chalán:\n${chalanEstimate}`,
+                status: 'DELIVERED'
+              }
+            });
+            // Emitir evento para el UI
+            notificationEmitter.emit('whatsapp_message', { message: internalMessage, contact });
+          } catch(e) {}
+
+          // Alertar al admin (si falla, no rompas el flujo de la IA)
+          try {
+            if (!contact.name?.includes("Simulador")) {
+              await sendMessageToMeta('52XXXXXXXXXX', {
+                type: 'text',
+                text: { body: adminAlertMsg }
+              });
+            } else {
+              console.log("[SIMULADOR] Alerta de cotización al admin simulada:", adminAlertMsg);
+            }
+          } catch (e) {
+            console.warn("No se pudo enviar la alerta al admin (quizás token vencido):", e);
+          }
           
           responseText = `¡Excelente! Ya capturé todos los detalles y se los pasé al taller. En un momento un asesor revisará la información y te enviará la cotización por este medio.`;
           
@@ -418,12 +472,14 @@ _Para responder, busca este cliente en el CRM o comunícate con él directamente
     // Enviar el mensaje físico por WhatsApp
     let metaMessageId = `ai_sim_${Date.now()}`;
     try {
-      const metaRes = await sendMessageToMeta(contact.phone, {
-        type: 'text',
-        text: { body: responseText }
-      });
-      if (metaRes?.messages?.[0]?.id) {
-        metaMessageId = metaRes.messages[0].id;
+      if (!contact.name?.includes("Simulador")) {
+        const metaRes = await sendMessageToMeta(contact.phone, {
+          type: 'text',
+          text: { body: responseText }
+        });
+        if (metaRes?.messages?.[0]?.id) {
+          metaMessageId = metaRes.messages[0].id;
+        }
       }
     } catch (e) {
       console.error("Error enviando WhatsApp al cliente:", e);

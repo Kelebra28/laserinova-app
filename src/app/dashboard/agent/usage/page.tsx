@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { ArrowLeft, Activity, Coins, BrainCircuit } from 'lucide-react';
 
+import UsageHistoryTable from './UsageHistoryTable';
+
 export const dynamic = 'force-dynamic';
 
 export default async function AiUsagePage() {
@@ -23,6 +25,15 @@ export default async function AiUsagePage() {
   
   const EXCHANGE_RATE_MXN = 19.50; // Tipo de cambio aproximado
   const totalCostMXN = totalCost * EXCHANGE_RATE_MXN;
+  
+  // Aggregate stats by agent
+  const agentStats = await prisma.aiUsageLog.groupBy({
+    by: ['agentName'],
+    _sum: {
+      totalTokens: true,
+      estimatedCost: true
+    }
+  });
   
   // Get detailed logs
   const logs = await prisma.aiUsageLog.findMany({
@@ -100,60 +111,27 @@ export default async function AiUsagePage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-5 border-b border-gray-100 bg-gray-50/50">
-          <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest">Historial de Peticiones</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-white border-b border-gray-100">
-                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Fecha</th>
-                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Agente</th>
-                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Contacto (WhatsApp)</th>
-                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Entrada</th>
-                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Salida</th>
-                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Total</th>
-                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Costo (USD / MXN)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-sm text-gray-400 font-medium">No hay registros de uso de IA todavía.</td>
-                </tr>
-              ) : (
-                logs.map(log => (
-                  <tr key={log.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="p-4 text-xs font-medium text-gray-600">
-                      {log.createdAt.toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}
-                    </td>
-                    <td className="p-4 text-xs font-bold text-indigo-600">
-                      {log.agentName}
-                    </td>
-                    <td className="p-4 text-xs font-medium text-gray-600">
-                      {log.contact?.name || log.contact?.phone || '-'}
-                    </td>
-                    <td className="p-4 text-xs text-right text-gray-500">
-                      {log.inputTokens.toLocaleString()}
-                    </td>
-                    <td className="p-4 text-xs text-right text-gray-500">
-                      {log.outputTokens.toLocaleString()}
-                    </td>
-                    <td className="p-4 text-xs text-right font-bold text-gray-700">
-                      {log.totalTokens.toLocaleString()}
-                    </td>
-                    <td className="p-4 text-xs text-right font-bold text-emerald-600">
-                      ${log.estimatedCost.toFixed(5)} USD<br/>
-                      <span className="text-gray-400 font-medium">${(log.estimatedCost * EXCHANGE_RATE_MXN).toFixed(4)} MXN</span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {agentStats.map(stat => (
+          <div key={stat.agentName} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-slate-100 text-slate-600 rounded-xl">
+                <BrainCircuit className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">{stat.agentName}</h3>
+                <p className="text-xs text-gray-500 font-medium">{(stat._sum.totalTokens || 0).toLocaleString()} tokens</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-black text-emerald-600">${((stat._sum.estimatedCost || 0) * EXCHANGE_RATE_MXN).toFixed(2)} <span className="text-xs text-gray-400">MXN</span></p>
+              <p className="text-[10px] text-gray-400 font-bold">${(stat._sum.estimatedCost || 0).toFixed(4)} USD</p>
+            </div>
+          </div>
+        ))}
       </div>
+
+      <UsageHistoryTable logs={logs} EXCHANGE_RATE_MXN={EXCHANGE_RATE_MXN} />
     </div>
   );
 }

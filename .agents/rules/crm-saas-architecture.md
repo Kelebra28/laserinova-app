@@ -34,6 +34,7 @@ ESTÁNDAR ARQUITECTÓNICO ABSOLUTO PARA NEXT.JS (APLICAR SIEMPRE SIN EXCEPCIONES
 
 6. REGLA ESTRICTA DE OPERACIÓN EN TERMINAL Y AHORRO DE TOKENS:
 - PROHIBICIÓN DE EJECUCIÓN AUTÓNOMA: Tienes estrictamente prohibido ejecutar por tu cuenta comandos de gestión de paquetes, compilación o base de datos que generen logs extensos. Esto incluye, pero no se limita a: `npm install`, `npm run dev`, `npm run build`, `npx prisma generate` o `npx prisma db push`.
+- PROHIBICIÓN DE CAT Y COMANDOS DE LECTURA: Tienes ESTRICTAMENTE PROHIBIDO usar el comando `cat` en la terminal para ver o filtrar archivos. Para visualizar o buscar en el código debes usar exclusivamente las herramientas nativas `view_file` y `grep_search`.
 - DELEGACIÓN AL HUMANO: Cuando el desarrollo requiera instalar una nueva dependencia, levantar el entorno o impactar la base de datos, SOLO debes entregarme el comando exacto formateado en un bloque de código bash.
 - PAUSA Y ESPERA: Una vez que me des el comando, asume que yo lo ejecutaré manualmente. No intentes adivinar el resultado de la terminal; espera mi confirmación de que la instalación o compilación fue exitosa antes de continuar con el código.
 

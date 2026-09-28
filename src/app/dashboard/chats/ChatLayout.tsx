@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useState, useEffect, useRef } from 'react';
 import { useWhatsAppEvents } from '@/hooks/useWhatsAppEvents';
 import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simulateIncomingMessageAction, createDummyContactAction, sendMediaMessageAction } from '@/server/actions/whatsapp.actions';
@@ -363,8 +365,29 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
               <div className="text-center text-[#8696a0] my-8">Cargando mensajes...</div>
             ) : (
               messages.map(msg => {
+                const isInternal = msg.direction === 'INTERNAL';
                 const isSimulatorChat = simulatorMode;
-                const alignRight = isSimulatorChat ? (msg.direction === 'INBOUND') : (msg.direction === 'OUTBOUND');
+                const alignRight = isInternal ? false : isSimulatorChat ? (msg.direction === 'INBOUND') : (msg.direction === 'OUTBOUND');
+                
+                if (isInternal) {
+                  return (
+                    <div key={msg.id} className="flex justify-center w-full my-2">
+                      <div className="bg-[#ffeb3b]/10 border border-[#ffeb3b]/30 text-[#ffeb3b] px-4 py-2 rounded-lg text-sm max-w-[85%] text-center shadow-sm">
+                        <div className="font-bold mb-1 flex items-center justify-center gap-2">
+                          <Bot size={14} /> Nota Interna (Chalán)
+                        </div>
+                        <p className="whitespace-pre-wrap text-left break-words mb-2">{msg.content}</p>
+                        <Link 
+                          href={`/dashboard/quotes/new?contactId=${activeContact.id}`}
+                          className="mt-2 inline-flex items-center gap-1 bg-[#ffeb3b]/20 hover:bg-[#ffeb3b]/30 text-[#ffeb3b] px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
+                        >
+                          <FileText size={14} /> Generar Cotización
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <div key={msg.id} className={cn("flex group items-center", alignRight ? "justify-end" : "justify-start")}>
                     
