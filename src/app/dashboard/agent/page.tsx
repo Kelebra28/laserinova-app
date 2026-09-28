@@ -1,5 +1,6 @@
 import { AgentChat } from "@/components/agent/AgentChat";
-import { Sparkles, Bot, Zap, Database } from "lucide-react";
+import { Sparkles, Bot, Zap, Database, Activity } from "lucide-react";
+import Link from "next/link";
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,15 @@ export default function AgentDashboardPage() {
           <p className="text-blue-100/80 font-medium ml-16 text-lg">
             Tu chalán virtual conectado directamente a la base de datos del CRM.
           </p>
+          <div className="ml-16 mt-4">
+            <Link 
+              href="/dashboard/agent/usage"
+              className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-bold backdrop-blur-md transition-colors border border-white/20"
+            >
+              <Activity className="w-4 h-4" />
+              Ver Consumo de API
+            </Link>
+          </div>
         </div>
       </div>
 

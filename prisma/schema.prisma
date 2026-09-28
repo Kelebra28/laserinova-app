@@ -562,6 +562,7 @@ model WhatsAppContact {
   clientId  String?
   client    Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
   messages  WhatsAppMessage[]
+  aiUsageLogs AiUsageLog[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -585,3 +586,18 @@ model WhatsAppMessage {
   @@index([timestamp])
 }
 
+model AiUsageLog {
+  id           String   @id @default(uuid())
+  agentName    String   // ej. "Secretary", "Sales"
+  contactId    String?  // Relacionado al contacto de WhatsApp si aplica
+  inputTokens  Int
+  outputTokens Int
+  totalTokens  Int
+  estimatedCost Float   @default(0) // Costo en USD calculado en base a los tokens
+  createdAt    DateTime @default(now())
+
+  contact      WhatsAppContact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([contactId])
+  @@index([createdAt])
+}

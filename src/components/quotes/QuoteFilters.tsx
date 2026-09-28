@@ -15,9 +15,11 @@ interface Client {
 interface QuoteFiltersProps {
   clients: Client[];
   defaultMonth: string;
+  searchTerm?: string;
+  onSearchChange?: (val: string) => void;
 }
 
-export default function QuoteFilters({ clients, defaultMonth }: QuoteFiltersProps) {
+export default function QuoteFilters({ clients, defaultMonth, searchTerm, onSearchChange }: QuoteFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -94,9 +96,17 @@ export default function QuoteFilters({ clients, defaultMonth }: QuoteFiltersProp
       )}
       <div className="flex flex-col lg:flex-row gap-4 w-full">
         <div className="flex-grow lg:max-w-md">
-          <SearchInput 
-            placeholder="Buscar por folio o proyecto..." 
-          />
+          {onSearchChange ? (
+            <SearchInput 
+              placeholder="Buscar por folio o proyecto..." 
+              value={searchTerm}
+              onChange={onSearchChange}
+            />
+          ) : (
+            <SearchInput 
+              placeholder="Buscar por folio o proyecto..." 
+            />
+          )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-grow">
           <Select

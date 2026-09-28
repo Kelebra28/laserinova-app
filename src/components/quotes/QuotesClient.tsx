@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -30,18 +31,19 @@ const columns = [
 export default function QuotesClient() {
   const searchParams = useSearchParams();
   
-  const search = searchParams.get("search") || "";
   const month = searchParams.get("month") || "all";
   const clientId = searchParams.get("clientId") || "all";
   const status = searchParams.get("status") || "all";
-  const page = searchParams.get("page") || "1";
-  const limit = searchParams.get("limit") || "10";
+  const urlPage = parseInt(searchParams.get("page") || "1", 10);
+  const itemsPerPage = 10;
 
-  // Query para la lista principal (re-fetch cuando cambia la URL)
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Query para la lista principal (re-fetch cuando cambia la URL de filtros, pero trae todo)
   const { data: listData, isLoading: isLoadingList } = useQuery({
-    queryKey: ["quotesList", search, month, clientId, status, page, limit],
+    queryKey: ["quotesList", month, clientId, status],
     queryFn: async () => {
-      const res = await getQuotesList({ search, month, clientId, status, page, limit });
+      const res = await getQuotesList({ search: "", month, clientId, status, page: "1", limit: "1000" });
       if (!res.success) throw new Error(res.error);
       return res.data;
     },
@@ -70,9 +72,26 @@ export default function QuotesClient() {
     staleTime: 60000, // Los clientes cambian menos frecuente
   });
 
+  const { quotes: allQuotes = [], defaultMonth = "all" } = listData || {};
+
+  const filteredQuotes = useMemo(() => {
+    if (!searchTerm) return allQuotes;
+    const lower = searchTerm.toLowerCase();
+    return allQuotes.filter((q: any) => 
+      (q.folio && q.folio.toLowerCase().includes(lower)) ||
+      (q.project && q.project.toLowerCase().includes(lower)) ||
+      (q.client?.name && q.client.name.toLowerCase().includes(lower)) ||
+      (q.prospectName && q.prospectName.toLowerCase().includes(lower))
+    );
+  }, [allQuotes, searchTerm]);
+
   if (isLoadingList || isLoadingKanban) return <DashboardSkeleton />;
 
-  const { quotes = [], totalItems = 0, totalPages = 1, currentPage = 1, itemsPerPage = 10, defaultMonth = "all" } = listData || {};
+  const totalItems = filteredQuotes.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const currentPage = Math.min(urlPage, totalPages);
+  
+  const displayedQuotes = filteredQuotes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="space-y-6">
@@ -116,7 +135,12 @@ export default function QuotesClient() {
       </div>
 
       <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
-        <QuoteFilters clients={clientsData || []} defaultMonth={defaultMonth} />
+        <QuoteFilters 
+          clients={clientsData || []} 
+          defaultMonth={defaultMonth} 
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+        />
       </div>
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100">
@@ -135,7 +159,7 @@ export default function QuotesClient() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {quotes.length === 0 ? (
+              {displayedQuotes.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-6 py-12 text-center">
                     <FileText className="h-8 w-8 text-gray-200 mx-auto mb-3" />
@@ -143,7 +167,7 @@ export default function QuotesClient() {
                   </td>
                 </tr>
               ) : (
-                quotes.map((quote: any) => (
+                displayedQuotes.map((quote: any) => (
                   <QuoteRow 
                     key={quote.id} 
                     quote={quote} 

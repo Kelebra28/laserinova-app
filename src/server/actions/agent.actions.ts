@@ -6,8 +6,10 @@ import {
   GoogleGenerativeAI, 
   FunctionDeclaration, 
   SchemaType, 
-  Tool 
+  Tool,
+  GenerateContentResult
 } from "@google/generative-ai";
+import { prisma } from "@/lib/prisma";
 import { createClientService, createQuoteService, calculateCutPriceService } from "../services/agent.service";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
@@ -90,21 +92,37 @@ export async function processAgentCommand(userInput: string) {
       tools: agentTools,
     };
 
-    let model = genAI.getGenerativeModel({ model: "gemini-3.7-flash", ...modelOptions });
+    let model = genAI.getGenerativeModel({ model: "gemini-3.5-flash", ...modelOptions });
     let chat;
+    let result: GenerateContentResult;
 
     try {
       chat = model.startChat();
-      await chat.sendMessage(userInput);
+      result = await chat.sendMessage(userInput);
     } catch (apiError: any) {
       if (apiError.status === 503) {
-        console.warn("gemini-3.7-flash sobrecargado (503). Intentando fallback a gemini-3.5-flash...");
+        console.warn("gemini-3.5-flash sobrecargado (503). Intentando fallback...");
         model = genAI.getGenerativeModel({ model: "gemini-3.5-flash", ...modelOptions });
         chat = model.startChat();
-        await chat.sendMessage(userInput);
+        result = await chat.sendMessage(userInput);
       } else {
         throw apiError;
       }
+    }
+
+    if (result.response.usageMetadata) {
+      const inputTokens = result.response.usageMetadata.promptTokenCount || 0;
+      const outputTokens = result.response.usageMetadata.candidatesTokenCount || 0;
+      const estimatedCost = (inputTokens * 0.075 / 1000000) + (outputTokens * 0.30 / 1000000);
+      await prisma.aiUsageLog.create({
+        data: {
+          agentName: "Internal CRM Agent",
+          inputTokens,
+          outputTokens,
+          totalTokens: inputTokens + outputTokens,
+          estimatedCost,
+        }
+      });
     }
 
     const history = await chat.getHistory();

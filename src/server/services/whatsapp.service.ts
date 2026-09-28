@@ -234,25 +234,41 @@ Si no pide costos, responde estrictamente con: "NO_ACTION_NEEDED".`;
       if (chalanResponse !== "NO_ACTION_NEEDED") {
         chalanContext = `\n--- INFO DEL CHALÁN ---\n${chalanResponse}\n-------------------------------\n(Usa esta info técnica para informar al cliente sin dar precios finales).`;
       }
+      
+      if (chalanResult.response.usageMetadata) {
+        const inputTokens = chalanResult.response.usageMetadata.promptTokenCount || 0;
+        const outputTokens = chalanResult.response.usageMetadata.candidatesTokenCount || 0;
+        const estimatedCost = (inputTokens * 0.075 / 1000000) + (outputTokens * 0.30 / 1000000);
+        await prisma.aiUsageLog.create({
+          data: {
+            agentName: "El Chalán",
+            contactId: contact.id,
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+            estimatedCost,
+          }
+        });
+      }
     } catch (e) {
       console.warn("Error en El Chalán (ignorado para no afectar al bot principal):", e);
     }
 
     // Definición de Herramientas (Function Calling)
-    const generar_borrador_cotizacion: FunctionDeclaration = {
-      name: 'generar_borrador_cotizacion',
-      description: 'Guarda los datos del cliente y crea un borrador de cotización. Úsalo SOLO cuando ya extrajiste material, medidas, y cantidad.',
+    const notificar_solicitud_cotizacion: FunctionDeclaration = {
+      name: 'notificar_solicitud_cotizacion',
+      description: 'Envía los datos recolectados al administrador humano para que autorice y genere la cotización final. IMPORTANTE: NO puedes usar esta herramienta hasta que le hayas preguntado al cliente y tengas TODOS los siguientes datos obligatorios: Material, Medidas exactas, y Cantidad. Si falta algo, pregúntale al cliente antes de llamar a esta función.',
       parameters: {
         type: SchemaType.OBJECT,
         properties: {
           project_name: { type: SchemaType.STRING, description: 'Nombre corto del proyecto (ej. "Termos Grabados", "Corte Acrílico 3mm")' },
-          material: { type: SchemaType.STRING, description: 'Material solicitado (ej. MDF, Acrílico, Acero)' },
+          material: { type: SchemaType.STRING, description: 'Material solicitado por el cliente (Obligatorio)' },
           grosor: { type: SchemaType.STRING, description: 'Grosor del material si aplica (ej. 3mm)' },
-          medidas: { type: SchemaType.STRING, description: 'Dimensiones o medidas (ej. 10x10cm)' },
-          cantidad: { type: SchemaType.INTEGER, description: 'Cantidad de piezas solicitadas' },
+          medidas: { type: SchemaType.STRING, description: 'Dimensiones o medidas exactas solicitadas por el cliente (Obligatorio)' },
+          cantidad: { type: SchemaType.INTEGER, description: 'Cantidad de piezas solicitadas por el cliente (Obligatorio)' },
           diseno_incluido: { type: SchemaType.BOOLEAN, description: 'True si el cliente tiene diseño en vectores, False si no.' },
         },
-        required: ['project_name', 'material', 'cantidad'],
+        required: ['project_name', 'material', 'medidas', 'cantidad'],
       }
     };
 
@@ -290,7 +306,7 @@ Si no pide costos, responde estrictamente con: "NO_ACTION_NEEDED".`;
     const model = genAI.getGenerativeModel({ 
       model: "gemini-3.5-flash",
       systemInstruction,
-      tools: [{ functionDeclarations: [generar_borrador_cotizacion, transferir_a_humano] }]
+      tools: [{ functionDeclarations: [notificar_solicitud_cotizacion, transferir_a_humano] }]
     });
 
     // Inyectar contexto del chalán al último mensaje del usuario si existe
@@ -343,41 +359,27 @@ Si no pide costos, responde estrictamente con: "NO_ACTION_NEEDED".`;
             data: { botMode: false }
           });
           responseText = `Entiendo, transferiré esta conversación a uno de nuestros asesores para que te atienda personalmente. (Motivo: ${args.motivo})`;
-        } else if (call.name === 'generar_borrador_cotizacion') {
+        } else if (call.name === 'notificar_solicitud_cotizacion') {
           const args = call.args as any;
           
-          // Obtener usuario administrador por defecto
-          const adminUser = await prisma.user.findFirst({ where: { role: 'ADMIN' }});
-          const userId = adminUser?.id || 'dummy-system-user';
-          
-          // Generar folio
-          const date = new Date();
-          const yy = date.getFullYear().toString().slice(-2);
-          const mm = (date.getMonth() + 1).toString().padStart(2, '0');
-          const count = await prisma.quote.count();
-          const folio = `COT-${yy}${mm}-${String(count + 1).padStart(4, '0')}`;
-          
-          // Crear cotización borrador
-          await prisma.quote.create({
-            data: {
-              folio,
-              prospectName: contact.name || contact.phone,
-              userId,
-              project: args.project_name || 'Cotización Web',
-              description: `Solicitud Bot WhatsApp:\\nMaterial: ${args.material}\\nGrosor: ${args.grosor || 'N/A'}\\nMedidas: ${args.medidas || 'N/A'}\\nDiseño: ${args.diseno_incluido ? 'Sí' : 'No'}\\nCantidad: ${args.cantidad}`,
-              status: 'DRAFT',
-              total: 0,
-              concepts: {
-                create: {
-                  conceptType: 'SERVICE',
-                  description: `Servicio: ${args.project_name}. Material: ${args.material}. Medidas: ${args.medidas}.`,
-                  quantity: args.cantidad || 1,
-                }
-              }
-            }
+          const adminAlertMsg = `🚨 *Nueva Solicitud de Cotización* 🚨
+Cliente: ${contact.name || contact.phone} (${contact.phone})
+Proyecto: ${args.project_name}
+Material: ${args.material}
+Grosor: ${args.grosor || 'N/A'}
+Medidas: ${args.medidas || 'N/A'}
+Cantidad: ${args.cantidad}
+Diseño: ${args.diseno_incluido ? 'Sí' : 'No'}
+
+_Para responder, busca este cliente en el CRM o comunícate con él directamente._`;
+
+          // Alertar al admin
+          await sendMessageToMeta('52XXXXXXXXXX', {
+            type: 'text',
+            text: { body: adminAlertMsg }
           });
           
-          responseText = `¡Excelente! Ya capturé todos los detalles (Folio #${folio}) y se los pasé a los técnicos para que evalúen el precio final. Te aviso por este medio en cuanto tengan el cálculo.`;
+          responseText = `¡Excelente! Ya capturé todos los detalles y se los pasé al taller. En un momento un asesor revisará la información y te enviará la cotización por este medio.`;
           
           if (ragContext && ragContext.trim().length > 0) {
             const cleanContext = ragContext.replace(/(Datos Bancarios:|Ubicación y Entregas:|Pagos:|Urgencias:|Restricciones de Máquina:)/g, '-');
@@ -387,6 +389,23 @@ Si no pide costos, responde estrictamente con: "NO_ACTION_NEEDED".`;
       } else {
         responseText = result.response.text();
       }
+
+      if (result.response.usageMetadata) {
+        const inputTokens = result.response.usageMetadata.promptTokenCount || 0;
+        const outputTokens = result.response.usageMetadata.candidatesTokenCount || 0;
+        const estimatedCost = (inputTokens * 0.075 / 1000000) + (outputTokens * 0.30 / 1000000);
+        await prisma.aiUsageLog.create({
+          data: {
+            agentName: "Secretary",
+            contactId: contact.id,
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+            estimatedCost,
+          }
+        });
+      }
+
 
       if (!responseText) {
         responseText = "Entendido. ¿Puedo ayudarte con algo más?";
@@ -401,11 +420,25 @@ Si no pide costos, responde estrictamente con: "NO_ACTION_NEEDED".`;
       });
     }
 
+    // Enviar el mensaje físico por WhatsApp
+    let metaMessageId = `ai_sim_${Date.now()}`;
+    try {
+      const metaRes = await sendMessageToMeta(contact.phone, {
+        type: 'text',
+        text: { body: responseText }
+      });
+      if (metaRes?.messages?.[0]?.id) {
+        metaMessageId = metaRes.messages[0].id;
+      }
+    } catch (e) {
+      console.error("Error enviando WhatsApp al cliente:", e);
+    }
+
     // Guardar respuesta en la BD como salida (OUTBOUND)
     const savedMessage = await prisma.whatsAppMessage.create({
       data: {
         contactId: contact.id,
-        messageId: `ai_sim_${Date.now()}`,
+        messageId: metaMessageId,
         direction: 'OUTBOUND',
         type: 'TEXT',
         content: responseText,

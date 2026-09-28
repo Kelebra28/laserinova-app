@@ -3,36 +3,15 @@ import Link from "next/link";
 import { MaterialRow } from "@/components/materials/MaterialRow";
 import { Plus, Tag, Edit, Trash2 } from "lucide-react";
 import { deleteMaterial } from "./actions";
-import SearchInput from "../../../components/ui/SearchInput";
+import MaterialsListClient from "@/components/materials/MaterialsListClient";
 
-const categoryColors = [
-  "bg-blue-100 text-blue-800",
-  "bg-purple-100 text-purple-800",
-  "bg-indigo-100 text-indigo-800",
-  "bg-pink-100 text-pink-800",
-  "bg-teal-100 text-teal-800",
-  "bg-cyan-100 text-cyan-800",
-  "bg-orange-100 text-orange-800",
-  "bg-fuchsia-100 text-fuchsia-800",
-  "bg-sky-100 text-sky-800",
-  "bg-violet-100 text-violet-800",
-];
 
-function getCategoryColor(categoryName: string) {
-  let hash = 0;
-  for (let i = 0; i < categoryName.length; i++) {
-    hash = categoryName.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % categoryColors.length;
-  return categoryColors[index];
-}
 
 export default async function MaterialsPage(props: { 
   searchParams?: Promise<{ category?: string; search?: string }> 
 }) {
   const searchParams = props.searchParams ? await props.searchParams : {};
   const currentCategory = searchParams.category || "all";
-  const search = searchParams.search;
 
   const categories = await prisma.materialCategory.findMany({
     orderBy: { name: "asc" },
@@ -40,17 +19,7 @@ export default async function MaterialsPage(props: {
 
   const materials = await prisma.material.findMany({
     where: {
-      AND: [
-        currentCategory !== "all" ? { category: { slug: currentCategory } } : {},
-        search ? {
-          OR: [
-            { name: { contains: search } },
-            { brand: { contains: search } },
-            { family: { contains: search } },
-            { color: { contains: search } },
-          ]
-        } : {},
-      ]
+      ...(currentCategory !== "all" ? { category: { slug: currentCategory } } : {})
     },
     include: {
       category: true,
@@ -80,83 +49,11 @@ export default async function MaterialsPage(props: {
         </div>
       </div>
 
-      <div className="bg-white shadow overflow-hidden sm:rounded-md border border-gray-100">
-        <div className="px-4 py-4 sm:px-6 border-b border-gray-200">
-          <div className="flex flex-col md:flex-row gap-4 items-center">
-            {/* Buscador */}
-            <SearchInput placeholder="Buscar material..." />
-            
-            {/* Filtros */}
-            <div className="w-full md:w-2/3 flex gap-2 overflow-x-auto pb-2 scrollbar-hide items-center">
-              <Link
-                href="/dashboard/materials"
-                className={`shrink-0 inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  currentCategory === "all"
-                    ? "bg-gray-900 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Todos
-              </Link>
-              {categories.map((cat) => (
-                <Link
-                  key={cat.id}
-                  href={`/dashboard/materials?category=${cat.slug}`}
-                  className={`shrink-0 inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                    currentCategory === cat.slug
-                      ? "bg-gray-900 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {cat.name}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Material
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Categoría
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Medidas
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Precio (Hoja / cm²)
-                </th>
-                <th scope="col" className="relative px-6 py-3">
-                  <span className="sr-only">Acciones</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {materials.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                    No hay materiales registrados.
-                  </td>
-                </tr>
-              ) : (
-                materials.map((material) => (
-                  <MaterialRow 
-                    key={material.id} 
-                    material={material} 
-                    categories={categories}
-                    categoryColor={getCategoryColor(material.category.name)}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <MaterialsListClient 
+        initialMaterials={materials as any} 
+        categories={categories} 
+        currentCategorySlug={currentCategory} 
+      />
     </div>
   );
 }

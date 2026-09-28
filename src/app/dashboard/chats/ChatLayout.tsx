@@ -108,7 +108,10 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
       try {
         const res = await sendMediaMessageAction(formData);
         if (res.success && res.message) {
-          setMessages(prev => prev.find(m => m.id === res.message.id) ? prev : [...prev, res.message]);
+          setMessages(prev => {
+            if (prev.some(m => m.id === res.message.id)) return prev;
+            return [...prev, res.message];
+          });
           
           // Si además hay texto, lo enviamos como mensaje separado si el backend de media no soporta caption
           if (textToSend.trim()) {
@@ -151,16 +154,24 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
     try {
       if (simulatorMode) {
         const res = await simulateIncomingMessageAction(activeContact!.id, finalContent);
-        if (res.success) {
-          setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id).concat(res.message));
+        if (res.success && res.message) {
+          setMessages(prev => {
+            const filtered = prev.filter(m => m.id !== optimisticMessage.id);
+            if (filtered.some(m => m.id === res.message!.id)) return filtered;
+            return [...filtered, res.message];
+          });
         } else {
           setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id));
           toast.error(res.error || 'Error al simular mensaje');
         }
       } else {
         const res = await sendManualMessageAction(activeContact!.id, finalContent);
-        if (res.success) {
-          setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id).concat(res.message));
+        if (res.success && res.message) {
+          setMessages(prev => {
+            const filtered = prev.filter(m => m.id !== optimisticMessage.id);
+            if (filtered.some(m => m.id === res.message!.id)) return filtered;
+            return [...filtered, res.message];
+          });
           if (activeContact!.botMode) {
             const updatedContact = { ...activeContact!, botMode: false };
             setActiveContact(updatedContact);
