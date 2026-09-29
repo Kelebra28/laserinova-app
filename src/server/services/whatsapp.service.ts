@@ -288,20 +288,37 @@ async function executeAIAgentResponse(contactId: string) {
     
     if (lastClientMessage && lastClientMessage.direction === 'INBOUND' && lastClientMessage.mediaUrl && ['AUDIO', 'IMAGE'].includes(lastClientMessage.type)) {
       try {
-        const filePath = path.join(process.cwd(), 'public', lastClientMessage.mediaUrl);
-        if (fs.existsSync(filePath)) {
-          const fileData = fs.readFileSync(filePath);
+        let base64Data: string | null = null;
+        let mimeType = lastClientMessage.mimeType || (lastClientMessage.type === 'AUDIO' ? 'audio/ogg' : 'image/jpeg');
+
+        if (lastClientMessage.mediaUrl.startsWith('data:')) {
+          // Formato Base64: "data:audio/ogg;base64,XXXX..."
+          const match = lastClientMessage.mediaUrl.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            mimeType = match[1];
+            base64Data = match[2];
+          }
+        } else {
+          // Fallback: archivo en disco (legacy)
+          const filePath = path.join(process.cwd(), 'public', lastClientMessage.mediaUrl);
+          if (fs.existsSync(filePath)) {
+            const fileData = fs.readFileSync(filePath);
+            base64Data = fileData.toString('base64');
+          }
+        }
+
+        if (base64Data) {
           // Encontrar el último mensaje de usuario en contents y adjuntarle el archivo
           for (let i = contents.length - 1; i >= 0; i--) {
-             if (contents[i].role === 'user') {
-                contents[i].parts.push({
-                  inlineData: {
-                    data: fileData.toString('base64'),
-                    mimeType: lastClientMessage.mimeType || (lastClientMessage.type === 'AUDIO' ? 'audio/ogg' : 'image/jpeg')
-                  }
-                });
-                break;
-             }
+            if (contents[i].role === 'user') {
+              contents[i].parts.push({
+                inlineData: {
+                  data: base64Data,
+                  mimeType
+                }
+              });
+              break;
+            }
           }
         }
       } catch (e) {
