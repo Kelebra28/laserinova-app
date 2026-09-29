@@ -670,19 +670,19 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                           : "bg-[#202c33] text-[#e9edef] rounded-lg rounded-tl-none border border-transparent order-1"
                       )}
                     >
-                      {msg.type === 'AUDIO' && msg.mediaUrl && (
+                      {msg.type === 'AUDIO' && (
                         <div className="mb-2">
-                          <audio controls src={msg.mediaUrl} className="w-full h-10 filter invert opacity-90" />
+                          <audio controls src={`/api/media/${msg.id}`} className="w-full h-10 filter invert opacity-90" />
                         </div>
                       )}
-                      {msg.type === 'IMAGE' && msg.mediaUrl ? (
+                      {msg.type === 'IMAGE' ? (
                         <div className="flex flex-col gap-1">
-                          <img src={msg.mediaUrl} alt="Adjunto" className="rounded-xl max-w-full max-h-60 object-contain shadow-md" />
-                          {msg.content && msg.content !== msg.mediaUrl.split('/').pop() && <span className="text-sm mt-1">{msg.content}</span>}
+                          <img src={`/api/media/${msg.id}`} alt="Adjunto" className="rounded-xl max-w-full max-h-60 object-contain shadow-md" />
+                          {msg.content && msg.content !== '📷 Imagen adjunta' && <span className="text-sm mt-1">{msg.content}</span>}
                         </div>
-                      ) : msg.type === 'DOCUMENT' && msg.mediaUrl ? (
+                      ) : msg.type === 'DOCUMENT' ? (
                         <div className="flex flex-col gap-1 bg-black/20 p-2 rounded-lg">
-                          <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:underline">
+                          <a href={`/api/media/${msg.id}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:underline">
                             <FileText size={16} />
                             <span className="text-sm truncate max-w-[200px]">{msg.content || 'Documento adjunto'}</span>
                           </a>

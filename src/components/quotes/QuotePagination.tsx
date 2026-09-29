@@ -24,18 +24,14 @@ export default function QuotePagination({ totalPages, currentPage, totalItems, l
     if (newPage < 1 || newPage > totalPages) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set("page", newPage.toString());
-    startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`, { scroll: false });
-    });
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const handleLimitChange = (newLimit: string) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("limit", newLimit);
     params.set("page", "1"); // reset to page 1 on limit change
-    startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`, { scroll: false });
-    });
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const limitOptions = [
@@ -49,11 +45,6 @@ export default function QuotePagination({ totalPages, currentPage, totalItems, l
 
   return (
     <>
-      {isPending && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm transition-all">
-          <GlobalLoader label="Cargando página" subLabel="Espera un momento..." minHeight="min-h-0" />
-        </div>
-      )}
       <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/30 gap-4">
       <div className="flex items-center text-[10px] font-black text-gray-500 uppercase tracking-widest">
         Mostrando {(currentPage - 1) * limit + 1} a {Math.min(currentPage * limit, totalItems)} de {totalItems} resultados

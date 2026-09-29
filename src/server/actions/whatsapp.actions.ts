@@ -52,7 +52,19 @@ export async function getMessagesAction(contactId: string) {
   
   const messages = await prisma.whatsAppMessage.findMany({
     where: { contactId },
-    orderBy: { timestamp: 'asc' }
+    orderBy: { timestamp: 'asc' },
+    select: {
+      id: true,
+      messageId: true,
+      contactId: true,
+      direction: true,
+      type: true,
+      content: true,
+      status: true,
+      timestamp: true,
+      mimeType: true,
+      // intentionally omitting mediaUrl
+    }
   });
 
   return { success: true, data: messages };

@@ -35,7 +35,7 @@ export default function QuotesClient() {
   const clientId = searchParams.get("clientId") || "all";
   const status = searchParams.get("status") || "all";
   const urlPage = parseInt(searchParams.get("page") || "1", 10);
-  const itemsPerPage = 10;
+  const itemsPerPage = parseInt(searchParams.get("limit") || "10", 10);
 
   const [searchTerm, setSearchTerm] = useState("");
 
