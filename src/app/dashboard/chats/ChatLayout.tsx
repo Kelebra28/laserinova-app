@@ -58,10 +58,15 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
 
       // If active chat, append message
       if (activeContact?.id === contact.id) {
-        setMessages(prev => {
-          if (prev.find(m => m.id === message.id)) return prev;
-          return [...prev, message];
-        });
+        if (message.mediaUrl === 'FETCH_REQUIRED') {
+          // La imagen era muy grande para Pusher, recargar historial desde DB
+          loadMessages(contact);
+        } else {
+          setMessages(prev => {
+            if (prev.find(m => m.id === message.id)) return prev;
+            return [...prev, message];
+          });
+        }
       } else if (message.direction === 'INBOUND') {
         // Si el chat NO está abierto y es un mensaje entrante, incrementar contador
         setUnreadCounts(prev => ({

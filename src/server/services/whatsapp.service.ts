@@ -600,8 +600,11 @@ _Para responder, busca este cliente en el CRM o comunícate con él directamente
       }
     });
 
-    // Emitir a la UI
-    notificationEmitter.emit('whatsapp_message', { message: savedMessage, contact });
+    const pusherMessage = { ...savedMessage };
+    if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
+      pusherMessage.mediaUrl = 'FETCH_REQUIRED';
+    }
+    notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
     
   } catch (error) {
     console.error("Error en processAIAgentResponse:", error);

@@ -35,7 +35,11 @@ export async function POST(request: Request) {
         if (result) {
           // Emitir evento al frontend
           if (result.type === 'message') {
-            notificationEmitter.emit('whatsapp_message', result);
+            const pusherMessage = { ...result.message };
+            if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
+              pusherMessage.mediaUrl = 'FETCH_REQUIRED';
+            }
+            notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact: result.contact });
             
             // IA: Responder si botMode está activado
             if (result.contact?.botMode && result.message?.type === 'TEXT') {

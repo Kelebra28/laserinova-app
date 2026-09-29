@@ -31,7 +31,11 @@ export async function simulateIncomingMessageAction(contactId: string, content: 
     });
 
     // Notificar a la UI
-    notificationEmitter.emit('whatsapp_message', { message: savedMessage, contact });
+    const pusherMessage = { ...savedMessage };
+    if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
+      pusherMessage.mediaUrl = 'FETCH_REQUIRED';
+    }
+    notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
 
     // Procesar con IA (debemos hacer await para que Vercel/Next.js no mate el proceso antes de que Gemini responda)
     await processAIAgentResponse(contact.id).catch(console.error);
@@ -95,7 +99,11 @@ export async function sendManualMessageAction(contactId: string, content: string
     });
 
     // Notificar al frontend
-    notificationEmitter.emit('whatsapp_message', { message: savedMessage, contact });
+    const pusherMessage = { ...savedMessage };
+    if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
+      pusherMessage.mediaUrl = 'FETCH_REQUIRED';
+    }
+    notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
     
     return { success: true, message: savedMessage };
   }
@@ -222,7 +230,11 @@ export async function sendMediaMessageAction(formData: FormData) {
       }
     });
 
-    notificationEmitter.emit('whatsapp_message', { message: savedMessage, contact });
+    const pusherMessage = { ...savedMessage };
+    if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
+      pusherMessage.mediaUrl = 'FETCH_REQUIRED';
+    }
+    notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
 
     // 4. Si es simulador (cliente envía), procesar con IA
     if (isSimulator) {
