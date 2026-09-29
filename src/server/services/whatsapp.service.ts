@@ -60,38 +60,23 @@ export async function downloadAndCompressMedia(mediaId: string): Promise<string 
     const arrayBuffer = await mediaResponse.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     
-    // 3. Crear directorio si no existe
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'whatsapp');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    const mimeType = urlData.mime_type;
-    let extension = mimeType.split('/')[1]?.split(';')[0] || 'bin';
+    let mimeType = urlData.mime_type;
     
-    // Convertir ogg a mp3 si es necesario o dejarlo nativo (WhatsApp usa audio/ogg; codecs=opus)
-    if (mimeType.includes('audio/ogg')) {
-      extension = 'ogg'; 
-    }
-
-    let finalFilename = `${Date.now()}-${mediaId}.${extension}`;
-    let finalPath = path.join(uploadDir, finalFilename);
-
-    // 4. Comprimir si es imagen
+    // 3. Comprimir si es imagen o guardar en Base64
     if (mimeType.startsWith('image/')) {
-      finalFilename = `${Date.now()}-${mediaId}.webp`;
-      finalPath = path.join(uploadDir, finalFilename);
-      
-      await sharp(buffer)
+      const optimizedBuffer = await sharp(buffer)
         .webp({ quality: 75 })
         .resize({ width: 1200, withoutEnlargement: true })
-        .toFile(finalPath);
+        .toBuffer();
+      
+      return `data:image/webp;base64,${optimizedBuffer.toString('base64')}`;
     } else {
-      // Guardar tal cual (documentos, audios, etc)
-      fs.writeFileSync(finalPath, buffer);
+      // Audio o Documentos: WhatsApp usa audio/ogg; codecs=opus.
+      if (mimeType.includes('audio/ogg')) {
+        mimeType = 'audio/ogg'; // Limpiar codecs=opus para compatibilidad web
+      }
+      return `data:${mimeType};base64,${buffer.toString('base64')}`;
     }
-
-    return `/uploads/whatsapp/${finalFilename}`;
 
   } catch (error) {
     console.error('Error procesando media:', error);

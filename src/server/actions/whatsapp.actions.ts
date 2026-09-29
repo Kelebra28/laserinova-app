@@ -142,9 +142,7 @@ export async function sendMediaMessageAction(formData: FormData) {
     const contact = await prisma.whatsAppContact.findUnique({ where: { id: contactId } });
     if (!contact) return { success: false, error: 'Contacto no encontrado' };
 
-    // 1. En entornos Serverless como Vercel, el sistema de archivos es de Solo Lectura (Read-Only).
-    // No podemos usar fs.writeFileSync. En su lugar, guardaremos el archivo pequeño directamente 
-    // en base64 (Data URL) en la base de datos.
+    // 1. Vercel es Read-Only. Guardar en Base64 directo a la BD.
     const buffer = Buffer.from(await file.arrayBuffer());
     const base64 = buffer.toString('base64');
     const mediaUrl = `data:${file.type};base64,${base64}`;

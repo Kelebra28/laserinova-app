@@ -282,18 +282,11 @@ export async function sendQuoteViaWhatsAppAction(quoteId: string) {
       throw new Error("El cliente no tiene un número de WhatsApp registrado en el sistema");
     }
 
-    // 1. Generar PDF localmente
+    // 1. Generar PDF localmente y pasarlo a Base64 para Vercel
     const pdfBuffer = await generateQuotePDF([quote]);
-    
-    // Guardar en public/uploads/pdf/
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'pdf');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
+    const base64 = (pdfBuffer as Buffer).toString('base64');
+    const publicUrl = `data:application/pdf;base64,${base64}`;
     const filename = `Cotizacion_${quote.folio}_${Date.now()}.pdf`;
-    const filepath = path.join(uploadsDir, filename);
-    fs.writeFileSync(filepath, pdfBuffer as Buffer);
-    const publicUrl = `/uploads/pdf/${filename}`;
 
     // 2. Insertar mensaje tipo DOCUMENT que simula el envío del PDF
     await prisma.whatsAppMessage.create({
