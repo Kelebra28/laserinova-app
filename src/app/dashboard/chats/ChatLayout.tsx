@@ -86,7 +86,7 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
       ));
       
       // Actualizar el contacto activo si es el que estamos viendo
-      setActiveContact(prev => {
+      setActiveContact((prev: any) => {
         if (prev?.id === contactId) {
           return { ...prev, ...changes };
         }
@@ -766,7 +766,7 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                 ref={fileInputRef} 
                 className="hidden" 
                 onChange={handleFileUpload} 
-                accept="image/*,.pdf,.doc,.docx"
+                accept="image/*,.pdf,.doc,.docx,.dxf"
               />
               <Button 
                 type="button" 

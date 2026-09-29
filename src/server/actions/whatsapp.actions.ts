@@ -151,28 +151,73 @@ export async function sendMediaMessageAction(formData: FormData) {
     // 1. Vercel es Read-Only. Guardar en Base64 directo a la BD.
     const buffer = Buffer.from(await file.arrayBuffer());
     const base64 = buffer.toString('base64');
-    const mediaUrl = `data:${file.type};base64,${base64}`;
+    const mimeType = file.type || 'application/octet-stream';
+    const mediaUrl = `data:${mimeType};base64,${base64}`;
 
     // Determinar tipo
     let type = 'DOCUMENT';
-    if (file.type.startsWith('image/')) type = 'IMAGE';
-    else if (file.type.startsWith('audio/')) type = 'AUDIO';
-    else if (file.type.startsWith('video/')) type = 'VIDEO';
+    if (mimeType.startsWith('image/')) type = 'IMAGE';
+    else if (mimeType.startsWith('audio/')) type = 'AUDIO';
+    else if (mimeType.startsWith('video/')) type = 'VIDEO';
 
     // 2. Determinar si es simulador (INBOUND) o flujo normal (OUTBOUND)
     const direction = isSimulator ? 'INBOUND' : 'OUTBOUND';
     const fakeMessageId = `media_${Date.now()}`;
 
-    // 3. Crear en BD
+    // 3. Si NO es simulador, debemos subir el archivo a Meta y enviarlo por WhatsApp
+    let metaMessageId = fakeMessageId;
+    
+    if (!isSimulator && process.env.WHATSAPP_TOKEN) {
+      try {
+        // A. Subir archivo a Meta
+        const metaFormData = new FormData();
+        const blob = new Blob([buffer], { type: mimeType });
+        metaFormData.append('file', blob, file.name || 'file');
+        metaFormData.append('type', mimeType);
+        metaFormData.append('messaging_product', 'whatsapp');
+
+        const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/media`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`
+          },
+          body: metaFormData
+        });
+
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.error?.message || 'Error subiendo media a Meta');
+        
+        const mediaId = uploadData.id;
+
+        // B. Enviar el mensaje con el mediaId
+        const metaMessageRes = await sendMessageToMeta(contact.phone, {
+          type: type.toLowerCase(),
+          [type.toLowerCase()]: { 
+            id: mediaId,
+            ...(caption ? { caption } : {}),
+            ...(type === 'DOCUMENT' ? { filename: file.name || 'documento' } : {})
+          }
+        });
+
+        if (metaMessageRes?.messages?.[0]?.id) {
+          metaMessageId = metaMessageRes.messages[0].id;
+        }
+      } catch (e) {
+        console.error("Error enviando media a Meta:", e);
+        return { success: false, error: 'Error al enviar por WhatsApp real' };
+      }
+    }
+
+    // 4. Crear en BD
     const savedMessage = await prisma.whatsAppMessage.create({
       data: {
         contactId: contact.id,
-        messageId: fakeMessageId,
+        messageId: metaMessageId,
         direction,
         type,
         content: caption ? caption : (isSimulator && type !== 'AUDIO' ? file.name : (type === 'IMAGE' ? '📷 Imagen adjunta' : type === 'AUDIO' ? '🎤 Mensaje de voz' : '📄 Archivo adjunto')),
         mediaUrl,
-        mimeType: file.type,
+        mimeType,
         status: isSimulator ? 'DELIVERED' : (process.env.WHATSAPP_TOKEN ? 'SENT' : 'SENT_LOCAL_SIMULATION')
       }
     });
@@ -189,6 +234,7 @@ export async function sendMediaMessageAction(formData: FormData) {
 
     return { success: true, message: savedMessage };
   } catch (error: any) {
+    console.error("🚨 Error FATAL en sendMediaMessageAction:", error);
     return { success: false, error: error.message || 'Error al procesar archivo' };
   }
 }
