@@ -20,6 +20,7 @@ function cn(...classes: (string | undefined | null | false)[]) {
 export default function ChatLayout({ initialContacts }: { initialContacts: Contact[] }) {
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [messages, setMessages] = useState<Message[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [inputText, setInputText] = useState('');
@@ -61,6 +62,14 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
           if (prev.find(m => m.id === message.id)) return prev;
           return [...prev, message];
         });
+      } else if (message.direction === 'INBOUND') {
+        // Si el chat NO está abierto y es un mensaje entrante, incrementar contador
+        setUnreadCounts(prev => ({
+          ...prev,
+          [contact.id]: (prev[contact.id] || 0) + 1
+        }));
+        // Sonido de notificación
+        try { new Audio('/notification.mp3').play().catch(() => {}); } catch {}
       }
     },
     onStatusUpdate: (statusData) => {
@@ -74,6 +83,8 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
   const loadMessages = async (contact: Contact) => {
     setActiveContact(contact);
     setLoadingMessages(true);
+    // Limpiar notificaciones al abrir el chat
+    setUnreadCounts(prev => ({ ...prev, [contact.id]: 0 }));
     
     // Autoclick en el simulador si es el contacto de prueba
     if (contact.name?.includes('Simulador')) {
@@ -460,11 +471,18 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                     )}
                     <span className="font-normal text-[#e9edef] truncate text-[17px]">{contact.name || contact.phone}</span>
                   </div>
-                  {contact.botMode ? (
-                    <Bot size={16} className="text-[#00a884] shrink-0" />
-                  ) : (
-                    <UserIcon size={16} className="text-[#8696a0] shrink-0" />
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {unreadCounts[contact.id] > 0 && (
+                      <span className="bg-[#00a884] text-[#111b21] text-[11px] font-bold rounded-full min-w-[20px] h-[20px] flex items-center justify-center px-1">
+                        {unreadCounts[contact.id]}
+                      </span>
+                    )}
+                    {contact.botMode ? (
+                      <Bot size={16} className="text-[#00a884]" />
+                    ) : (
+                      <UserIcon size={16} className="text-[#8696a0]" />
+                    )}
+                  </div>
                 </div>
                 <div className="text-xs text-slate-400 truncate flex justify-between ml-13 pl-13">
                   <span className="truncate pl-[52px]">

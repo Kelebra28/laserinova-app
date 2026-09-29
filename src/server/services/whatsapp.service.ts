@@ -182,18 +182,10 @@ export async function processAIAgentResponse(contactId: string) {
   
   if (!contact) return;
 
-  // Si es el simulador local, espera 4 segundos para ser rápido.
-  // Si es WhatsApp real, espera 2 minutos (120000 ms) para asegurar que el cliente termine.
-  const isSimulator = !process.env.WHATSAPP_TOKEN || (contact.name && contact.name.includes("Simulador"));
-  const delayMs = isSimulator ? 4000 : 120000;
-
-  // Set a new timer to wait before processing
-  const timer = setTimeout(() => {
-    aiProcessingTimers.delete(contactId);
-    executeAIAgentResponse(contactId).catch(console.error);
-  }, delayMs);
-
-  aiProcessingTimers.set(contactId, timer);
+  // En Vercel (Serverless), los "setTimeout" no funcionan porque el servidor se congela
+  // en cuanto se devuelve la respuesta HTTP. 
+  // Por lo tanto, debemos ejecutar la IA INMEDIATAMENTE y usar await.
+  return await executeAIAgentResponse(contactId).catch(console.error);
 }
 
 async function executeAIAgentResponse(contactId: string) {

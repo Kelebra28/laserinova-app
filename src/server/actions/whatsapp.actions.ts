@@ -175,7 +175,7 @@ export async function sendMediaMessageAction(formData: FormData) {
 
     // 4. Si es simulador (cliente envía), procesar con IA
     if (isSimulator) {
-      processAIAgentResponse(contact.id).catch(console.error);
+      await processAIAgentResponse(contact.id).catch(console.error);
     } else if (contact.botMode) {
       // Si el agente manda algo manual, se apaga el bot
       await toggleBotModeAction(contact.id, false);
