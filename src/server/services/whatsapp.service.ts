@@ -276,7 +276,7 @@ async function executeAIAgentResponse(contactId: string) {
     const systemInstruction = getSecretarySystemPrompt(clientContext, ragContext);
 
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
+      model: "gemini-3.8-flash",
       systemInstruction,
       tools: [{ functionDeclarations: [notificar_solicitud_cotizacion, transferir_a_humano] }]
     });
@@ -385,7 +385,7 @@ async function executeAIAgentResponse(contactId: string) {
           // 1. Invocar al Chalán AHORA que ya tenemos toda la info, para que haga el cálculo interno
           let chalanEstimate = "No se pudo calcular el estimado.";
           try {
-            const chalanModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const chalanModel = genAI.getGenerativeModel({ model: "gemini-3.8-flash" });
             const chalanPrompt = `Eres "El Chalán", el calculista interno de Laser Inova. La secretaria recopiló esta información del cliente:
 Proyecto: ${args.project_name}
 Material: ${args.material}
@@ -559,11 +559,11 @@ _Para responder, busca este cliente en el CRM o comunícate con él directamente
     } catch (error: any) {
       console.error("Error crítico en Gemini (main):", error);
       responseText = "Disculpa, nuestro sistema automático está experimentando intermitencias técnicas. En un momento un asesor humano retomará tu conversación.";
-      // Apagamos el botMode porque la IA está fallando por demanda 503
-      await prisma.whatsAppContact.update({
-        where: { id: contact.id },
-        data: { botMode: false }
-      });
+      // Ya no apagamos el bot para que no se quede mudo por fallos temporales
+      // await prisma.whatsAppContact.update({
+      //   where: { id: contact.id },
+      //   data: { botMode: false }
+      // });
     }
 
     // Enviar el mensaje físico por WhatsApp
