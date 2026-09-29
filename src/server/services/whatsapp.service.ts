@@ -339,6 +339,12 @@ async function executeAIAgentResponse(contactId: string) {
             where: { id: contact.id },
             data: { botMode: false }
           });
+          
+          notificationEmitter.emit('whatsapp_contact_update', {
+            contactId: contact.id,
+            changes: { botMode: false }
+          });
+
           responseText = `Entiendo, transferiré esta conversación a uno de nuestros asesores para que te atienda personalmente. (Motivo: ${args.motivo})`;
         } else if (call.name === 'notificar_solicitud_cotizacion') {
           const args = call.args as any;

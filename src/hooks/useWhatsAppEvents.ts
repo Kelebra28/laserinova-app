@@ -6,17 +6,20 @@ import { getPusherClient } from '@/lib/pusher';
 type UseWhatsAppEventsProps = {
   onNewMessage?: (message: any) => void;
   onStatusUpdate?: (statusData: any) => void;
+  onContactUpdate?: (contactData: any) => void;
 };
 
-export function useWhatsAppEvents({ onNewMessage, onStatusUpdate }: UseWhatsAppEventsProps = {}) {
+export function useWhatsAppEvents({ onNewMessage, onStatusUpdate, onContactUpdate }: UseWhatsAppEventsProps = {}) {
   const onNewMessageRef = useRef(onNewMessage);
   const onStatusUpdateRef = useRef(onStatusUpdate);
+  const onContactUpdateRef = useRef(onContactUpdate);
 
   // Mantiene las referencias actualizadas
   useEffect(() => {
     onNewMessageRef.current = onNewMessage;
     onStatusUpdateRef.current = onStatusUpdate;
-  }, [onNewMessage, onStatusUpdate]);
+    onContactUpdateRef.current = onContactUpdate;
+  }, [onNewMessage, onStatusUpdate, onContactUpdate]);
 
   useEffect(() => {
     const pusher = getPusherClient();
@@ -31,6 +34,12 @@ export function useWhatsAppEvents({ onNewMessage, onStatusUpdate }: UseWhatsAppE
     channel.bind('whatsapp_status_update', (data: any) => {
       if (onStatusUpdateRef.current) {
         onStatusUpdateRef.current(data);
+      }
+    });
+
+    channel.bind('whatsapp_contact_update', (data: any) => {
+      if (onContactUpdateRef.current) {
+        onContactUpdateRef.current(data);
       }
     });
 

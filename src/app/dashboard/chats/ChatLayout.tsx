@@ -77,6 +77,21 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
       setMessages(prev => prev.map(m => 
         m.messageId === statusData.id ? { ...m, status: statusData.status.toUpperCase() } : m
       ));
+    },
+    onContactUpdate: (data) => {
+      const { contactId, changes } = data;
+      // Actualizar la lista de contactos en el sidebar
+      setContacts(prev => prev.map(c => 
+        c.id === contactId ? { ...c, ...changes } : c
+      ));
+      
+      // Actualizar el contacto activo si es el que estamos viendo
+      setActiveContact(prev => {
+        if (prev?.id === contactId) {
+          return { ...prev, ...changes };
+        }
+        return prev;
+      });
     }
   });
 

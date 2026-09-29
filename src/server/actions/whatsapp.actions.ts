@@ -111,6 +111,12 @@ export async function toggleBotModeAction(contactId: string, botMode: boolean) {
     data: { botMode }
   });
 
+  // Emit event to update UI across all browsers
+  notificationEmitter.emit('whatsapp_contact_update', {
+    contactId,
+    changes: { botMode }
+  });
+
   return { success: true };
 }
 
