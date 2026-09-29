@@ -1,18 +1,11 @@
-import { EventEmitter } from 'events';
+import { pusherServer } from './pusher';
 
-// TODO: ADVERTENCIA SERVERLESS (ESCALABILIDAD)
-// Este Singleton de EventEmitter en memoria solo funcionará en un entorno Node.js tradicional.
-// Si llegamos a desplegar en Vercel o en un entorno Serverless con múltiples instancias efímeras,
-// las funciones no compartirán memoria y el SSE fallará entre ellas. 
-// Para escalar a Serverless se requerirá Redis (Pub/Sub) o un servicio externo (Pusher/Ably).
-class NotificationEmitter extends EventEmitter {}
-
-// Prevención de re-instanciación del EventEmitter durante hot-reloads de desarrollo
-const globalForEmitter = global as unknown as { notificationEmitter: NotificationEmitter };
-
-export const notificationEmitter =
-  globalForEmitter.notificationEmitter || new NotificationEmitter();
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForEmitter.notificationEmitter = notificationEmitter;
-}
+export const notificationEmitter = {
+  emit: (event: string, data: any) => {
+    // Disparamos el evento a través de Pusher en el canal global "crm-channel"
+    // Esto asegura que todos los navegadores conectados (independientemente del proceso/servidor) lo reciban.
+    pusherServer.trigger('crm-channel', event, data).catch((error) => {
+      console.error('Error al emitir evento de Pusher:', error);
+    });
+  }
+};

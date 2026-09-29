@@ -299,7 +299,7 @@ async function executeAIAgentResponse(contactId: string) {
     const systemInstruction = getSecretarySystemPrompt(clientContext, ragContext);
 
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-3.5-flash",
+      model: "gemini-1.5-flash",
       systemInstruction,
       tools: [{ functionDeclarations: [notificar_solicitud_cotizacion, transferir_a_humano] }]
     });
@@ -391,7 +391,7 @@ async function executeAIAgentResponse(contactId: string) {
           // 1. Invocar al Chalán AHORA que ya tenemos toda la info, para que haga el cálculo interno
           let chalanEstimate = "No se pudo calcular el estimado.";
           try {
-            const chalanModel = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
+            const chalanModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
             const chalanPrompt = `Eres "El Chalán", el calculista interno de Laser Inova. La secretaria recopiló esta información del cliente:
 Proyecto: ${args.project_name}
 Material: ${args.material}

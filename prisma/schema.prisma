@@ -579,8 +579,8 @@ model WhatsAppMessage {
   messageId  String   @unique // ID provisto por Meta
   direction  String   // 'INBOUND' o 'OUTBOUND'
   type       String   // 'TEXT', 'IMAGE', 'AUDIO', 'DOCUMENT'
-  content    String?  @db.Text
-  mediaUrl   String?  @db.Text // Ruta local (ej. public/uploads/whatsapp/...)
+  content    String?  @db.LongText
+  mediaUrl   String?  @db.LongText // Base64 encoding requires more than 64kb
   mimeType   String?
   status     String   @default("SENT") // SENT, DELIVERED, READ, FAILED
   timestamp  DateTime @default(now())

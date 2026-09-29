@@ -142,20 +142,12 @@ export async function sendMediaMessageAction(formData: FormData) {
     const contact = await prisma.whatsAppContact.findUnique({ where: { id: contactId } });
     if (!contact) return { success: false, error: 'Contacto no encontrado' };
 
-    // 1. Guardar archivo localmente
+    // 1. En entornos Serverless como Vercel, el sistema de archivos es de Solo Lectura (Read-Only).
+    // No podemos usar fs.writeFileSync. En su lugar, guardaremos el archivo pequeño directamente 
+    // en base64 (Data URL) en la base de datos.
     const buffer = Buffer.from(await file.arrayBuffer());
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'whatsapp');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    // Simplificado para el simulador: guardar con su nombre original saneado
-    const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    const finalFilename = `${Date.now()}-${safeName}`;
-    const finalPath = path.join(uploadDir, finalFilename);
-    
-    fs.writeFileSync(finalPath, buffer);
-    const mediaUrl = `/uploads/whatsapp/${finalFilename}`;
+    const base64 = buffer.toString('base64');
+    const mediaUrl = `data:${file.type};base64,${base64}`;
 
     // Determinar tipo
     let type = 'DOCUMENT';
