@@ -7,10 +7,11 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const messageId = params.id;
+    const resolvedParams = await params;
+    const messageId = resolvedParams.id;
     
     if (!messageId) {
       return new NextResponse("ID Missing", { status: 400 });

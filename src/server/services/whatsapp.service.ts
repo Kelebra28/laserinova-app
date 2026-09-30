@@ -276,7 +276,7 @@ async function executeAIAgentResponse(contactId: string) {
     const systemInstruction = getSecretarySystemPrompt(clientContext, ragContext);
 
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-3.8-flash",
+      model: "gemini-3.5-flash",
       systemInstruction,
       tools: [{ functionDeclarations: [notificar_solicitud_cotizacion, transferir_a_humano] }]
     });
@@ -330,6 +330,28 @@ async function executeAIAgentResponse(contactId: string) {
 
     try {
       const result = await model.generateContent({ contents });
+      
+      // REGISTRAR TOKENS INMEDIATAMENTE ANTES DE QUE ALGO MÁS PUEDA FALLAR
+      try {
+        if (result.response.usageMetadata) {
+          const inputTokens = result.response.usageMetadata.promptTokenCount || 0;
+          const outputTokens = result.response.usageMetadata.candidatesTokenCount || 0;
+          const estimatedCost = (inputTokens * 0.075 / 1000000) + (outputTokens * 0.30 / 1000000);
+          await prisma.aiUsageLog.create({
+            data: {
+              agentName: "Secretary",
+              contactId: contact.id,
+              inputTokens,
+              outputTokens,
+              totalTokens: inputTokens + outputTokens,
+              estimatedCost,
+            }
+          });
+        }
+      } catch (logError) {
+        console.error("Fallo al guardar tokens de Secretary:", logError);
+      }
+
       const call = result.response.functionCalls()?.[0];
       
       if (call) {
@@ -391,7 +413,7 @@ async function executeAIAgentResponse(contactId: string) {
           // 1. Invocar al Chalán AHORA que ya tenemos toda la info, para que haga el cálculo interno
           let chalanEstimate = "No se pudo calcular el estimado.";
           try {
-            const chalanModel = genAI.getGenerativeModel({ model: "gemini-3.8-flash" });
+            const chalanModel = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
             const chalanPrompt = `Eres "El Chalán", el calculista interno de Laser Inova. La secretaria recopiló esta información del cliente:
 Proyecto: ${args.project_name}
 Material: ${args.material}
@@ -541,23 +563,6 @@ _Para responder, busca este cliente en el CRM o comunícate con él directamente
       } else {
         responseText = result.response.text();
       }
-
-      if (result.response.usageMetadata) {
-        const inputTokens = result.response.usageMetadata.promptTokenCount || 0;
-        const outputTokens = result.response.usageMetadata.candidatesTokenCount || 0;
-        const estimatedCost = (inputTokens * 0.075 / 1000000) + (outputTokens * 0.30 / 1000000);
-        await prisma.aiUsageLog.create({
-          data: {
-            agentName: "Secretary",
-            contactId: contact.id,
-            inputTokens,
-            outputTokens,
-            totalTokens: inputTokens + outputTokens,
-            estimatedCost,
-          }
-        });
-      }
-
 
       if (!responseText) {
         responseText = "Entendido. ¿Puedo ayudarte con algo más?";

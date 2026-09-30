@@ -7,7 +7,7 @@ let cachedStoragePath: string | null = null;
 export const getStorageBasePath = () => {
   if (cachedStoragePath) return cachedStoragePath;
 
-  const primaryDir = path.join(process.cwd(), 'storage', 'emails');
+  const primaryDir = path.join(/*turbopackIgnore: true*/ process.cwd(), 'storage', 'emails');
   try {
     if (!fs.existsSync(primaryDir)) {
       fs.mkdirSync(primaryDir, { recursive: true });

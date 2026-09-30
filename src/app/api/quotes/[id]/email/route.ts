@@ -139,7 +139,7 @@ export async function POST(
     const isMock = process.env.EMAIL_MOCK === 'true';
     if (!isMock) {
       try {
-        const logoPath = path.join(process.cwd(), 'public', 'logo_pdf.png');
+        const logoPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', 'logo_pdf.png');
         const logoBuffer = fs.readFileSync(logoPath);
         attachments.push({
           filename: 'logo_pdf.png',
