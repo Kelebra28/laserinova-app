@@ -7,6 +7,25 @@ export async function createClientService(nombre: string, telefono?: string) {
   });
 }
 
+async function generateAIFolio() {
+  const year = new Date().getFullYear();
+  // Buscar la última cotización del año actual sin importar si es LI o LIA
+  const lastQuote = await prisma.quote.findFirst({
+    where: { folio: { contains: `-${year}-` } },
+    orderBy: { createdAt: "desc" },
+    select: { folio: true },
+  });
+  
+  let nextNumber = 1;
+  if (lastQuote) {
+    const match = lastQuote.folio.match(/-(\d+)$/);
+    if (match) {
+      nextNumber = parseInt(match[1], 10) + 1;
+    }
+  }
+  return `LIA-${year}-${String(nextNumber).padStart(4, "0")}`;
+}
+
 export async function createQuoteService(nombre_cliente: string, userId: string, conceptos: any[]) {
   const client = await prisma.client.findFirst({ where: { name: { contains: nombre_cliente } } });
   if (!client) throw new Error(`No se encontró un cliente con el nombre "${nombre_cliente}".`);
@@ -71,11 +90,13 @@ export async function createQuoteService(nombre_cliente: string, userId: string,
     granTotal += calcResult.suggestedPrice;
   }
 
+  const newFolio = await generateAIFolio();
+
   const newQuote = await prisma.quote.create({
     data: {
       clientId: client.id, 
       userId: userId,
-      folio: `AG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      folio: newFolio,
       project: `Cotización IA - ${conceptos.length} opciones`,
       total: granTotal, 
       status: "DRAFT",

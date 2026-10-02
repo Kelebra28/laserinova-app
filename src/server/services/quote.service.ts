@@ -372,20 +372,21 @@ export async function approveQuoteVersionService(groupId: string, approvedQuoteI
 
 export async function generateNextFolioService(): Promise<string> {
   const year = new Date().getFullYear();
-  const prefix = `LI-${year}-`;
+  // Buscar la última cotización del año actual sin importar si es LI o LIA
   const lastQuote = await prisma.quote.findFirst({
-    where: { folio: { startsWith: prefix } },
-    orderBy: { folio: "desc" },
+    where: { folio: { contains: `-${year}-` } },
+    orderBy: { createdAt: "desc" },
     select: { folio: true },
   });
+  
   let nextNumber = 1;
   if (lastQuote) {
-    const lastNumber = parseInt(lastQuote.folio.replace(prefix, ""), 10);
-    if (!isNaN(lastNumber)) {
-      nextNumber = lastNumber + 1;
+    const match = lastQuote.folio.match(/-(\d+)$/);
+    if (match) {
+      nextNumber = parseInt(match[1], 10) + 1;
     }
   }
-  return `${prefix}${String(nextNumber).padStart(4, "0")}`;
+  return `LI-${year}-${String(nextNumber).padStart(4, "0")}`;
 }
 
 export async function createQuoteService(userId: string, data: any) {
