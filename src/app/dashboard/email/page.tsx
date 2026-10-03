@@ -9,7 +9,7 @@ import { useSession } from 'next-auth/react';
 import { 
   Trash2, AlertOctagon, MailOpen, ArrowLeft, Download, X, Reply, Loader2, 
   Paperclip, ChevronDown, ChevronRight, Inbox, Send, Star, StarOff,
-  RefreshCw, PenSquare, Search, Archive, ChevronLeft, Mail
+  RefreshCw, PenSquare, Search, Archive, ChevronLeft, Mail, Menu
 } from 'lucide-react';
 
 const FOLDERS = [
@@ -73,6 +73,7 @@ export default function EmailPage() {
   const { isSending, sendEmail, downloadAttachment, updateEmail } = useEmailActions();
   
   const [isComposeOpen, setIsComposeOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [activeThread, setActiveThread] = useState<(Email & { html?: string; text?: string; attachments?: any[] })[]>([]);
   const [expandedEmails, setExpandedEmails] = useState<Record<string, boolean>>({});
@@ -176,7 +177,12 @@ export default function EmailPage() {
     <div className="flex h-[calc(100vh-7.5rem)] w-full overflow-hidden rounded-2xl border border-slate-200/60 shadow-xl bg-white">
       
       {/* ─── LEFT SIDEBAR ─── */}
-      <div className="w-56 flex-shrink-0 bg-slate-50/80 border-r border-slate-200/60 flex flex-col">
+      <div className={`w-56 flex-shrink-0 bg-slate-50/80 border-r border-slate-200/60 flex-col ${isSidebarOpen ? 'absolute inset-y-0 left-0 z-50 flex shadow-2xl h-full' : 'hidden md:flex'}`}>
+        <div className="md:hidden flex justify-end p-2 border-b border-slate-200/60">
+          <button onClick={() => setIsSidebarOpen(false)} className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
         {/* Compose button */}
         <div className="p-3">
           <button
@@ -228,11 +234,14 @@ export default function EmailPage() {
       </div>
 
       {/* ─── EMAIL LIST ─── */}
-      <div className={`flex-shrink-0 flex flex-col border-r border-slate-200/60 bg-white transition-all duration-300 ${selectedEmail ? 'w-80' : 'flex-1 min-w-0'}`}>
+      <div className={`flex-shrink-0 flex-col border-r border-slate-200/60 bg-white transition-all duration-300 ${selectedEmail ? 'hidden md:flex md:w-80' : 'flex flex-1 min-w-0'}`}>
         {/* List header */}
         <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="font-bold text-slate-800 text-base capitalize">
+          <div className="flex items-center gap-3 mb-2">
+            <button className="md:hidden p-1 text-slate-500 hover:bg-slate-100 rounded-lg" onClick={() => setIsSidebarOpen(true)}>
+              <Menu className="w-5 h-5" />
+            </button>
+            <h2 className="font-bold text-slate-800 text-base capitalize flex-1">
               {FOLDERS.find(f => f.id === currentFolder)?.label || currentFolder}
             </h2>
             <span className="text-xs text-slate-400">{totalEmails} mensajes</span>
@@ -378,17 +387,23 @@ export default function EmailPage() {
 
       {/* ─── EMAIL VIEWER PANEL ─── */}
       {selectedEmail && (
-        <div className="flex-1 flex flex-col overflow-hidden bg-white">
+        <div className="flex-1 flex flex-col overflow-hidden bg-white relative">
           <>
             {/* Viewer toolbar */}
-            <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-white">
-              <div className="flex items-center gap-2">
+            <div className="px-3 md:px-5 py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-white">
+              <div className="flex items-center gap-1 md:gap-2">
+                <button
+                  onClick={() => setSelectedEmail(null)}
+                  className="md:hidden p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all mr-1"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
                 <button
                   onClick={() => handleReply(selectedEmail)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-sm shadow-red-200 transition-all active:scale-95"
                 >
                   <Reply className="w-3.5 h-3.5" />
-                  Responder
+                  <span className="hidden sm:inline">Responder</span>
                 </button>
 
                 <div className="h-4 w-px bg-slate-200" />

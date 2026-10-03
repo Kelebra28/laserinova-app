@@ -17,6 +17,7 @@ model User {
   emailPasswordEncrypted String?
   emailIncomingServer    String?                @default("imap.hostinger.com")
   emailOutgoingServer    String?                @default("smtp.hostinger.com")
+  permissions            Json?
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
   quotes                 Quote[]

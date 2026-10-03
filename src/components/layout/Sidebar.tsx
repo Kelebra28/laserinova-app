@@ -26,23 +26,24 @@ import {
 import { useSession } from "next-auth/react";
  
 const menuItems = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Chats", href: "/dashboard/chats", icon: MessageCircle },
-  { name: "Agente IA", href: "/dashboard/agent", icon: Bot },
-  { name: "Correo", href: "/dashboard/email", icon: Mail },
-  { name: "Cotizaciones", href: "/dashboard/quotes", icon: FileText },
-  { name: "Recibos", href: "/dashboard/receipts", icon: Receipt },
-  { name: "Tareas", href: "/dashboard/tasks", icon: CheckSquare },
-  { name: "Clientes", href: "/dashboard/clients", icon: Users },
-  { name: "Proveedores", href: "/dashboard/providers", icon: Building2 },
-  { name: "Cobranza", href: "/dashboard/payment-requests", icon: Banknote },
-  { name: "Finanzas", href: "/dashboard/finance", icon: DollarSign, adminOnly: true },
-  { name: "Inventario", href: "/dashboard/inventory", icon: Box },
-  { name: "Materiales", href: "/dashboard/materials", icon: Package },
-  { name: "Procesos", href: "/dashboard/processes", icon: Cpu },
-  { name: "Etiquetas", href: "/dashboard/labels", icon: Printer },
-  { name: "Encuestas", href: "/dashboard/surveys", icon: Star, adminOnly: true },
-  { name: "Reportes", href: "/dashboard/reports", icon: PieChart },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permKey: "dashboard" },
+  { name: "Chats", href: "/dashboard/chats", icon: MessageCircle, permKey: "chats" },
+  { name: "Agente IA", href: "/dashboard/agent", icon: Bot, permKey: "agent" },
+  { name: "Correo", href: "/dashboard/email", icon: Mail, permKey: "email" },
+  { name: "Cotizaciones", href: "/dashboard/quotes", icon: FileText, permKey: "quotes" },
+  { name: "Recibos", href: "/dashboard/receipts", icon: Receipt, permKey: "receipts" },
+  { name: "Tareas", href: "/dashboard/tasks", icon: CheckSquare, permKey: "tasks" },
+  { name: "Clientes", href: "/dashboard/clients", icon: Users, permKey: "clients" },
+  { name: "Proveedores", href: "/dashboard/providers", icon: Building2, permKey: "providers" },
+  { name: "Cobranza", href: "/dashboard/payment-requests", icon: Banknote, permKey: "payment_requests" },
+  { name: "Finanzas", href: "/dashboard/finance", icon: DollarSign, permKey: "finance", adminOnly: true },
+  { name: "Inventario", href: "/dashboard/inventory", icon: Box, permKey: "inventory" },
+  { name: "Materiales", href: "/dashboard/materials", icon: Package, permKey: "materials" },
+  { name: "Procesos", href: "/dashboard/processes", icon: Cpu, permKey: "processes" },
+  { name: "Etiquetas", href: "/dashboard/labels", icon: Printer, permKey: "labels" },
+  { name: "Encuestas", href: "/dashboard/surveys", icon: Star, permKey: "surveys", adminOnly: true },
+  { name: "Reportes", href: "/dashboard/reports", icon: PieChart, permKey: "reports" },
+  { name: "Usuarios", href: "/dashboard/users", icon: Users, adminOnly: true },
   { name: "Configuración", href: "/dashboard/settings", icon: Settings, adminOnly: true },
 ];
 
@@ -53,7 +54,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const isAdmin = (session?.user as any)?.role === "ADMIN";
 
   return (
@@ -85,8 +86,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
 
         <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto custom-scrollbar">
-          {menuItems.map((item) => {
+          {status === "loading" ? null : menuItems.map((item) => {
             if (item.adminOnly && !isAdmin) return null;
+            
+            if (!isAdmin && item.permKey) {
+              let permissions = (session?.user as any)?.permissions || {};
+              if (typeof permissions === 'string') {
+                try { permissions = JSON.parse(permissions); } catch(e) {}
+              }
+              if (permissions[item.permKey] === false) return null; // Ocultar si está explícitamente denegado
+            }
             
             const isActive = item.href === "/dashboard" 
               ? pathname === "/dashboard" 

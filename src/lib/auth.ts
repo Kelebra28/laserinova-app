@@ -38,6 +38,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           email: user.email,
           role: user.role,
+          permissions: user.permissions,
         };
       },
     }),
@@ -51,6 +52,14 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = (user as any).role;
+        token.permissions = (user as any).permissions;
+      } else if (token.id) {
+        // Fetch fresh permissions from DB so changes apply immediately without relogin
+        const freshUser = await prisma.user.findUnique({ where: { id: token.id as string }, select: { role: true, permissions: true } });
+        if (freshUser) {
+          token.role = freshUser.role;
+          token.permissions = freshUser.permissions;
+        }
       }
       return token;
     },
@@ -58,6 +67,7 @@ export const authOptions: NextAuthOptions = {
       if (token && session.user) {
         (session.user as any).id = token.id;
         (session.user as any).role = token.role;
+        (session.user as any).permissions = token.permissions;
       }
       return session;
     },
