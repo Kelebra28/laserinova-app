@@ -597,7 +597,7 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
           )}
           {/* Header */}
           <div className="h-16 bg-[#202c33] px-3 md:px-6 flex items-center justify-between shrink-0 z-30">
-            <div className="flex items-center gap-2 md:gap-3">
+            <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0 pr-2">
               <button 
                 type="button"
                 onClick={() => setActiveContact(null)}
@@ -608,7 +608,7 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
               {activeContact.profilePictureUrl ? (
                 <img src={activeContact.profilePictureUrl} alt="Avatar" className="w-10 h-10 rounded-full object-cover shrink-0" />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-[#6a7175] flex items-center justify-center text-white font-medium text-lg">
+                <div className="w-10 h-10 shrink-0 rounded-full bg-[#6a7175] flex items-center justify-center text-white font-medium text-lg">
                   {activeContact.name ? activeContact.name.substring(0, 1).toUpperCase() : <UserIcon size={20} className="text-[#cfd4d6]" />}
                 </div>
               )}
