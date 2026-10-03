@@ -28,11 +28,14 @@ export function useWhatsAppEvents({ onNewMessage, onStatusUpdate, onContactUpdat
     channel.bind('whatsapp_message', (data: any) => {
       const isSimulator = data?.contact?.name?.includes('(Simulador)') || data?.contact?.phone?.includes('5211058132407');
       const isIncoming = data?.message?.direction === 'INBOUND';
+      const isOutbound = data?.message?.direction === 'OUTBOUND';
 
       // Reproducir sonido para:
-      // 1. Mensajes entrantes reales de clientes (INBOUND)
-      // 2. Todos los mensajes del chat del Simulador (para escuchar cuando la IA nos responde)
-      if (isIncoming || isSimulator) {
+      // 1. Clientes reales: Solo cuando el cliente nos escribe (INBOUND)
+      // 2. Simulador: Solo cuando la IA nos responde (OUTBOUND)
+      const shouldPlaySound = (!isSimulator && isIncoming) || (isSimulator && isOutbound);
+
+      if (shouldPlaySound) {
         const audioEl = document.getElementById('notification-sound') as HTMLAudioElement;
         if (audioEl) {
           audioEl.currentTime = 0; // Reiniciar por si suenan varios seguidos
