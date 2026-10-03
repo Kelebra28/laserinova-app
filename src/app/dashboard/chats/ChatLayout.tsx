@@ -478,6 +478,29 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
     }
   };
 
+  let pendingQuoteUrl = '';
+  if (activeContact && messages.length > 0) {
+    const quoteMsg = [...messages].reverse().find(m => m.direction === 'INTERNAL' && m.content.includes('|||'));
+    if (quoteMsg) {
+      const parts = quoteMsg.content.split('|||');
+      if (parts[1] && !parts[1].startsWith('QUOTE:')) {
+        try {
+          const data = JSON.parse(decodeURIComponent(parts[1]));
+          let queryParams = `?contactId=${activeContact.id}`;
+          if (data.project) queryParams += `&project=${encodeURIComponent(data.project)}`;
+          if (data.material) queryParams += `&material=${encodeURIComponent(data.material)}`;
+          if (data.width) queryParams += `&w=${data.width}`;
+          if (data.height) queryParams += `&h=${data.height}`;
+          if (data.qty) queryParams += `&qty=${data.qty}`;
+          if (data.estimatedTimeMin) queryParams += `&t=${data.estimatedTimeMin}`;
+          if (data.name) queryParams += `&name=${encodeURIComponent(data.name)}`;
+          if (data.email) queryParams += `&email=${encodeURIComponent(data.email)}`;
+          pendingQuoteUrl = `/dashboard/quotes/new${queryParams}`;
+        } catch(e) {}
+      }
+    }
+  }
+
   return (
     <div className="flex h-full bg-[#111b21] text-[#e9edef] divide-x divide-[#313d45] border-x border-[#313d45]">
       {/* Sidebar */}
@@ -595,6 +618,18 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
               </div>
             </div>
             <div className="flex items-center gap-2 md:gap-4 shrink-0">
+              {pendingQuoteUrl && (
+                <Link href={pendingQuoteUrl}>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="border-none rounded-full px-2 md:px-4 bg-yellow-500 hover:bg-yellow-600 text-black font-bold shadow-sm flex items-center gap-2 animate-pulse"
+                    title="Cotización Lista para Generar"
+                  >
+                    📝 <span className="hidden md:inline">Generar Cotización</span>
+                  </Button>
+                </Link>
+              )}
               <div className="flex items-center gap-2 border-r border-[#313d45] pr-2 md:pr-4">
                 <span className="hidden md:inline text-sm text-[#8696a0]">Simulador</span>
                 <button
@@ -682,7 +717,7 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                           <Bot size={14} /> Nota Interna (Sistema)
                         </div>
                         <p className="whitespace-pre-wrap text-left break-words mb-2">{displayContent}</p>
-                        {buttonLink && (
+                        {buttonLink && buttonText !== "Generar Cotización" && (
                           <Link 
                             href={buttonLink}
                             className="mt-2 inline-flex items-center gap-1 bg-[#ffeb3b]/20 hover:bg-[#ffeb3b]/30 text-[#ffeb3b] px-3 py-1.5 rounded-full text-xs font-bold transition-colors"

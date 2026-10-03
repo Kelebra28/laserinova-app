@@ -76,7 +76,6 @@ const materialsData = [
 ];
 
 async function main() {
-  console.log("Creando categorías...");
   const catMap = new Map();
   for (const catName of categories) {
     let cat = await prisma.materialCategory.findFirst({ where: { name: catName } });
@@ -91,7 +90,6 @@ async function main() {
     catMap.set(catName, cat.id);
   }
 
-  console.log("Creando materiales...");
   for (const mat of materialsData) {
     const categoryId = catMap.get(mat.category);
     if (!categoryId) continue;
@@ -119,7 +117,6 @@ async function main() {
     }
   }
 
-  console.log("Actualizando configuración de costos...");
   const configs = [
     { key: "costo_minuto_mayoreo", name: "Costo Minuto Mayoreo", value: 8.5 },
     { key: "costo_minuto_menudeo", name: "Costo Minuto Menudeo", value: 10 },
@@ -134,8 +131,6 @@ async function main() {
       create: { key: config.key, name: config.name, value: config.value }
     });
   }
-
-  console.log("¡Seed completado exitosamente!");
 }
 
 main()

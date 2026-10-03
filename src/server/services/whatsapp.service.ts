@@ -270,11 +270,13 @@ async function executeAIAgentResponse(contactId: string) {
       }
     }
 
+    const hasRequestedQuote = recentMessages.some(m => m.direction === 'INTERNAL' && m.content?.includes('Estimación del Chalán'));
+    
     // RAG: Inyectar reglas de negocio relevantes al último mensaje
     const lastUserMessage = recentMessages.slice().reverse().find(m => m.direction === 'INBOUND')?.content || "";
     const ragContext = await getRelevantRules(lastUserMessage, genAI);
 
-    const systemInstruction = getSecretarySystemPrompt(clientContext, ragContext);
+    const systemInstruction = getSecretarySystemPrompt(clientContext, ragContext, hasRequestedQuote);
 
     const model = genAI.getGenerativeModel({ 
       model: "gemini-3.5-flash",
@@ -422,11 +424,6 @@ async function executeAIAgentResponse(contactId: string) {
           }
           
           responseText = `¡Excelente! Ya capturé todos los detalles y se los pasé al taller. En un momento un asesor revisará la información y te enviará la cotización por este medio.`;
-          
-          if (ragContext && ragContext.trim().length > 0) {
-            const cleanContext = ragContext.replace(/(Datos Bancarios:|Ubicación y Entregas:|Pagos:|Urgencias:|Restricciones de Máquina:)/g, '-');
-            responseText += `\n\nPor cierto, respondiendo a lo demás que me preguntaste:\n\n${cleanContext}`;
-          }
         }
       } else {
         responseText = result.response.text();

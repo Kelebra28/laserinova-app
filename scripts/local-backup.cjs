@@ -7,9 +7,8 @@ const prisma = new PrismaClient();
 
 async function runBackup() {
   try {
-    console.log("Iniciando respaldo de base de datos...");
     const [
-      users, clients, quotes, quoteConcepts, 
+      users, clients, quotes, quoteConcepts,
       materials, products, transactions, tasks
     ] = await Promise.all([
       prisma.user.findMany(),
@@ -32,7 +31,7 @@ async function runBackup() {
 
     // Ruta al escritorio del usuario
     const desktopPath = path.join(os.homedir(), 'Desktop', 'Respaldos_LaserInova');
-    
+
     // Crear carpeta si no existe
     if (!fs.existsSync(desktopPath)) {
       fs.mkdirSync(desktopPath, { recursive: true });
@@ -42,10 +41,8 @@ async function runBackup() {
     const filePath = path.join(desktopPath, `backup-${dateStr}.json`);
 
     fs.writeFileSync(filePath, JSON.stringify(backupData, null, 2));
-    
-    console.log(`Respaldo creado exitosamente en: ${filePath}`);
+
   } catch (error) {
-    console.error("Error al crear el respaldo:", error);
   } finally {
     await prisma.$disconnect();
   }
