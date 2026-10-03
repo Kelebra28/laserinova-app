@@ -38,13 +38,17 @@ const updatePaymentRequestSchema = z.object({
   })
 });
 
-// Helper for Session Validation (Zero Trust)
-async function requireAuth() {
+// Helper for Session Validation & RBAC (Zero Trust)
+async function requireAuth(allowedRoles?: string[]) {
   const session = await getServerSession(authOptions);
-  if (!(session?.user as any)?.id) {
+  const user = session?.user as any;
+  if (!user?.id) {
     throw new Error("No autorizado");
   }
-  return session!.user as any;
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    throw new Error("Acceso denegado: Privilegios insuficientes");
+  }
+  return user;
 }
 
 export async function getPendingQuotesByClient(clientId: string) {
@@ -108,7 +112,7 @@ export async function getPaymentRequests() {
 
 export async function updatePaymentRequestStatus(id: string, newStatus: string) {
   try {
-    await requireAuth();
+    await requireAuth(["ADMIN"]);
     const validData = updatePaymentRequestStatusSchema.parse({ id, newStatus });
     const pr = await updatePaymentRequestStatusService(validData.id, validData.newStatus);
     
@@ -121,7 +125,7 @@ export async function updatePaymentRequestStatus(id: string, newStatus: string) 
 
 export async function deletePaymentRequest(id: string) {
   try {
-    await requireAuth();
+    await requireAuth(["ADMIN"]);
     const validId = paymentRequestIdSchema.parse(id);
     await deletePaymentRequestService(validId);
     
@@ -134,7 +138,7 @@ export async function deletePaymentRequest(id: string) {
 
 export async function updatePaymentRequest(id: string, data: { amountRequested: number; notes: string }) {
   try {
-    await requireAuth();
+    await requireAuth(["ADMIN"]);
     const validData = updatePaymentRequestSchema.parse({ id, data });
     const pr = await updatePaymentRequestService(validData.id, validData.data);
     

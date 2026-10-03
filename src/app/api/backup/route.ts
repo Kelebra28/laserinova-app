@@ -23,7 +23,9 @@ export async function GET() {
       transactions,
       tasks
     ] = await Promise.all([
-      prisma.user.findMany(),
+      prisma.user.findMany({
+        select: { id: true, name: true, email: true, role: true, active: true, createdAt: true, updatedAt: true }
+      }),
       prisma.client.findMany(),
       prisma.quote.findMany(),
       prisma.quoteConcept.findMany(),

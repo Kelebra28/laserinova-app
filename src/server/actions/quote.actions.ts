@@ -2,6 +2,7 @@
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { z } from "zod";
 import { 
   getQuotesListService, 
   getActiveQuotesKanbanService, 
@@ -27,12 +28,16 @@ import fs from "fs";
 import path from "path";
 import { processAIAgentResponse } from "../services/whatsapp.service";
 
-async function requireAuth() {
+async function requireAuth(allowedRoles?: string[]) {
   const session = await getServerSession(authOptions);
-  if (!(session?.user as any)?.id) {
+  const user = session?.user as any;
+  if (!user?.id) {
     throw new Error("No autorizado");
   }
-  return session!.user as any;
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    throw new Error("Acceso denegado: Privilegios insuficientes");
+  }
+  return user;
 }
 
 export async function getQuotesList(params: GetQuotesParams) {
@@ -105,7 +110,7 @@ export async function updateQuotePayment(formData: FormData) {
 }
 
 export async function deleteQuote(formData: FormData) {
-  await requireAuth();
+  await requireAuth(["ADMIN"]);
   const quoteId = formData.get("quoteId") as string;
   if (!quoteId) throw new Error("Datos incompletos");
 
@@ -129,6 +134,29 @@ export async function duplicateQuoteAsVersion(quoteId: string) {
   }
 }
 
+const createQuoteSchema = z.object({
+  clientId: z.string().nullable().optional(),
+  contactId: z.string().nullable().optional(),
+  prospectName: z.string().nullable().optional(),
+  prospectEmail: z.string().nullable().optional(),
+  prospectPhone: z.string().nullable().optional(),
+  project: z.string().min(1, "El proyecto es requerido"),
+  description: z.string(),
+  imagesStr: z.string(),
+  images: z.array(z.string()),
+  subtotal: z.number(),
+  tax: z.number(),
+  total: z.number(),
+  taxable: z.boolean(),
+  realCostTotal: z.number(),
+  estimatedUtility: z.number(),
+  conceptsDataStr: z.string(),
+  conceptsData: z.array(z.any()), // Idealmente requerir schema por cada concepto
+  globalCostsSnapshotStr: z.string().optional(),
+  saveAsClient: z.boolean(),
+  visibleConsiderations: z.string().optional(),
+});
+
 export async function approveQuoteVersion(groupId: string, approvedQuoteId: string) {
   await requireAuth();
   if (!groupId || !approvedQuoteId) throw new Error("Datos incompletos");
@@ -141,15 +169,17 @@ export async function approveQuoteVersion(groupId: string, approvedQuoteId: stri
 
 export async function createQuoteAction(formData: FormData) {
   const user = await requireAuth();
-  const data = {
-    clientId: formData.get("clientId") as string,
+  
+  // Extraemos y validamos con Zod para prevenir Mass Assignment
+  const rawData = {
+    clientId: formData.get("clientId") as string || null,
     contactId: formData.get("contactId") as string || null,
     prospectName: (formData.get("prospectName") as string) || null,
     prospectEmail: (formData.get("prospectEmail") as string) || null,
     prospectPhone: (formData.get("prospectPhone") as string) || null,
     project: formData.get("project") as string,
-    description: formData.get("description") as string,
-    imagesStr: formData.get("images") as string,
+    description: (formData.get("description") as string) || "",
+    imagesStr: (formData.get("images") as string) || "",
     images: formData.get("images") ? JSON.parse(formData.get("images") as string) : [],
     subtotal: parseFloat(formData.get("subtotal") as string) || 0,
     tax: parseFloat((formData.get("tax") as string) || (formData.get("iva") as string)) || 0,
@@ -157,15 +187,20 @@ export async function createQuoteAction(formData: FormData) {
     taxable: formData.get("taxable") !== "false",
     realCostTotal: parseFloat(formData.get("realCostTotal") as string) || 0,
     estimatedUtility: parseFloat(formData.get("estimatedUtility") as string) || 0,
-    conceptsDataStr: formData.get("conceptsData") as string,
+    conceptsDataStr: formData.get("conceptsData") as string || "[]",
     conceptsData: JSON.parse(formData.get("conceptsData") as string || "[]"),
-    globalCostsSnapshotStr: formData.get("globalCostsSnapshot") as string,
+    globalCostsSnapshotStr: formData.get("globalCostsSnapshot") as string || "",
     saveAsClient: formData.get("saveAsClient") === "true",
-    visibleConsiderations: formData.get("visibleConsiderations") as string,
+    visibleConsiderations: formData.get("visibleConsiderations") as string || "",
   };
-  if (!data.project || !data.conceptsDataStr) throw new Error("Faltan datos requeridos (Proyecto y Conceptos)");
 
-  const quoteId = await createQuoteService(user.id, data);
+  const data = createQuoteSchema.parse(rawData);
+
+  if (!data.project || data.conceptsData.length === 0) {
+    throw new Error("Faltan datos requeridos (Proyecto y Conceptos)");
+  }
+
+  const quoteId = await createQuoteService(user.id, data as any);
 
   const contactId = formData.get("contactId") as string;
   if (contactId) {
@@ -189,27 +224,46 @@ export async function createQuoteAction(formData: FormData) {
   redirect(`/dashboard/quotes/${quoteId}`);
 }
 
+const updateQuoteSchema = z.object({
+  clientId: z.string().nullable().optional(),
+  prospectName: z.string().nullable().optional(),
+  saveAsClient: z.boolean(),
+  project: z.string().min(1, "El proyecto es requerido"),
+  description: z.string(),
+  imagesStr: z.string(),
+  images: z.array(z.string()),
+  subtotal: z.number(),
+  tax: z.number(),
+  total: z.number(),
+  realCostTotal: z.number(),
+  estimatedUtility: z.number(),
+  taxable: z.boolean(),
+  conceptsData: z.array(z.any()),
+});
+
 export async function updateQuoteAction(formData: FormData) {
   const quoteId = formData.get("quoteId") as string;
   const user = await requireAuth();
-  const data = {
+  const rawData = {
     clientId: formData.get("clientId") as string || null,
     prospectName: (formData.get("prospectName") as string) || null,
     saveAsClient: formData.get("saveAsClient") === "true",
     project: formData.get("project") as string,
-    description: formData.get("description") as string,
-    imagesStr: formData.get("images") as string,
+    description: (formData.get("description") as string) || "",
+    imagesStr: (formData.get("images") as string) || "",
     images: formData.get("images") ? JSON.parse(formData.get("images") as string) : [],
-    subtotal: parseFloat(formData.get("subtotal") as string),
-    tax: parseFloat(formData.get("tax") as string),
-    total: parseFloat(formData.get("total") as string),
-    realCostTotal: parseFloat(formData.get("realCostTotal") as string),
-    estimatedUtility: parseFloat(formData.get("estimatedUtility") as string),
+    subtotal: parseFloat(formData.get("subtotal") as string) || 0,
+    tax: parseFloat(formData.get("tax") as string) || 0,
+    total: parseFloat(formData.get("total") as string) || 0,
+    realCostTotal: parseFloat(formData.get("realCostTotal") as string) || 0,
+    estimatedUtility: parseFloat(formData.get("estimatedUtility") as string) || 0,
     taxable: formData.get("taxable") === "true",
     conceptsData: JSON.parse(formData.get("concepts") as string || "[]"),
   };
 
-  await updateQuoteDataService(user.id, quoteId, data);
+  const data = updateQuoteSchema.parse(rawData);
+
+  await updateQuoteDataService(user.id, quoteId, data as any);
   revalidatePath("/dashboard", "layout");
   redirect(`/dashboard/quotes/${quoteId}`);
 }
