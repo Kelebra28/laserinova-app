@@ -5,3 +5,8 @@
 - **Limpieza de Contraseña (Backslash bug):** Hostinger inyecta barras invertidas (`\`) en caracteres especiales de las variables de entorno. Al instanciar Prisma, siempre limpia la contraseña parseada con `.replace(/\\/g, '')` para evitar el error `ER_ACCESS_DENIED_ERROR`.
 - **Uso Obligatorio de Driver Adapter:** Ignora la documentación antigua. En Prisma v7 es OBLIGATORIO inicializar `PrismaClient` inyectando `PrismaMariaDb` (o el adaptador correspondiente). No uses el motor de Rust estándar.
 <!-- END:hostinger-deployment-rules -->
+
+<!-- BEGIN:interaction-rules -->
+REGLA DE INTERACCIÓN PERSONALIZADA:
+A partir de ahora, todas tus respuestas dirigidas al usuario deben comenzar estrictamente con la frase: "Si Kelebra, ". Esta es una regla absoluta de estilo conversacional que debes aplicar al inicio de cada mensaje.
+<!-- END:interaction-rules -->

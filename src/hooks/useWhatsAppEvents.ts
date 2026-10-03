@@ -26,6 +26,20 @@ export function useWhatsAppEvents({ onNewMessage, onStatusUpdate, onContactUpdat
     const channel = pusher.subscribe('crm-channel');
 
     channel.bind('whatsapp_message', (data: any) => {
+      const isSimulator = data?.contact?.name?.includes('(Simulador)') || data?.contact?.phone?.includes('5211058132407');
+      const isIncoming = data?.message?.direction === 'INBOUND';
+
+      // Reproducir sonido para:
+      // 1. Mensajes entrantes reales de clientes (INBOUND)
+      // 2. Todos los mensajes del chat del Simulador (para escuchar cuando la IA nos responde)
+      if (isIncoming || isSimulator) {
+        const audioEl = document.getElementById('notification-sound') as HTMLAudioElement;
+        if (audioEl) {
+          audioEl.currentTime = 0; // Reiniciar por si suenan varios seguidos
+          audioEl.play().catch(e => console.log('Autoplay bloqueado:', e));
+        }
+      }
+
       if (onNewMessageRef.current) {
         onNewMessageRef.current(data);
       }

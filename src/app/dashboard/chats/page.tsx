@@ -25,13 +25,8 @@ export default async function ChatsPage() {
   });
 
   return (
-    <div className="h-[calc(100vh-6rem)] w-full flex flex-col bg-[#111b21] text-[#e9edef] overflow-hidden">
-      <div className="px-6 py-4 bg-[#202c33] flex justify-between items-center shadow-sm z-10 border-b border-[#313d45]">
-        <h1 className="text-xl font-medium text-[#e9edef]">Centro de Mensajes <span className="text-[#00a884] font-semibold">(WhatsApp IA)</span></h1>
-      </div>
-      <div className="flex-1 overflow-hidden bg-[#111b21]">
-        <ChatLayout initialContacts={contacts} />
-      </div>
+    <div className="h-full w-full bg-[#111b21]">
+      <ChatLayout initialContacts={contacts} />
     </div>
   );
 }

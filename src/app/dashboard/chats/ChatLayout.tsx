@@ -4,10 +4,10 @@ import Link from 'next/link';
 
 import { useState, useEffect, useRef } from 'react';
 import { useWhatsAppEvents } from '@/hooks/useWhatsAppEvents';
-import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simulateIncomingMessageAction, createDummyContactAction, sendMediaMessageAction } from '@/server/actions/whatsapp.actions';
+import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simulateIncomingMessageAction, createDummyContactAction, sendMediaMessageAction, generateSummaryAction } from '@/server/actions/whatsapp.actions';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square } from 'lucide-react';
+import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 type Contact = any;
@@ -30,6 +30,10 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
   const [stagedFile, setStagedFile] = useState<File | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [reactionMenuFor, setReactionMenuFor] = useState<string | null>(null);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryText, setSummaryText] = useState('');
+  const [summaryCache, setSummaryCache] = useState<Record<string, { text: string; messageCount: number }>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -441,10 +445,43 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
     }
   };
 
+  const handleGenerateSummary = async () => {
+    if (!activeContact) return;
+    setIsSummaryOpen(true);
+
+    const currentMessageCount = messages.length;
+    const cached = summaryCache[activeContact.id];
+
+    if (cached && cached.messageCount === currentMessageCount) {
+      setSummaryText(cached.text);
+      return; // Usar caché, no gastar tokens
+    }
+
+    setSummaryLoading(true);
+    setSummaryText('');
+    
+    try {
+      const res = await generateSummaryAction(activeContact.id);
+      if (res.success) {
+        setSummaryText(res.summary!);
+        setSummaryCache(prev => ({
+          ...prev,
+          [activeContact.id]: { text: res.summary!, messageCount: currentMessageCount }
+        }));
+      } else {
+        setSummaryText('Error al generar resumen: ' + res.error);
+      }
+    } catch (e) {
+      setSummaryText('Error al procesar el resumen.');
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
   return (
     <div className="flex h-full bg-[#111b21] text-[#e9edef] divide-x divide-[#313d45] border-x border-[#313d45]">
       {/* Sidebar */}
-      <div className="w-1/3 flex flex-col bg-[#111b21] overflow-hidden">
+      <div className={cn("flex flex-col bg-[#111b21] overflow-hidden", activeContact ? "hidden md:flex md:w-1/3" : "w-full md:w-1/3")}>
         <div className="p-3 bg-[#111b21] flex gap-2 border-b border-[#313d45]">
           <Input 
             placeholder="Buscar contacto..." 
@@ -526,18 +563,25 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
 
       {/* Main Chat Area */}
       {activeContact ? (
-        <div className="w-2/3 flex flex-col bg-[#0b141a] relative">
+        <div className={cn("flex flex-col bg-[#0b141a] relative", !activeContact ? "hidden md:flex md:w-2/3" : "w-full md:w-2/3")}>
           {/* Fondo de patrón clásico de WhatsApp */}
           <div className="absolute inset-0 opacity-[0.06] pointer-events-none bg-[url('https://static.whatsapp.net/rsrc.php/v3/yl/r/r2jEqjVLEmC.png')] bg-repeat z-0 invert" />
           
           {simulatorMode && (
-            <div className="absolute top-16 left-0 right-0 bg-yellow-500/10 backdrop-blur-sm text-yellow-500 border-b border-yellow-500/20 text-xs font-bold py-1.5 px-4 text-center shadow-sm z-20">
+            <div className="bg-yellow-500/10 backdrop-blur-sm text-yellow-500 border-b border-yellow-500/20 text-xs font-bold py-1.5 px-4 text-center shadow-sm shrink-0 z-20">
               MODO SIMULADOR ACTIVO: Estás escribiendo como si fueras el cliente. No se enviarán mensajes reales.
             </div>
           )}
           {/* Header */}
-          <div className="h-16 bg-[#202c33] px-6 flex items-center justify-between shrink-0 z-30">
-            <div className="flex items-center gap-3">
+          <div className="h-16 bg-[#202c33] px-3 md:px-6 flex items-center justify-between shrink-0 z-30">
+            <div className="flex items-center gap-2 md:gap-3">
+              <button 
+                type="button"
+                onClick={() => setActiveContact(null)}
+                className="md:hidden p-2 -ml-2 text-[#8696a0] hover:text-[#e9edef] rounded-full hover:bg-[#2a3942]"
+              >
+                <ChevronLeft size={24} />
+              </button>
               {activeContact.profilePictureUrl ? (
                 <img src={activeContact.profilePictureUrl} alt="Avatar" className="w-10 h-10 rounded-full object-cover shrink-0" />
               ) : (
@@ -545,14 +589,14 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                   {activeContact.name ? activeContact.name.substring(0, 1).toUpperCase() : <UserIcon size={20} className="text-[#cfd4d6]" />}
                 </div>
               )}
-              <div className="flex flex-col">
-                <span className="font-medium text-lg text-[#e9edef] leading-tight">{activeContact.name || activeContact.phone}</span>
-                <span className="text-xs text-[#8696a0]">{activeContact.phone}</span>
+              <div className="flex flex-col min-w-0">
+                <span className="font-medium text-lg text-[#e9edef] leading-tight truncate">{activeContact.name || activeContact.phone}</span>
+                <span className="text-xs text-[#8696a0] truncate">{activeContact.phone}</span>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 border-r border-[#313d45] pr-4">
-                <span className="text-sm text-[#8696a0]">Simulador</span>
+            <div className="flex items-center gap-2 md:gap-4 shrink-0">
+              <div className="flex items-center gap-2 border-r border-[#313d45] pr-2 md:pr-4">
+                <span className="hidden md:inline text-sm text-[#8696a0]">Simulador</span>
                 <button
                   type="button"
                   onClick={() => setSimulatorMode(!simulatorMode)}
@@ -572,13 +616,22 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                 size="sm"
                 onClick={toggleBotMode}
                 className={cn(
-                  "border-none transition-all rounded-full px-4",
+                  "border-none transition-all rounded-full px-2 md:px-4",
                   activeContact.botMode 
                     ? "bg-[#00a884] hover:bg-[#008f6f] text-[#111b21] font-medium shadow-sm" 
                     : "bg-transparent hover:bg-[#2a3942] text-[#8696a0]"
                 )}
               >
-                {activeContact.botMode ? <><Bot size={16} className="mr-2"/> Bot Activo</> : <><UserIcon size={16} className="mr-2"/> Modo Humano</>}
+                {activeContact.botMode ? <><Bot size={16} className="md:mr-2"/><span className="hidden md:inline">Bot Activo</span></> : <><UserIcon size={16} className="md:mr-2"/><span className="hidden md:inline">Modo Humano</span></>}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={handleGenerateSummary}
+                className="rounded-full bg-gradient-to-r from-purple-500/20 to-blue-500/20 border-purple-500/30 text-purple-400 hover:text-purple-300 hover:from-purple-500/30 hover:to-blue-500/30 transition-all shadow-sm"
+                title="Resumir con IA"
+              >
+                <Sparkles size={18} />
               </Button>
             </div>
           </div>
@@ -863,7 +916,7 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
           </div>
         </div>
       ) : (
-        <div className="w-2/3 flex items-center justify-center bg-[#202c33] border-l border-[#313d45] relative overflow-hidden">
+        <div className="hidden md:flex w-2/3 items-center justify-center bg-[#202c33] border-l border-[#313d45] relative overflow-hidden">
           <div className="text-center max-w-md p-8 relative z-10 flex flex-col items-center">
             <div className="w-64 h-64 mx-auto mb-8 relative">
               <div className="absolute inset-0 bg-[#00a884]/10 rounded-full animate-pulse" />
@@ -873,6 +926,52 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
             </div>
             <h2 className="text-3xl font-light text-[#e9edef] mb-4 tracking-tight">WhatsApp CRM</h2>
             <p className="text-[#8696a0] leading-relaxed text-sm">Selecciona un chat en la barra lateral para ver los mensajes y responder a los prospectos de Laser Inova de forma rápida y sencilla.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Resumen IA */}
+      {isSummaryOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#111b21] rounded-2xl w-full max-w-lg shadow-2xl border border-[#313d45] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+            <div className="p-4 bg-[#202c33] border-b border-[#313d45] flex justify-between items-center">
+              <div className="flex items-center gap-2 text-[#e9edef] font-medium">
+                <Sparkles className="text-purple-400" size={20} />
+                <span>Resumen de la Conversación</span>
+              </div>
+              <button onClick={() => setIsSummaryOpen(false)} className="text-[#8696a0] hover:text-[#e9edef] transition-colors p-1 rounded-full hover:bg-[#2a3942]">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[70vh]">
+              {summaryLoading ? (
+                <div className="flex flex-col items-center justify-center py-8 text-[#8696a0]">
+                  <Loader2 size={32} className="animate-spin mb-4 text-purple-400" />
+                  <p>La IA está analizando los mensajes...</p>
+                </div>
+              ) : (
+                <div className="text-[#e9edef] text-[15px] leading-relaxed space-y-4">
+                  {summaryText.split('\n').map((line, i) => {
+                    if (line.trim().startsWith('**') && line.includes('**')) {
+                      const parts = line.split('**');
+                      return (
+                        <p key={i} className="flex gap-2">
+                          <span className="font-semibold text-purple-400 shrink-0">{parts[1]}</span>
+                          <span className="text-[#d1d7db]">{parts[2] || parts.slice(2).join('')}</span>
+                        </p>
+                      );
+                    }
+                    if (line.trim()) return <p key={i}>{line}</p>;
+                    return null;
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="p-4 bg-[#202c33] border-t border-[#313d45] flex justify-end">
+              <Button onClick={() => setIsSummaryOpen(false)} variant="outline" className="bg-[#2a3942] border-none text-[#e9edef] hover:bg-[#313d45]">
+                Cerrar
+              </Button>
+            </div>
           </div>
         </div>
       )}

@@ -28,6 +28,7 @@ export default function DashboardLayout({
           </div>
         </main>
       </div>
+      <audio id="notification-sound" src="/notification.mp3" preload="auto" className="hidden" />
     </div>
   );
 }

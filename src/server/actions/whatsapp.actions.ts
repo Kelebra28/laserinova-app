@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { sendMessageToMeta, processAIAgentResponse } from '@/server/services/whatsapp.service';
 import { notificationEmitter } from '@/lib/notification-emitter';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function simulateIncomingMessageAction(contactId: string, content: string) {
   try {
@@ -260,6 +261,55 @@ export async function sendMediaMessageAction(formData: FormData) {
   } catch (error: any) {
     console.error("🚨 Error FATAL en sendMediaMessageAction:", error);
     return { success: false, error: error.message || 'Error al procesar archivo' };
+  }
+}
+
+export async function generateSummaryAction(contactId: string) {
+  try {
+    const contact = await prisma.whatsAppContact.findUnique({
+      where: { id: contactId }
+    });
+    if (!contact) return { success: false, error: 'Contacto no encontrado' };
+
+    const messages = await prisma.whatsAppMessage.findMany({
+      where: { contactId },
+      orderBy: { timestamp: 'desc' },
+      take: 40
+    });
+
+    if (messages.length === 0) return { success: false, error: 'No hay mensajes para resumir' };
+
+    let transcript = '';
+    for (const m of messages.reverse()) {
+      if (m.type === 'TEXT') {
+        const actor = m.direction === 'INBOUND' ? 'Cliente' : 'Asesor/IA';
+        transcript += `${actor}: ${m.content}\n`;
+      }
+    }
+
+    if (!transcript.trim()) return { success: false, error: 'No hay conversaciones de texto' };
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
+
+    const prompt = `Analiza la siguiente conversación entre un cliente y un asesor/bot de una empresa de corte láser e impresión (Laser Inova).
+Genera un resumen estricto en el siguiente formato (Usa Markdown, usa viñetas y sé muy breve).
+
+**Requerimiento Principal:** (Qué quiere el cliente)
+**Materiales/Medidas:** (Si aplica)
+**Estatus Actual:** (Ej. En espera de diseño, cotización enviada, cliente molesto, etc.)
+**Siguiente Paso:** (Qué tiene que hacer el asesor o el cliente ahora)
+
+Conversación:
+${transcript}`;
+
+    const result = await model.generateContent(prompt);
+    const summary = result.response.text();
+
+    return { success: true, summary };
+  } catch (error: any) {
+    console.error("Error generando resumen:", error);
+    return { success: false, error: 'Error al generar resumen' };
   }
 }
 

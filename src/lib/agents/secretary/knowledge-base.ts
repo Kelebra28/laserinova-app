@@ -29,34 +29,66 @@ const KNOWLEDGE_BASE = [
   }
 ];
 
-// RAG Local basado en palabras clave (Fake RAG)
-// Es instantáneo, no consume API ni tira errores 404 de Google.
+// RAG Híbrido: Pinecone (Vectorial) con fallback a Palabras Clave
 export async function getRelevantRules(userMessage: string, genAI?: GoogleGenerativeAI): Promise<string> {
   if (!userMessage || userMessage.trim().length === 0) return "";
   
+  // Si tenemos Pinecone configurado, hacemos búsqueda vectorial real
+  if (process.env.PINECONE_API_KEY && process.env.PINECONE_INDEX && genAI) {
+    try {
+      const { Pinecone } = await import('@pinecone-database/pinecone');
+      const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
+      const index = pc.index(process.env.PINECONE_INDEX);
+      
+      // 1. Convertir el mensaje del cliente en un vector usando Gemini
+      const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-2" });
+      const result = await embeddingModel.embedContent(userMessage);
+      const vector = result.embedding.values;
+
+      // 2. Buscar en Pinecone las 2 reglas más similares matemáticamente
+      const queryResponse = await index.query({
+        vector: vector,
+        topK: 2,
+        includeMetadata: true
+      });
+
+      if (queryResponse.matches.length > 0) {
+        const relevantChunks = queryResponse.matches
+          .filter(match => match.score && match.score > 0.6) // Filtro de relevancia (similitud mínima)
+          .map(match => match.metadata?.content as string)
+          .filter(Boolean);
+          
+        if (relevantChunks.length > 0) {
+          return relevantChunks.join('\n\n');
+        }
+      }
+    } catch (error) {
+      console.error("Error en RAG Vectorial (Pinecone), cayendo a fallback:", error);
+    }
+  }
+  
+  // FALLBACK: Búsqueda basada en palabras clave si Pinecone falla o no está configurado
   try {
     const query = userMessage.toLowerCase();
     const relevantChunks = [];
     
     for (const chunk of KNOWLEDGE_BASE) {
       const keywords = chunk.keywords.split(',').map(k => k.trim().toLowerCase());
-      
-      // Si el mensaje del usuario contiene alguna de las palabras clave de la regla
       const isRelevant = keywords.some(keyword => query.includes(keyword));
-      
       if (isRelevant) {
         relevantChunks.push(chunk.content);
       }
     }
     
-    // Devolvemos máximo 2 reglas para no inflar el prompt
     if (relevantChunks.length > 0) {
       return relevantChunks.slice(0, 2).join('\n\n');
     }
-    
     return "";
   } catch (error) {
-    console.error("Error en RAG de Reglas:", error);
+    console.error("Error en RAG de Reglas Fallback:", error);
     return "";
   }
 }
+
+// Exportamos la base para poder inyectarla a Pinecone después
+export { KNOWLEDGE_BASE };

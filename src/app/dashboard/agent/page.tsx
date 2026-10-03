@@ -1,4 +1,5 @@
 import { AgentChat } from "@/components/agent/AgentChat";
+import { KnowledgeImportCard } from "@/components/agent/KnowledgeImportCard";
 import { Sparkles, Bot, Zap, Database, Activity } from "lucide-react";
 import Link from "next/link";
 
@@ -90,13 +91,7 @@ export default function AgentDashboardPage() {
             </ul>
           </div>
 
-          <div className="bg-gradient-to-br from-zinc-900 to-black p-8 rounded-[2.5rem] shadow-2xl text-white relative overflow-hidden">
-            <Database className="absolute -right-4 -bottom-4 w-32 h-32 opacity-10" />
-            <h3 className="font-black text-lg mb-2 text-white">100% Conectado</h3>
-            <p className="text-sm text-zinc-400 font-medium">
-              El agente lee los precios en tiempo real de tu base de datos (Materiales y CostConfiguration). No inventa precios, solo hace la matemática por ti.
-            </p>
-          </div>
+          <KnowledgeImportCard />
         </div>
 
       </div>
