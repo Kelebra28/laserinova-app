@@ -48,10 +48,14 @@ export async function POST(req: NextRequest) {
 
     const rows = parsed.data as any[];
 
-    if (type === "pinecone") {
+    if (type.startsWith("pinecone_")) {
+      const namespaceName = type.split('_')[1]; // 'secretary' o 'chalan'
+      
       // PROCESAR REGLAS PARA PINECONE (Respuestas, FAQ, Restricciones, Políticas)
       const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY! });
       const index = pc.index(process.env.PINECONE_INDEX!);
+      const targetNamespace = index.namespace(namespaceName);
+      
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
       const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-2" });
 
@@ -84,13 +88,13 @@ export async function POST(req: NextRequest) {
       }
 
       if (vectors.length > 0) {
-        // En Pinecone v9, se envía un objeto con la propiedad records
-        await index.upsert({ records: vectors });
+        // En Pinecone v9, se envía un objeto con la propiedad records al namespace
+        await targetNamespace.upsert({ records: vectors });
       }
 
       return NextResponse.json({ 
         success: true, 
-        message: `Se sincronizaron ${vectors.length} reglas en Pinecone.` 
+        message: `Se sincronizaron ${vectors.length} reglas en el espacio '${namespaceName}'.` 
       });
     }
 

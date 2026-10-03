@@ -6,6 +6,7 @@ import { GoogleGenerativeAI, FunctionDeclaration, SchemaType } from '@google/gen
 import { notificationEmitter } from '@/lib/notification-emitter';
 import { getSecretarySystemPrompt } from '@/lib/agents/secretary/prompt';
 import { getRelevantRules } from '@/lib/agents/secretary/knowledge-base';
+import { executeChalanEstimate } from '@/lib/agents/chalan';
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -370,184 +371,51 @@ async function executeAIAgentResponse(contactId: string) {
           responseText = `Entiendo, transferiré esta conversación a uno de nuestros asesores para que te atienda personalmente. (Motivo: ${args.motivo})`;
         } else if (call.name === 'notificar_solicitud_cotizacion') {
           const args = call.args as any;
-          
-          // Obtener lista de precios reales de la BD
-          let productListContext = "";
-          let materialListContext = "";
-          let machineCostMin = 0.70; // Fallback
 
+          // 1. Invocar a El Chalán de forma modular (con catálogos y Pinecone)
+          const chalanResult = await executeChalanEstimate(
+            {
+              project_name: args.project_name,
+              material: args.material,
+              grosor: args.grosor,
+              ancho_cm: args.ancho_cm,
+              alto_cm: args.alto_cm,
+              cantidad: args.cantidad,
+              diseno_incluido: args.diseno_incluido,
+              nombre_cliente: args.nombre_cliente,
+              correo_cliente: args.correo_cliente,
+            },
+            contact,
+            genAI
+          );
+
+          // 2. Guardar el mensaje interno del Chalán en la BD para que se vea en el UI del chat
           try {
-            const products = await prisma.product.findMany({
-              where: { active: true },
-              select: { name: true, unitPrice: true }
-            });
-            if (products.length > 0) {
-              productListContext = products.map(p => `- ${p.name}: $${p.unitPrice} MXN`).join('\n');
-            }
-
-            const materials = await prisma.material.findMany({
-              select: { name: true, pricePerCm2: true, sheetPrice: true, length: true, width: true }
-            });
-            if (materials.length > 0) {
-              materialListContext = materials.map(m => {
-                let costArea = m.pricePerCm2 || 0;
-                if (!costArea && m.sheetPrice && m.length && m.width) {
-                  costArea = m.sheetPrice / (m.length * m.width);
-                }
-                // Añadirle el 20% de transporte y 20% de merma (simplificado a factor 1.44 para el estimado bruto)
-                const costFinal = (costArea * 1.44).toFixed(4);
-                return `- ${m.name}: $${costFinal} MXN por cm2 (ya incluye transporte y merma)`;
-              }).join('\n');
-            }
-
-            const costConfigs = await prisma.costConfiguration.findMany();
-            let tubePrice = 250000;
-            let tubeLife = 6000;
-            costConfigs.forEach(c => {
-              if (c.key === 'precio_tubo') tubePrice = c.value;
-              if (c.key === 'vida_util_tubo') tubeLife = c.value;
-            });
-            machineCostMin = (tubePrice / tubeLife) / 60;
-          } catch(e) {}
-
-          // 1. Invocar al Chalán AHORA que ya tenemos toda la info, para que haga el cálculo interno
-          let chalanEstimate = "No se pudo calcular el estimado.";
-          try {
-            const chalanModel = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
-            const chalanPrompt = `Eres "El Chalán", el calculista interno de Laser Inova. La secretaria recopiló esta información del cliente:
-Proyecto: ${args.project_name}
-Material: ${args.material}
-Grosor: ${args.grosor || 'N/A'}
-Ancho: ${args.ancho_cm} cm
-Alto: ${args.alto_cm} cm
-Cantidad: ${args.cantidad}
-Diseño: ${args.diseno_incluido ? 'Sí' : 'No'}
-
-**CATÁLOGO DE PRODUCTOS (Para Reventa/Grabado de Producto):**
-${productListContext || "No disponible"}
-
-**CATÁLOGO DE MATERIALES (Para Corte/Grabado desde cero):**
-${materialListContext || "No disponible"}
-
-**COSTO DE MÁQUINA LÁSER:**
-$${machineCostMin.toFixed(2)} MXN por Minuto.
-
-REGLA CRÍTICA DE CÁLCULO: TIENES ESTRICTAMENTE PROHIBIDO INVENTAR PRECIOS.
-Debes usar ÚNICAMENTE los catálogos provistos arriba.
-1. Calcula el Área de la pieza (Ancho x Alto).
-2. Costo Material = Área x (Costo por cm2 del material más similar). Si no lo encuentras, usa $0.05.
-3. Costo Máquina = (Minutos estimados) x (Costo por Minuto). Para grabados/cortes promedio, estima 1 a 3 minutos por pieza de 10x10.
-4. Costo Total = Costo Material + Costo Máquina.
-5. El "TOTAL ESTIMADO" de venta al público debe ser aprox el (Costo Total x 2).
-
-REGLAS ESTRICTAS DE FORMATO:
-1. DEBES iniciar tu respuesta EXACTAMENTE con la palabra "Jefe" (sin saludos extra).
-2. NO uses párrafos, explicaciones largas ni hables. Solo devuelve datos crudos en una lista de viñetas.
-3. Al FINAL de tu mensaje, DEBES incluir un bloque de datos técnicos en formato JSON envuelto exactamente entre las etiquetas ||JSON|| ... ||JSON|| con el tiempo de máquina estimado por cada 1 pieza (en minutos).
-
-Ejemplo exacto del formato que debes usar:
-Jefe
-- Área por pieza: X cm2
-- Costo Material: $X MXN
-- Costo Corte/Grabado: $X MXN
-- Costo Diseño: $X MXN
-- TOTAL ESTIMADO: $X - $Y MXN
-||JSON||
-{"estimatedTimeMin": 1.5}
-||JSON||`;
-
-            const chalanResult = await chalanModel.generateContent(chalanPrompt);
-            chalanEstimate = chalanResult.response.text().trim();
-            
-            // Log tokens for Chalan
-            if (chalanResult.response.usageMetadata) {
-              const inputTokens = chalanResult.response.usageMetadata.promptTokenCount || 0;
-              const outputTokens = chalanResult.response.usageMetadata.candidatesTokenCount || 0;
-              const estimatedCost = (inputTokens * 0.075 / 1000000) + (outputTokens * 0.30 / 1000000);
-              await prisma.aiUsageLog.create({
-                data: {
-                  agentName: "El Chalán",
-                  contactId: contact.id,
-                  inputTokens,
-                  outputTokens,
-                  totalTokens: inputTokens + outputTokens,
-                  estimatedCost,
-                }
-              });
-            }
-          } catch (e) {
-            console.error("Error en estimación final del Chalán:", e);
-          }
-
-          // Procesar el mensaje del chalán para extraer el JSON oculto y limpiar el texto
-          let cleanChalanEstimate = chalanEstimate;
-          let parsedChalanData: any = {};
-          
-          if (chalanEstimate.includes("||JSON||")) {
-            const parts = chalanEstimate.split("||JSON||");
-            cleanChalanEstimate = parts[0].trim();
-            try {
-              if (parts[1]) {
-                parsedChalanData = JSON.parse(parts[1].trim());
-              }
-            } catch(e) {
-              console.error("Error parseando JSON del Chalán:", e);
-            }
-          }
-
-          const adminAlertMsg = `🚨 *Nueva Solicitud de Cotización* 🚨
-Cliente: ${contact.name || contact.phone} (${contact.phone})
-Proyecto: ${args.project_name}
-Material: ${args.material}
-Grosor: ${args.grosor || 'N/A'}
-Ancho: ${args.ancho_cm} cm
-Alto: ${args.alto_cm} cm
-Cantidad: ${args.cantidad}
-Diseño: ${args.diseno_incluido ? 'Sí' : 'No'}
-
-🤖 *Estimación Previa del Chalán (IA):*
-${cleanChalanEstimate}
-
-_Para responder, busca este cliente en el CRM o comunícate con él directamente._`;
-
-          // Guardar el mensaje interno del Chalán en la BD para que se vea en el UI del chat
-          try {
-            const fullMaterialName = args.grosor ? `${args.material} ${args.grosor}` : args.material;
-            const quoteData = {
-              project: args.project_name,
-              material: fullMaterialName,
-              width: args.ancho_cm,
-              height: args.alto_cm,
-              qty: args.cantidad,
-              estimatedTimeMin: parsedChalanData.estimatedTimeMin || "",
-              name: args.nombre_cliente || "",
-              email: args.correo_cliente || ""
-            };
-            const payload = `|||${encodeURIComponent(JSON.stringify(quoteData))}|||`;
-
             const internalMessage = await prisma.whatsAppMessage.create({
               data: {
                 contactId: contact.id,
                 messageId: `chalan_${Date.now()}`,
                 direction: 'INTERNAL',
                 type: 'TEXT',
-                content: `Estimación del Chalán:\n${cleanChalanEstimate}\n${payload}`,
-                status: 'DELIVERED'
-              }
+                content: `Estimación del Chalán:\n${chalanResult.cleanEstimate}\n${chalanResult.quotePayload}`,
+                status: 'DELIVERED',
+              },
             });
             // Emitir evento para el UI
             notificationEmitter.emit('whatsapp_message', { message: internalMessage, contact });
-          } catch(e) {}
+          } catch (e) {
+            console.error("Error guardando mensaje interno de El Chalán:", e);
+          }
 
-          // Alertar al admin (si falla, no rompas el flujo de la IA)
+          // 3. Alertar al admin (si falla, no rompas el flujo de la IA)
           try {
             if (!contact.name?.includes("Simulador")) {
               await sendMessageToMeta('52XXXXXXXXXX', {
                 type: 'text',
-                text: { body: adminAlertMsg }
+                text: { body: chalanResult.adminAlertMsg },
               });
             } else {
-              console.log("[SIMULADOR] Alerta de cotización al admin simulada:", adminAlertMsg);
+              console.log("[SIMULADOR] Alerta de cotización al admin simulada:", chalanResult.adminAlertMsg);
             }
           } catch (e) {
             console.warn("No se pudo enviar la alerta al admin (quizás token vencido):", e);

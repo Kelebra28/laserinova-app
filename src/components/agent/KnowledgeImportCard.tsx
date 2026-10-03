@@ -5,34 +5,42 @@ import toast from "react-hot-toast";
 import { UploadCloud } from "lucide-react";
 
 export function KnowledgeImportCard() {
-  const [file, setFile] = useState<File | null>(null);
-  const [type, setType] = useState<string>("pinecone");
+  const [files, setFiles] = useState<File[]>([]);
+  const [type, setType] = useState<string>("pinecone_secretary");
   const [loading, setLoading] = useState(false);
 
   const handleUpload = async () => {
-    if (!file) {
-      toast.error("Selecciona un archivo CSV primero");
+    if (files.length === 0) {
+      toast.error("Selecciona al menos un archivo CSV primero");
       return;
     }
 
     setLoading(true);
+    let successCount = 0;
+    
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("type", type);
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("type", type);
 
-      const res = await fetch("/api/admin/import-csv", {
-        method: "POST",
-        body: formData,
-      });
+        const res = await fetch("/api/admin/import-csv", {
+          method: "POST",
+          body: formData,
+        });
 
-      const data = await res.json();
+        const data = await res.json();
+        
+        if (data.success) {
+          successCount++;
+        } else {
+          toast.error(`Error en ${file.name}: ${data.error}`);
+        }
+      }
       
-      if (data.success) {
-        toast.success(data.message);
-        setFile(null);
-      } else {
-        toast.error(data.error || "Error al subir el archivo");
+      if (successCount > 0) {
+        toast.success(`Se inyectaron ${successCount} archivos exitosamente`);
+        setFiles([]);
       }
     } catch (error: any) {
       toast.error("Error de conexión: " + error.message);
@@ -55,7 +63,8 @@ export function KnowledgeImportCard() {
           value={type} 
           onChange={(e) => setType(e.target.value)}
         >
-          <option value="pinecone" className="text-black">🧠 Respuestas/Reglas (Pinecone)</option>
+          <option value="pinecone_secretary" className="text-black">🧠 Reglas Secretaria (Pinecone)</option>
+          <option value="pinecone_chalan" className="text-black">👷🏽‍♂️ Reglas Chalán (Pinecone)</option>
           <option value="materials" className="text-black">📦 Materiales (DB)</option>
           <option value="costs" className="text-black">💰 Costos/Gastos Fijos (DB)</option>
           <option value="machines" className="text-black">⚙️ Máquinas/Procesos (DB)</option>
@@ -63,23 +72,28 @@ export function KnowledgeImportCard() {
 
         <label className="flex flex-col items-center justify-center w-full p-4 border-2 border-dashed border-white/30 rounded-xl cursor-pointer bg-white/5 hover:bg-white/10 transition-colors">
           <UploadCloud className="w-8 h-8 text-white/70 mb-2" />
-          <span className="text-sm font-bold text-white">
-            {file ? file.name : "Haz clic para seleccionar tu archivo CSV"}
+          <span className="text-sm font-bold text-white text-center">
+            {files.length > 0 ? `${files.length} archivo(s) seleccionado(s)` : "Haz clic para seleccionar archivos CSV"}
           </span>
           <span className="text-xs text-white/50 mt-1">
-            {file ? "Archivo listo para inyectar" : "Solo archivos .csv"}
+            {files.length > 0 ? Array.from(files).map(f => f.name).join(', ') : "Puedes seleccionar múltiples archivos .csv"}
           </span>
           <input 
             type="file" 
             accept=".csv"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            multiple
+            onChange={(e) => {
+              if (e.target.files) {
+                setFiles(Array.from(e.target.files));
+              }
+            }}
             className="hidden"
           />
         </label>
 
         <button 
           onClick={handleUpload}
-          disabled={loading || !file}
+          disabled={loading || files.length === 0}
           className="w-full py-2 px-4 bg-white text-indigo-900 font-bold rounded-xl hover:bg-zinc-200 disabled:opacity-50 transition-all text-sm"
         >
           {loading ? "Inyectando..." : "Subir e Inyectar"}

@@ -45,8 +45,8 @@ export async function getRelevantRules(userMessage: string, genAI?: GoogleGenera
       const result = await embeddingModel.embedContent(userMessage);
       const vector = result.embedding.values;
 
-      // 2. Buscar en Pinecone las 2 reglas más similares matemáticamente
-      const queryResponse = await index.query({
+      // 2. Buscar en Pinecone (namespace 'secretary') las 2 reglas más similares
+      const queryResponse = await index.namespace('secretary').query({
         vector: vector,
         topK: 2,
         includeMetadata: true

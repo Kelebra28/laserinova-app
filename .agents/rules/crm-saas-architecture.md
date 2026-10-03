@@ -63,5 +63,12 @@ ESTÁNDAR ARQUITECTÓNICO ABSOLUTO PARA NEXT.JS (APLICAR SIEMPRE SIN EXCEPCIONES
 - CARPETA DESIGNADA: Toda constante o mapeo de datos que pueda ser reutilizado debe centralizarse en un directorio dedicado, típicamente en `/src/lib/constants.ts` (o `/src/constants/`).
 - IMPORTACIÓN LIMPIA: Las páginas y componentes solo deben importar estos diccionarios, manteniendo la declaración de variables lo más limpia posible y asegurando una única fuente de verdad para toda la aplicación.
 
+10. DIRECTRICES ESTRICTAS DE SEGURIDAD Y BLINDAJE (AUDITORÍA & ZERO TRUST):
+- PREVENCIÓN DE MASS ASSIGNMENT: Prohibido desempaquetar `FormData` o payloads crudos directamente en Prisma (`...data`). Todo Server Action DEBE validar perimetralmente con esquemas Zod estrictos (`z.object({...})`), filtrando únicamente los campos explícitamente permitidos para la operación.
+- CONTROL DE ACCESO BASADO EN ROLES (RBAC): No basta con verificar que el usuario esté logueado. En todas las mutaciones críticas y destructivas (eliminación de registros, actualización de pagos, anulación de cotizaciones, descargas de backups), el helper `requireAuth` debe invocar la validación de roles permitidos (ej. `await requireAuth(["ADMIN"])`).
+- FUGA CERO DE CREDENCIALES (DATA LEAKAGE): En modelos sensibles como `User`, queda estrictamente prohibido consultar Prisma sin un `select` explícito. NUNCA se debe retornar el campo `passwordHash`, tokens de recuperación o secretos al cliente ni incluirlos en endpoints de backup o reportes.
+- CABECERAS DE SEGURIDAD Y SESIONES: Mantener configuradas cabeceras de seguridad estrictas en `next.config.ts` (HSTS, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy) y expiración de sesiones JWT con tiempo acotado (máximo 8 horas de inactividad).
+- PROTECCIÓN DE CONEXIONES DB: Toda cadena de conexión remota debe regular su pool (`connection_limit=3` a `5`) para evitar caídas por saturación de concurrencia.
+
 INSTRUCCIÓN OPERATIVA CONSTANTE:
 Cuando solicite un nuevo módulo o pantalla, NO preguntes qué tecnologías usar. Diseña la solución aplicando estas reglas, separa los componentes presentacionales de los contenedores, y entrégame el código final listo para integrar.
