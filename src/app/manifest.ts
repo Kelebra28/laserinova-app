@@ -12,9 +12,9 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: 'portrait',
     icons: [
       {
-        src: '/logo_sidebar.png',
+        src: '/favicon.ico',
         sizes: 'any',
-        type: 'image/png',
+        type: 'image/x-icon',
       }
     ],
   };

@@ -1,12 +1,6 @@
 import React from "react";
-import { GlobalLoader } from "@/components/ui/GlobalLoader";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 
-export default function FinanceLoading() {
-  return (
-    <GlobalLoader 
-      label="Cargando Finanzas" 
-      subLabel="Control de Egresos e Ingresos" 
-      minHeight="min-h-[60vh]" 
-    />
-  );
+export default function Loading() {
+  return <TableSkeleton />;
 }

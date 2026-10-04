@@ -1,12 +1,6 @@
 import React from "react";
-import { GlobalLoader } from "@/components/ui/GlobalLoader";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 
-export default function InventoryLoading() {
-  return (
-    <GlobalLoader 
-      label="Cargando Inventario" 
-      subLabel="Control de Stock de Productos" 
-      minHeight="min-h-[60vh]" 
-    />
-  );
+export default function Loading() {
+  return <TableSkeleton />;
 }

@@ -1,12 +1,6 @@
 import React from "react";
-import { GlobalLoader } from "@/components/ui/GlobalLoader";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 
-export default function ProcessesLoading() {
-  return (
-    <GlobalLoader 
-      label="Cargando Procesos" 
-      subLabel="Parámetros de Maquinaria" 
-      minHeight="min-h-[60vh]" 
-    />
-  );
+export default function Loading() {
+  return <TableSkeleton />;
 }

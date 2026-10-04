@@ -12,26 +12,19 @@ export function GlobalLoader({
   minHeight = "min-h-[60vh]" 
 }: GlobalLoaderProps) {
   return (
-    <div className={`flex flex-col items-center justify-center ${minHeight} space-y-6 bg-black w-full`}>
-      <div className="relative w-24 h-24 flex items-center justify-center">
-        {/* Anillo exterior rotando */}
-        <div className="absolute inset-0 border-[6px] border-zinc-900 border-t-red-600 rounded-full animate-spin"></div>
-        
-        {/* Anillo interior rotando en dirección opuesta */}
-        <div className="absolute inset-2 border-[4px] border-zinc-900 border-b-red-600 rounded-full animate-spin" style={{ animationDirection: "reverse", animationDuration: "1.5s" }}></div>
-        
-        {/* Centro pulsante rojo */}
-        <div className="absolute inset-6 bg-zinc-950 rounded-full flex items-center justify-center border border-red-900">
-          <div className="w-4 h-4 bg-red-600 rounded-full animate-pulse shadow-[0_0_15px_rgba(220,38,38,1)]"></div>
-        </div>
+    <div className={`flex flex-col items-center justify-center ${minHeight} space-y-4 w-full bg-transparent`}>
+      <div className="relative w-12 h-12 flex items-center justify-center">
+        <div className="absolute inset-0 border-4 border-slate-100 border-t-red-500 rounded-full animate-spin"></div>
       </div>
       <div className="flex flex-col items-center space-y-1">
-        <h3 className="text-base font-black text-white uppercase tracking-[0.2em] animate-pulse drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
+        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest animate-pulse">
           {label}
         </h3>
-        <p className="text-xs text-red-500 uppercase tracking-widest font-bold drop-shadow-[0_0_5px_rgba(220,38,38,0.5)]">
-          {subLabel}
-        </p>
+        {subLabel && (
+          <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">
+            {subLabel}
+          </p>
+        )}
       </div>
     </div>
   );

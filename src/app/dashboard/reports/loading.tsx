@@ -1,12 +1,6 @@
 import React from "react";
-import { GlobalLoader } from "@/components/ui/GlobalLoader";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 
-export default function ReportsLoading() {
-  return (
-    <GlobalLoader 
-      label="Cargando Reportes" 
-      subLabel="Análisis de Rendimiento" 
-      minHeight="min-h-[60vh]" 
-    />
-  );
+export default function Loading() {
+  return <TableSkeleton />;
 }

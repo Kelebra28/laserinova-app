@@ -28,3 +28,25 @@ export function DashboardSkeleton() {
     </div>
   );
 }
+
+export function TableSkeleton() {
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500 w-full">
+      <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
+        <Skeleton className="h-10 w-1/3 rounded-lg" />
+        <Skeleton className="h-10 w-32 rounded-xl" />
+      </div>
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60 space-y-4">
+        <div className="flex justify-between items-center">
+           <Skeleton className="h-8 w-64 rounded-lg" />
+           <Skeleton className="h-8 w-24 rounded-lg" />
+        </div>
+        <div className="space-y-3 pt-4">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-xl" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

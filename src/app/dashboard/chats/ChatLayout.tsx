@@ -7,7 +7,7 @@ import { useWhatsAppEvents } from '@/hooks/useWhatsAppEvents';
 import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simulateIncomingMessageAction, createDummyContactAction, sendMediaMessageAction, generateSummaryAction } from '@/server/actions/whatsapp.actions';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2 } from 'lucide-react';
+import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 type Contact = any;
@@ -512,6 +512,9 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
             onChange={(e) => setSearchQuery(e.target.value)}
             className="bg-[#202c33] border-none !text-white focus-visible:ring-[#00a884] placeholder:text-[#8696a0] flex-1 rounded-lg" 
           />
+          <Button type="button" onClick={() => window.location.reload()} variant="outline" size="icon" title="Recargar App" className="shrink-0 bg-transparent border-none hover:bg-[#202c33] text-[#8696a0] rounded-full">
+            <RefreshCw size={20} />
+          </Button>
           <Button type="button" onClick={createDummyContact} variant="outline" size="icon" title="Crear contacto de prueba" className="shrink-0 bg-transparent border-none hover:bg-[#202c33] text-[#8696a0] rounded-full">
             <Plus size={20} />
           </Button>
@@ -617,53 +620,61 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                 <span className="text-xs text-[#8696a0] truncate">{activeContact.phone}</span>
               </div>
             </div>
-            <div className="flex items-center gap-2 md:gap-4 shrink-0">
+            <div className="flex items-center gap-3 shrink-0">
               {pendingQuoteUrl && (
                 <Link href={pendingQuoteUrl}>
                   <Button 
-                    variant="outline" 
+                    variant="ghost" 
                     size="sm"
-                    className="border-none rounded-full px-2 md:px-4 bg-yellow-500 hover:bg-yellow-600 text-black font-bold shadow-sm flex items-center gap-2 animate-pulse"
+                    className="rounded-xl px-4 bg-amber-500 hover:bg-amber-400 text-amber-950 font-black tracking-wide shadow-[0_0_15px_rgba(245,158,11,0.4)] flex items-center gap-2 transition-all active:scale-95"
                     title="Cotización Lista para Generar"
                   >
                     📝 <span className="hidden md:inline">Generar Cotización</span>
                   </Button>
                 </Link>
               )}
-              <div className="flex items-center gap-2 border-r border-[#313d45] pr-2 md:pr-4">
-                <span className="hidden md:inline text-sm text-[#8696a0]">Simulador</span>
+              
+              {/* Contenedor del Simulador con estilo Píldora */}
+              <div className="hidden md:flex items-center gap-3 bg-[#111b21] px-4 py-1.5 rounded-xl border border-[#313d45] shadow-inner">
+                <span className="text-xs font-bold text-[#8696a0] uppercase tracking-wider">Simulador</span>
                 <button
                   type="button"
                   onClick={() => setSimulatorMode(!simulatorMode)}
                   className={cn(
-                    "w-10 h-5 rounded-full relative transition-colors duration-200",
-                    simulatorMode ? "bg-[#00a884]" : "bg-[#313d45]"
+                    "w-11 h-6 rounded-full relative transition-colors duration-300 shadow-inner",
+                    simulatorMode ? "bg-amber-500" : "bg-[#313d45]"
                   )}
                 >
                   <div className={cn(
-                    "w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform duration-200 shadow-sm",
-                    simulatorMode ? "translate-x-5" : "translate-x-1"
+                    "w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-300 shadow-md",
+                    simulatorMode ? "translate-x-6" : "translate-x-1"
                   )} />
                 </button>
               </div>
+
+              {/* Botón de Bot Activo / Modo Humano */}
               <Button 
-                variant="outline" 
+                variant="ghost" 
                 size="sm"
                 onClick={toggleBotMode}
                 className={cn(
-                  "border-none transition-all rounded-full px-2 md:px-4",
+                  "rounded-xl px-4 font-black uppercase tracking-wider text-xs transition-all active:scale-95 shadow-sm border",
                   activeContact.botMode 
-                    ? "bg-[#00a884] hover:bg-[#008f6f] text-[#111b21] font-medium shadow-sm" 
-                    : "bg-transparent hover:bg-[#2a3942] text-[#8696a0]"
+                    ? "bg-[#00a884] hover:bg-[#00c298] text-teal-950 border-[#00a884] shadow-[0_0_15px_rgba(0,168,132,0.3)]" 
+                    : "bg-[#111b21] hover:bg-[#202c33] text-[#8696a0] border-[#313d45]"
                 )}
               >
-                {activeContact.botMode ? <><Bot size={16} className="md:mr-2"/><span className="hidden md:inline">Bot Activo</span></> : <><UserIcon size={16} className="md:mr-2"/><span className="hidden md:inline">Modo Humano</span></>}
+                {activeContact.botMode 
+                  ? <><Bot size={16} className="md:mr-2"/><span className="hidden md:inline">Bot Activo</span></> 
+                  : <><UserIcon size={16} className="md:mr-2"/><span className="hidden md:inline">Modo Humano</span></>}
               </Button>
+
+              {/* Botón Resumen IA */}
               <Button 
-                variant="outline" 
+                variant="ghost" 
                 size="icon"
                 onClick={handleGenerateSummary}
-                className="rounded-full bg-gradient-to-r from-purple-500/20 to-blue-500/20 border-purple-500/30 text-purple-400 hover:text-purple-300 hover:from-purple-500/30 hover:to-blue-500/30 transition-all shadow-sm"
+                className="rounded-xl w-9 h-9 bg-[#111b21] border border-[#313d45] hover:border-purple-500/50 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 transition-all shadow-sm active:scale-95"
                 title="Resumir con IA"
               >
                 <Sparkles size={18} />

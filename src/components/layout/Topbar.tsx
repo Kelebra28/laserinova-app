@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
-import { LogOut, Menu, ShieldCheck, User as UserIcon } from "lucide-react";
+import { LogOut, Menu, ShieldCheck, User as UserIcon, RefreshCw } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/Button";
 
@@ -50,6 +50,17 @@ export function Topbar({ onMenuClick }: TopbarProps) {
             </p>
           </div>
         </div>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => window.location.reload()}
+          className="text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-all"
+          title="Recargar App"
+          aria-label="Recargar App"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </Button>
 
         {/* Logout */}
         <Button

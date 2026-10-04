@@ -1,12 +1,6 @@
 import React from "react";
-import { GlobalLoader } from "@/components/ui/GlobalLoader";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 
-export default function ProvidersLoading() {
-  return (
-    <GlobalLoader 
-      label="Cargando Proveedores" 
-      subLabel="Directorio de Contactos Comerciales" 
-      minHeight="min-h-[60vh]" 
-    />
-  );
+export default function Loading() {
+  return <TableSkeleton />;
 }

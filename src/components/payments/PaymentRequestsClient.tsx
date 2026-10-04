@@ -13,7 +13,7 @@ import {
   getClientsForPayments 
 } from "@/server/actions/payment.actions";
 import toast from "react-hot-toast";
-import { GlobalLoader } from "@/components/ui/GlobalLoader";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 
 export default function PaymentRequestsClient() {
   const queryClient = useQueryClient();
@@ -102,7 +102,7 @@ export default function PaymentRequestsClient() {
   };
 
   if (isLoadingRequests || isLoadingClients) {
-    return <GlobalLoader label="Cargando Cobranza" subLabel="Por favor espera..." />;
+    return <TableSkeleton />;
   }
 
   return (
