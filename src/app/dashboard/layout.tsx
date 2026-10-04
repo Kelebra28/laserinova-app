@@ -15,15 +15,15 @@ export default function DashboardLayout({
   const isChatRoute = pathname?.startsWith('/dashboard/chats');
 
   return (
-    <div className={`flex h-screen overflow-hidden ${isChatRoute ? 'bg-[#111b21]' : 'bg-gray-50'}`}>
+    <div className={`flex min-h-screen ${isChatRoute ? 'bg-[#111b21]' : 'bg-gray-50'}`}>
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
       />
-      <div className="flex flex-col flex-1 w-0 overflow-hidden">
+      <div className="flex flex-col flex-1 w-full min-w-0">
         <Topbar onMenuClick={() => setIsSidebarOpen(true)} />
-        <main className="flex-1 relative overflow-y-auto focus:outline-none">
-          <div className={isChatRoute ? "h-full w-full" : "py-4 px-4 sm:px-6 md:px-8"}>
+        <main className="flex-1 relative focus:outline-none">
+          <div className={isChatRoute ? "h-[calc(100vh-3.5rem)] w-full" : "py-4 px-4 sm:px-6 md:px-8"}>
             {children}
           </div>
         </main>

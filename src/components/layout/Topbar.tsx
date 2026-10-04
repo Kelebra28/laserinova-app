@@ -1,9 +1,10 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
-import { LogOut, Menu, ShieldCheck, User as UserIcon, RefreshCw } from "lucide-react";
+import { LogOut, Menu, ShieldCheck, User as UserIcon, RefreshCw, ChevronLeft } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/Button";
+import { useRouter, usePathname } from "next/navigation";
 
 interface TopbarProps {
   onMenuClick?: () => void;
@@ -11,15 +12,21 @@ interface TopbarProps {
 
 export function Topbar({ onMenuClick }: TopbarProps) {
   const { data: session } = useSession();
+  const router = useRouter();
+  const pathname = usePathname();
   const user = session?.user as any;
   const name = user?.name || user?.email || "Usuario";
   const role = user?.role as string | undefined;
   const isAdmin = role === "ADMIN";
 
+  // Determinar si estamos en una vista profunda (ej. /dashboard/quotes/123)
+  // path segments: ["", "dashboard", "quotes", "123"] -> length > 3
+  const isDeepView = pathname ? pathname.split("/").filter(Boolean).length > 2 : false;
+
   return (
     <header className="sticky top-0 z-30 bg-white/70 dark:bg-black/40 backdrop-blur-md border-b border-zinc-200/50 dark:border-zinc-800/50 h-14 flex items-center justify-between px-4 sm:px-6 shrink-0 transition-colors duration-200">
       {/* Left: hamburger (mobile) */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1 sm:gap-3">
         <Button
           variant="ghost"
           size="icon"
