@@ -53,14 +53,9 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.role = (user as any).role;
         token.permissions = (user as any).permissions;
-      } else if (token.id) {
-        // Fetch fresh permissions from DB so changes apply immediately without relogin
-        const freshUser = await prisma.user.findUnique({ where: { id: token.id as string }, select: { role: true, permissions: true } });
-        if (freshUser) {
-          token.role = freshUser.role;
-          token.permissions = freshUser.permissions;
-        }
       }
+      // Se elimina el findUnique aquí para evitar DDoSear la base de datos en Hostinger.
+      // Los permisos se leen del token de forma ultra-rápida.
       return token;
     },
     async session({ session, token }) {
