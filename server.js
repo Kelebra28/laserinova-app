@@ -1,6 +1,10 @@
 const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
+const { loadEnvConfig } = require('@next/env');
+
+// Cargar .env manualmente (Requerido para server.js personalizado en Hostinger)
+loadEnvConfig(process.cwd());
 
 // Configuramos entorno
 const dev = process.env.NODE_ENV !== 'production';
