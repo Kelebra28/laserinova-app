@@ -45,6 +45,9 @@ export async function downloadAndCompressMedia(mediaId: string): Promise<string 
   if (!WHATSAPP_TOKEN) return null;
 
   try {
+    const { mkdir, writeFile } = await import('fs/promises');
+    const { join } = await import('path');
+    
     // 1. Obtener la URL del media
     const urlResponse = await fetch(`https://graph.facebook.com/v19.0/${mediaId}`, {
       headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
@@ -62,22 +65,40 @@ export async function downloadAndCompressMedia(mediaId: string): Promise<string 
     const buffer = Buffer.from(arrayBuffer);
     
     let mimeType = urlData.mime_type;
+    let folder = 'docs';
+    let extension = 'bin';
+    let finalBuffer = buffer;
     
-    // 3. Comprimir si es imagen o guardar en Base64
+    // 3. Categorizar y comprimir
     if (mimeType.startsWith('image/')) {
-      const optimizedBuffer = await sharp(buffer)
-        .webp({ quality: 75 })
+      folder = 'images';
+      extension = 'webp';
+      finalBuffer = await sharp(buffer)
+        .webp({ quality: 80 })
         .resize({ width: 1200, withoutEnlargement: true })
         .toBuffer();
-      
-      return `data:image/webp;base64,${optimizedBuffer.toString('base64')}`;
-    } else {
-      // Audio o Documentos: WhatsApp usa audio/ogg; codecs=opus.
-      if (mimeType.includes('audio/ogg')) {
-        mimeType = 'audio/ogg'; // Limpiar codecs=opus para compatibilidad web
-      }
-      return `data:${mimeType};base64,${buffer.toString('base64')}`;
+    } else if (mimeType.includes('audio/')) {
+      folder = 'audio';
+      extension = 'ogg'; // WhatsApp usa ogg
+    } else if (mimeType.includes('video/')) {
+      folder = 'video';
+      extension = 'mp4';
+    } else if (mimeType.includes('pdf')) {
+      extension = 'pdf';
     }
+
+    // 4. Guardar físicamente en Hostinger (public/uploads)
+    const uploadDir = join(process.cwd(), 'public', 'uploads', folder);
+    await mkdir(uploadDir, { recursive: true });
+
+    const uniqueId = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const fileName = `${uniqueId}.${extension}`;
+    const filePath = join(uploadDir, fileName);
+
+    await writeFile(filePath, finalBuffer);
+
+    // 5. Retornar solo el enlace público a la BD
+    return `/uploads/${folder}/${fileName}`;
 
   } catch (error) {
     console.error('Error procesando media:', error);
