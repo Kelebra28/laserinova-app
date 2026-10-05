@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     // Determinar categoría por tipo MIME
     const mime = file.type;
     let folder = 'docs';
-    let finalBuffer = buffer;
+    let finalBuffer: any = buffer;
     
     // Obtener la extensión original (limpiando posibles nombres raros)
     let extension = (file.name || '').split('.').pop()?.toLowerCase() || 'bin';

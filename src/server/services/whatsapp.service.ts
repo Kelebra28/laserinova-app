@@ -67,7 +67,7 @@ export async function downloadAndCompressMedia(mediaId: string): Promise<string 
     let mimeType = urlData.mime_type;
     let folder = 'docs';
     let extension = 'bin';
-    let finalBuffer = buffer;
+    let finalBuffer: any = buffer;
     
     // 3. Categorizar y comprimir
     if (mimeType.startsWith('image/')) {
