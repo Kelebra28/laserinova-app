@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { Metadata } from "next";
 import { Suspense } from "react";
 import QuotesClient from "@/components/quotes/QuotesClient";

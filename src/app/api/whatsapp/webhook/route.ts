@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { processIncomingMessage, processAIAgentResponse } from '@/server/services/whatsapp.service';
 import { notificationEmitter } from '@/lib/notification-emitter';

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createCategory } from "../actions";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";

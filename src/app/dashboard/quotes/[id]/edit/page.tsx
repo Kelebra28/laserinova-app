@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { notFound } from "next/navigation";
 import EditQuoteForm from "@/components/quotes/EditQuoteForm";
 import QuoteVersionTabs from "@/components/quotes/QuoteVersionTabs";

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { prisma } from "@/lib/prisma";
 import { Cpu, Settings2 } from "lucide-react";
 import ProcessTabs from "./ProcessTabs";

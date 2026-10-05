@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import Link from "next/link";
 import { ArrowLeft, Download, Mail, FileText, Settings, User, TrendingUp, TrendingDown, Clock, Loader2, Trash2, Edit, CreditCard, DollarSign, Briefcase, AlertCircle } from "lucide-react";
 import { notFound } from "next/navigation";
