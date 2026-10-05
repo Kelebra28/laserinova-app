@@ -845,7 +845,7 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
           <div className="bg-[#202c33] px-4 py-3 flex flex-col z-20">
             
             {/* Context Banners (Reply & Staged File) */}
-            {(replyingTo || stagedFile) && (
+            {(replyingTo || stagedFiles.length > 0) && (
               <div className="flex flex-col gap-2 mb-2">
                 {replyingTo && (
                   <div className="flex items-center justify-between bg-[#2a3942] p-3 rounded-lg border-l-4 border-[#00a884] shadow-sm relative mx-2">
