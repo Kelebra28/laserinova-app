@@ -62,7 +62,7 @@ export async function downloadAndCompressMedia(mediaId: string): Promise<string 
     });
     
     const arrayBuffer = await mediaResponse.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const buffer = Buffer.from(arrayBuffer as ArrayBuffer);
     
     let mimeType = urlData.mime_type;
     let folder = 'docs';

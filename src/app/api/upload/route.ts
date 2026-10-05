@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     }
 
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const buffer = Buffer.from(bytes as ArrayBuffer);
 
     // Determinar categoría por tipo MIME
     const mime = file.type;
