@@ -10,11 +10,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  webpack: (config) => {
-    // Esta configuración dummy fuerza a Next.js a usar Webpack en lugar de Turbopack
-    // Esto previene el error "TurbopackInternalError" al compilar CSS en Hostinger.
-    return config;
-  },
   experimental: {
     serverActions: {
       bodySizeLimit: '5mb',
