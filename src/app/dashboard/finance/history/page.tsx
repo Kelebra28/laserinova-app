@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { ArrowLeft, TrendingUp, TrendingDown, Receipt, Wallet, Scale, ArrowDownRight, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
