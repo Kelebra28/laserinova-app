@@ -27,7 +27,7 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [simulatorMode, setSimulatorMode] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [stagedFile, setStagedFile] = useState<File | null>(null);
+  const [stagedFiles, setStagedFiles] = useState<File[]>([]);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [reactionMenuFor, setReactionMenuFor] = useState<string | null>(null);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
@@ -294,49 +294,70 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if ((!inputText.trim() && !stagedFile && !recordedAudio) || !activeContact) return;
+    if ((!inputText.trim() && stagedFiles.length === 0 && !recordedAudio) || !activeContact) return;
 
     const textToSend = inputText;
-    const fileToSend = stagedFile;
+    const filesToSend = [...stagedFiles];
     const audioToSend = recordedAudio;
     const replyingToMessage = replyingTo;
     
     setInputText('');
-    setStagedFile(null);
+    setStagedFiles([]);
     setRecordedAudio(null);
     setReplyingTo(null);
 
-    // Si hay un archivo o audio, lo manejamos con sendMediaMessageAction
-    if (fileToSend || audioToSend) {
-      const formData = new FormData();
-      if (fileToSend) {
-        formData.append('file', fileToSend);
-      } else if (audioToSend) {
-        // Convert Blob to File
-        const audioFile = new File([audioToSend], `audio_message_${Date.now()}.webm`, { type: 'audio/webm' });
-        formData.append('file', audioFile);
-      }
-      formData.append('contactId', activeContact.id);
-      formData.append('simulatorMode', String(simulatorMode));
-      if (textToSend.trim()) {
-        formData.append('caption', textToSend);
-      }
-
+    // Si hay archivos o audio, los manejamos con sendMediaMessageAction
+    if (filesToSend.length > 0 || audioToSend) {
       setIsUploading(true);
       try {
-        const res = await sendMediaMessageAction(formData);
-        if (res.success && res.message) {
-          setMessages(prev => {
-            if (prev.some(m => m.id === res.message.id)) return prev;
-            return [...prev, res.message];
-          });
-        } else {
-          toast.error(res.error || 'Error al subir archivo');
+        if (audioToSend) {
+          const formData = new FormData();
+          const audioFile = new File([audioToSend], `audio_message_${Date.now()}.webm`, { type: 'audio/webm' });
+          formData.append('file', audioFile);
+          formData.append('contactId', activeContact.id);
+          formData.append('simulatorMode', String(simulatorMode));
+          
+          const res = await sendMediaMessageAction(formData);
+          if (res.success && res.message) {
+            setMessages(prev => {
+              if (prev.some(m => m.id === res.message.id)) return prev;
+              return [...prev, res.message];
+            });
+          }
+        }
+
+        // Subir cada imagen/archivo secuencialmente
+        for (let i = 0; i < filesToSend.length; i++) {
+          const file = filesToSend[i];
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('contactId', activeContact.id);
+          formData.append('simulatorMode', String(simulatorMode));
+          
+          // Solo adjuntar el texto al primer archivo
+          if (i === 0 && textToSend.trim()) {
+            formData.append('caption', textToSend);
+          }
+
+          const res = await sendMediaMessageAction(formData);
+          if (res.success && res.message) {
+            setMessages(prev => {
+              if (prev.some(m => m.id === res.message.id)) return prev;
+              return [...prev, res.message];
+            });
+          } else {
+            toast.error(res.error || `Error al subir archivo ${i+1}`);
+          }
         }
       } catch (err) {
-        toast.error('Error al subir el archivo');
+        toast.error('Error al subir archivos');
       } finally {
         setIsUploading(false);
+      }
+      
+      // Si no hubo primer archivo pero sí audio y texto, el texto se envía por separado
+      if (filesToSend.length === 0 && textToSend.trim()) {
+        await handleTextSend(textToSend, replyingToMessage);
       }
     } else {
       await handleTextSend(textToSend, replyingToMessage);
@@ -402,11 +423,11 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !activeContact) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0 || !activeContact) return;
 
-    // Solo lo preparamos (stage)
-    setStagedFile(file);
+    // Agregar nuevos archivos a los que ya estaban (si queremos permitir acumular)
+    setStagedFiles(prev => [...prev, ...files]);
     // Reset input para que pueda seleccionar el mismo archivo si lo borra
     e.target.value = '';
   };
@@ -539,47 +560,53 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                 key={contact.id} 
                 onClick={() => loadMessages(contact)}
                 className={cn(
-                  "p-3 mx-2 my-1 rounded-xl cursor-pointer transition-colors flex flex-col gap-1",
+                  "p-3 mx-2 my-1 rounded-xl cursor-pointer transition-colors flex gap-3 items-center",
                   activeContact?.id === contact.id ? "bg-[#2a3942]" : "hover:bg-[#202c33]"
                 )}
               >
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    {contact.profilePictureUrl ? (
-                      <img src={contact.profilePictureUrl} alt="Avatar" className="w-12 h-12 rounded-full object-cover shrink-0" />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full bg-[#6a7175] flex items-center justify-center text-white font-medium text-lg shrink-0">
-                        {contact.name ? contact.name.substring(0, 1).toUpperCase() : <UserIcon size={24} className="text-[#cfd4d6]" />}
-                      </div>
-                    )}
-                    <span className="font-normal text-[#e9edef] truncate text-[17px]">{contact.name || contact.phone}</span>
+                {/* Avatar */}
+                {contact.profilePictureUrl ? (
+                  <img src={contact.profilePictureUrl} alt="Avatar" className="w-12 h-12 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-[#6a7175] flex items-center justify-center text-white font-medium text-lg shrink-0">
+                    {contact.name ? contact.name.substring(0, 1).toUpperCase() : <UserIcon size={24} className="text-[#cfd4d6]" />}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {unreadCounts[contact.id] > 0 && (
-                      <span className="bg-[#00a884] text-[#111b21] text-[11px] font-bold rounded-full min-w-[20px] h-[20px] flex items-center justify-center px-1">
-                        {unreadCounts[contact.id]}
+                )}
+
+                {/* Contenido (Nombre + Mensaje) */}
+                <div className="flex flex-col flex-1 min-w-0">
+                  {/* Fila superior: Nombre y Fecha */}
+                  <div className="flex justify-between items-center mb-0.5">
+                    <span className="font-normal text-[#e9edef] truncate text-base">{contact.name || contact.phone}</span>
+                    {contact.messages?.[0] && (
+                      <span className="text-[11px] text-[#8696a0] shrink-0 ml-2">
+                        {new Date(contact.messages[0].timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </span>
                     )}
-                    {contact.botMode ? (
-                      <Bot size={16} className="text-[#00a884]" />
-                    ) : (
-                      <UserIcon size={16} className="text-[#8696a0]" />
-                    )}
                   </div>
-                </div>
-                <div className="text-xs text-slate-400 truncate flex justify-between ml-13 pl-13">
-                  <span className="truncate pl-[52px]">
-                    {contact.messages?.[0]?.type === 'TEXT' ? contact.messages[0].content : 
-                     contact.messages?.[0]?.type === 'IMAGE' ? '📷 Foto' : 
-                     contact.messages?.[0]?.type === 'AUDIO' ? '🎵 Audio' : 
-                     contact.messages?.[0]?.type === 'DOCUMENT' ? '📄 Documento' : 
-                     'Sin mensajes recientes'}
-                  </span>
-                  {contact.messages?.[0] && (
-                    <span className="ml-2 text-slate-500 shrink-0">
-                      {new Date(contact.messages[0].timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  
+                  {/* Fila inferior: Mensaje e Iconos (Bot/Unread) */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-[13px] text-[#8696a0] truncate mr-2">
+                      {contact.messages?.[0]?.type === 'TEXT' ? contact.messages[0].content : 
+                       contact.messages?.[0]?.type === 'IMAGE' ? '📷 Foto' : 
+                       contact.messages?.[0]?.type === 'AUDIO' ? '🎵 Audio' : 
+                       contact.messages?.[0]?.type === 'DOCUMENT' ? '📄 Documento' : 
+                       'Sin mensajes recientes'}
                     </span>
-                  )}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {contact.botMode ? (
+                        <Bot size={14} className="text-[#00a884]" />
+                      ) : (
+                        <UserIcon size={14} className="text-[#8696a0]" />
+                      )}
+                      {unreadCounts[contact.id] > 0 && (
+                        <span className="bg-[#00a884] text-[#111b21] text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                          {unreadCounts[contact.id]}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))
@@ -832,33 +859,41 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                   </div>
                 )}
                 
-                {stagedFile && (
+                {stagedFiles.length > 0 && (
                   <div className="flex flex-col bg-[#2a3942] rounded-lg shadow-sm mx-2 overflow-hidden border border-[#313d45]">
                     <div className="flex justify-between items-center bg-[#202c33] px-2 py-1 border-b border-[#313d45]">
-                      <span className="text-xs text-[#8696a0]">Vista previa adjunto</span>
-                      <button type="button" onClick={() => setStagedFile(null)} className="text-[#8696a0] hover:text-[#e9edef] p-1">
+                      <span className="text-xs text-[#8696a0]">Vista previa adjuntos ({stagedFiles.length})</span>
+                      <button type="button" onClick={() => setStagedFiles([])} className="text-[#8696a0] hover:text-[#e9edef] p-1">
                         <X size={18} />
                       </button>
                     </div>
-                    {stagedFile.type.startsWith('image/') ? (
-                      <div className="flex justify-center bg-[#111b21] p-4 max-h-[250px]">
-                        <img 
-                          src={URL.createObjectURL(stagedFile)} 
-                          alt="Preview" 
-                          className="object-contain max-h-full rounded-md shadow-md"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3 p-4">
-                        <div className="w-12 h-12 bg-[#202c33] rounded-lg flex items-center justify-center shrink-0">
-                          <FileText size={24} className="text-[#8696a0]"/>
+                    <div className="flex overflow-x-auto p-2 gap-2 custom-scrollbar">
+                      {stagedFiles.map((file, idx) => (
+                        <div key={idx} className="relative group shrink-0">
+                          {file.type.startsWith('image/') ? (
+                            <div className="w-24 h-24 bg-[#111b21] rounded-md overflow-hidden relative border border-[#313d45]">
+                              <img 
+                                src={URL.createObjectURL(file)} 
+                                alt="Preview" 
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-24 h-24 bg-[#202c33] rounded-md flex flex-col items-center justify-center p-2 border border-[#313d45]">
+                              <FileText size={24} className="text-[#8696a0] mb-1"/>
+                              <span className="text-[10px] font-medium text-[#e9edef] truncate w-full text-center">{file.name}</span>
+                            </div>
+                          )}
+                          <button 
+                            type="button" 
+                            onClick={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))} 
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X size={12} />
+                          </button>
                         </div>
-                        <div className="flex flex-col overflow-hidden">
-                          <span className="text-sm font-medium text-[#e9edef] truncate">{stagedFile.name}</span>
-                          <span className="text-xs text-[#8696a0]">{(stagedFile.size / 1024 / 1024).toFixed(2)} MB</span>
-                        </div>
-                      </div>
-                    )}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -871,6 +906,7 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                 className="hidden" 
                 onChange={handleFileUpload} 
                 accept="image/*,.pdf,.doc,.docx,.dxf"
+                multiple
               />
               <Button 
                 type="button" 
@@ -920,21 +956,26 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                   onKeyDown={e => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      if (inputText.trim() || stagedFile) handleSendMessage();
+                      if (inputText.trim() || stagedFiles.length > 0) handleSendMessage();
                     }
                   }}
                   onPaste={e => {
                     const items = e.clipboardData?.items;
                     if (!items) return;
+                    let hasFiles = false;
+                    const newFiles: File[] = [];
                     for (let i = 0; i < items.length; i++) {
                       if (items[i].type.indexOf('image') !== -1) {
                         const file = items[i].getAsFile();
                         if (file) {
-                          setStagedFile(file);
-                          e.preventDefault();
-                          break;
+                          newFiles.push(file);
+                          hasFiles = true;
                         }
                       }
+                    }
+                    if (hasFiles) {
+                      setStagedFiles(prev => [...prev, ...newFiles]);
+                      e.preventDefault();
                     }
                   }}
                   rows={1}
@@ -945,7 +986,7 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
               )}
 
               {/* Action Buttons: Send or Mic */}
-              {inputText.trim() || stagedFile || recordedAudio ? (
+              {inputText.trim() || stagedFiles.length > 0 || recordedAudio ? (
                 <Button type="submit" size="icon" className="shrink-0 rounded-full bg-[#00a884] hover:bg-[#008f6f] text-[#111b21] w-10 h-10 mb-1 ml-1 shadow-sm" disabled={isUploading}>
                   <Send size={18} className="transition-transform translate-x-0.5 -translate-y-0.5" />
                 </Button>
