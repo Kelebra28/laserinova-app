@@ -1,7 +1,7 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, AlertCircle, Loader2, Zap } from "lucide-react";
 
@@ -12,6 +12,12 @@ export default function LoginPage() {
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    // Forzamos al router a purgar la caché y actualizar los tokens (CSRF) 
+    // en caso de que el usuario haya sido redirigido aquí tras expirar su sesión.
+    router.refresh();
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
