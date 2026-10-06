@@ -86,3 +86,135 @@ export async function deleteProduct(productId: string) {
     return { error: "Error al eliminar producto" };
   }
 }
+
+export async function validateProductsImport(rows: any[]) {
+  try {
+    // Buscar todas las categorías existentes
+    const existingCategories = await prisma.productCategory.findMany();
+    const existingProducts = await prisma.product.findMany();
+
+    const newProducts = [];
+    const conflicts = [];
+    const invalidRows = [];
+
+    for (const row of rows) {
+      if (!row.nombre || !row.categoria) {
+        invalidRows.push(row);
+        continue;
+      }
+
+      // Buscar si el producto ya existe (por modelo si existe, si no por nombre)
+      const existingProduct = existingProducts.find(p => 
+        (row.modelo && p.model?.toLowerCase() === row.modelo.toLowerCase()) || 
+        p.name.toLowerCase() === row.nombre.toLowerCase()
+      );
+
+      // Buscar o preparar la categoría
+      let category = existingCategories.find(c => c.name.toLowerCase() === row.categoria.toLowerCase());
+      const categoryId = category ? category.id : `NEW_${row.categoria}`; // ID temporal si es nueva
+
+      const parsedProduct = {
+        name: row.nombre,
+        model: row.modelo || null,
+        brand: row.marca || null,
+        color: row.color || null,
+        stockQuantity: Number(row.stock) || 0,
+        unitCost: Number(row.costo) || 0,
+        unitPrice: Number(row.precio_venta) || 0,
+        notes: row.notas || null,
+        image: row.imagen_url || null,
+        categoryId: categoryId,
+        categoryName: row.categoria, // para crearla si no existe
+      };
+
+      if (existingProduct) {
+        conflicts.push({
+          existing: existingProduct,
+          incoming: parsedProduct
+        });
+      } else {
+        newProducts.push(parsedProduct);
+      }
+    }
+
+    return { success: true, newProducts, conflicts, invalidRows };
+  } catch (error) {
+    console.error(error);
+    return { error: "Error al validar el CSV" };
+  }
+}
+
+export async function executeProductsImport(newProducts: any[], updateProducts: any[]) {
+  try {
+    // 1. Crear categorías faltantes
+    const allCategoryNames = new Set([
+      ...newProducts.map(p => p.categoryName),
+      ...updateProducts.map(p => p.incoming.categoryName)
+    ]);
+
+    const existingCategories = await prisma.productCategory.findMany();
+    const existingCatNames = new Set(existingCategories.map(c => c.name.toLowerCase()));
+
+    const categoriesToCreate = Array.from(allCategoryNames).filter(
+      name => !existingCatNames.has(name.toLowerCase())
+    );
+
+    for (const catName of categoriesToCreate) {
+      const slug = catName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const newCat = await prisma.productCategory.create({
+        data: { name: catName, slug }
+      });
+      existingCategories.push(newCat);
+    }
+
+    // Función auxiliar para obtener categoryId
+    const getCatId = (name: string) => {
+      return existingCategories.find(c => c.name.toLowerCase() === name.toLowerCase())?.id || "";
+    };
+
+    // 2. Insertar nuevos productos
+    if (newProducts.length > 0) {
+      await prisma.product.createMany({
+        data: newProducts.map(p => ({
+          name: p.name,
+          model: p.model,
+          brand: p.brand,
+          color: p.color,
+          stockQuantity: p.stockQuantity,
+          unitCost: p.unitCost,
+          unitPrice: p.unitPrice,
+          notes: p.notes,
+          image: p.image,
+          categoryId: getCatId(p.categoryName)
+        }))
+      });
+    }
+
+    // 3. Actualizar productos conflictivos
+    for (const conflict of updateProducts) {
+      const p = conflict.incoming;
+      await prisma.product.update({
+        where: { id: conflict.existing.id },
+        data: {
+          name: p.name,
+          model: p.model,
+          brand: p.brand,
+          color: p.color,
+          stockQuantity: p.stockQuantity,
+          unitCost: p.unitCost,
+          unitPrice: p.unitPrice,
+          notes: p.notes,
+          image: p.image,
+          categoryId: getCatId(p.categoryName)
+        }
+      });
+    }
+
+    revalidatePath("/dashboard/inventory");
+    return { success: true };
+  } catch (error) {
+    console.error(error);
+    return { error: "Error al importar productos" };
+  }
+}
+

@@ -2,30 +2,36 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import * as mariadb from 'mariadb';
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+const globalForPrisma = global as unknown as { 
+  prisma: PrismaClient;
+  mariadbPool: mariadb.Pool;
+};
 
 function createPrismaClient() {
   if (!process.env.DATABASE_URL) {
     return new PrismaClient();
   }
 
-  // Parsear URL manualmente para inyectar a mariadb pool
   try {
     const url = new URL(process.env.DATABASE_URL);
-    // Limpiar password bug de Hostinger y decodificar URL
     const password = decodeURIComponent(url.password).replace(/\\/g, '');
     
-    const pool = mariadb.createPool({
+    // Reutilizar el pool si ya existe en desarrollo para evitar fugas de conexiones
+    const pool = globalForPrisma.mariadbPool || mariadb.createPool({
       host: url.hostname,
       port: url.port ? parseInt(url.port) : 3306,
       user: url.username,
       password: password,
-      database: url.pathname.substring(1), // remover el '/' inicial
-      connectionLimit: 3, // Regla estricta Hostinger
-      idleTimeout: 60, // Evita mantener conexiones zombie en Hostinger
-      connectTimeout: 30000,
-      acquireTimeout: 30000,
+      database: url.pathname.substring(1),
+      connectionLimit: process.env.NODE_ENV === 'development' ? 1 : 3, // 1 en dev por los múltiples workers de Next.js, 3 en prod
+      idleTimeout: 60000, 
+      connectTimeout: 10000, // 10 segundos máximo para fallar rápido
+      acquireTimeout: 15000,
     });
+
+    if (process.env.NODE_ENV !== "production") {
+      globalForPrisma.mariadbPool = pool;
+    }
 
     const adapter = new PrismaMariaDb(pool as any);
     return new PrismaClient({ adapter });

@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { Plus, Save, Trash2, Edit2, Check, X, Box, Settings2, PackagePlus } from "lucide-react";
 import { createProductCategory, createProduct, updateProductStock, deleteProduct } from "./actions";
 import toast from "react-hot-toast";
+import ImportProductsModal from "@/components/inventory/ImportProductsModal";
 
 export default function InventoryClient({ initialCategories, autoDeductInitial }: { initialCategories: any[], autoDeductInitial: boolean }) {
   const [categories, setCategories] = useState(initialCategories);
@@ -13,6 +14,7 @@ export default function InventoryClient({ initialCategories, autoDeductInitial }
   const [activeCategoryId, setActiveCategoryId] = useState(initialCategories[0]?.id || null);
 
   const [isAddingProduct, setIsAddingProduct] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
   const [editStockValue, setEditStockValue] = useState("");
 
@@ -132,21 +134,32 @@ export default function InventoryClient({ initialCategories, autoDeductInitial }
   return (
     <div className="space-y-6">
       {/* Top Bar Config */}
-      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Settings2 className="w-5 h-5 text-gray-400" />
-          <div>
-            <h3 className="text-sm font-bold text-gray-800">Descuento Automático</h3>
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest">Restar stock al aprobar cotización (Próximamente)</p>
+      <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between w-full md:w-auto flex-1">
+          <div className="flex items-center gap-3">
+            <Settings2 className="w-5 h-5 text-gray-400" />
+            <div>
+              <h3 className="text-sm font-bold text-gray-800">Descuento Automático</h3>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest">Restar stock al aprobar cotización</p>
+            </div>
           </div>
+          <button 
+            onClick={() => setAutoDeduct(!autoDeduct)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ml-4 ${autoDeduct ? 'bg-indigo-600' : 'bg-gray-200'}`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoDeduct ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
         </div>
+
         <button 
-          onClick={() => setAutoDeduct(!autoDeduct)}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoDeduct ? 'bg-indigo-600' : 'bg-gray-200'}`}
+          onClick={() => setIsImporting(true)}
+          className="flex items-center gap-2 bg-indigo-50 text-indigo-700 border border-indigo-100 px-6 py-4 rounded-2xl text-sm font-black hover:bg-indigo-100 transition-colors shadow-sm w-full md:w-auto justify-center"
         >
-          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoDeduct ? 'translate-x-6' : 'translate-x-1'}`} />
+          <PackagePlus className="w-5 h-5" /> Importar Catálogo (CSV)
         </button>
       </div>
+
+      {isImporting && <ImportProductsModal onClose={() => setIsImporting(false)} />}
 
       <div className="flex flex-col md:flex-row gap-6">
         {/* Categories Sidebar */}
@@ -199,12 +212,14 @@ export default function InventoryClient({ initialCategories, autoDeductInitial }
               <>
                 <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gray-50/50">
                   <h2 className="text-base font-black text-gray-900 uppercase tracking-widest">{activeCategory.name}</h2>
-                  <button 
-                    onClick={() => setIsAddingProduct(true)}
-                    className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/20"
-                  >
-                    <PackagePlus className="w-4 h-4" /> Agregar Producto
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setIsAddingProduct(true)}
+                      className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/20"
+                    >
+                      <Plus className="w-4 h-4" /> Agregar Producto
+                    </button>
+                  </div>
                 </div>
 
                 {isAddingProduct && (
