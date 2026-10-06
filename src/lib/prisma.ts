@@ -12,8 +12,8 @@ function createPrismaClient() {
   // Parsear URL manualmente para inyectar a mariadb pool
   try {
     const url = new URL(process.env.DATABASE_URL);
-    // Limpiar password bug de Hostinger
-    const password = url.password.replace(/\\/g, '');
+    // Limpiar password bug de Hostinger y decodificar URL
+    const password = decodeURIComponent(url.password).replace(/\\/g, '');
     
     const pool = mariadb.createPool({
       host: url.hostname,
@@ -22,6 +22,9 @@ function createPrismaClient() {
       password: password,
       database: url.pathname.substring(1), // remover el '/' inicial
       connectionLimit: 3, // Regla estricta Hostinger
+      idleTimeout: 60, // Evita mantener conexiones zombie en Hostinger
+      connectTimeout: 30000,
+      acquireTimeout: 30000,
     });
 
     const adapter = new PrismaMariaDb(pool as any);
