@@ -168,60 +168,64 @@ export async function approveQuoteVersion(groupId: string, approvedQuoteId: stri
 }
 
 export async function createQuoteAction(formData: FormData) {
-  const user = await requireAuth();
-  
-  // Extraemos y validamos con Zod para prevenir Mass Assignment
-  const rawData = {
-    clientId: formData.get("clientId") as string || null,
-    contactId: formData.get("contactId") as string || null,
-    prospectName: (formData.get("prospectName") as string) || null,
-    prospectEmail: (formData.get("prospectEmail") as string) || null,
-    prospectPhone: (formData.get("prospectPhone") as string) || null,
-    project: formData.get("project") as string,
-    description: (formData.get("description") as string) || "",
-    imagesStr: (formData.get("images") as string) || "",
-    images: formData.get("images") ? JSON.parse(formData.get("images") as string) : [],
-    subtotal: parseFloat(formData.get("subtotal") as string) || 0,
-    tax: parseFloat((formData.get("tax") as string) || (formData.get("iva") as string)) || 0,
-    total: parseFloat(formData.get("total") as string) || 0,
-    taxable: formData.get("taxable") !== "false",
-    realCostTotal: parseFloat(formData.get("realCostTotal") as string) || 0,
-    estimatedUtility: parseFloat(formData.get("estimatedUtility") as string) || 0,
-    conceptsDataStr: formData.get("conceptsData") as string || "[]",
-    conceptsData: JSON.parse(formData.get("conceptsData") as string || "[]"),
-    globalCostsSnapshotStr: formData.get("globalCostsSnapshot") as string || "",
-    saveAsClient: formData.get("saveAsClient") === "true",
-    visibleConsiderations: formData.get("visibleConsiderations") as string || "",
-  };
+  try {
+    const user = await requireAuth();
+    
+    const rawData = {
+      clientId: formData.get("clientId") as string || null,
+      contactId: formData.get("contactId") as string || null,
+      prospectName: (formData.get("prospectName") as string) || null,
+      prospectEmail: (formData.get("prospectEmail") as string) || null,
+      prospectPhone: (formData.get("prospectPhone") as string) || null,
+      project: formData.get("project") as string,
+      description: (formData.get("description") as string) || "",
+      imagesStr: (formData.get("images") as string) || "",
+      images: formData.get("images") ? JSON.parse(formData.get("images") as string) : [],
+      subtotal: parseFloat(formData.get("subtotal") as string) || 0,
+      tax: parseFloat((formData.get("tax") as string) || (formData.get("iva") as string)) || 0,
+      total: parseFloat(formData.get("total") as string) || 0,
+      taxable: formData.get("taxable") !== "false",
+      realCostTotal: parseFloat(formData.get("realCostTotal") as string) || 0,
+      estimatedUtility: parseFloat(formData.get("estimatedUtility") as string) || 0,
+      conceptsDataStr: formData.get("conceptsData") as string || "[]",
+      conceptsData: JSON.parse(formData.get("conceptsData") as string || "[]"),
+      globalCostsSnapshotStr: formData.get("globalCostsSnapshot") as string || "",
+      saveAsClient: formData.get("saveAsClient") === "true",
+      visibleConsiderations: formData.get("visibleConsiderations") as string || "",
+    };
 
-  const data = createQuoteSchema.parse(rawData);
+    const data = createQuoteSchema.parse(rawData);
 
-  if (!data.project || data.conceptsData.length === 0) {
-    throw new Error("Faltan datos requeridos (Proyecto y Conceptos)");
-  }
-
-  const quoteId = await createQuoteService(user.id, data as any);
-
-  const contactId = formData.get("contactId") as string;
-  if (contactId) {
-    try {
-      await prisma.whatsAppMessage.create({
-        data: {
-          contactId,
-          messageId: `internal_quote_${Date.now()}`,
-          direction: 'INTERNAL',
-          type: 'TEXT',
-          content: `Cotización Creada Exitosamente. Puedes verla dando clic en el botón.|||QUOTE:${quoteId}|||`,
-          status: 'DELIVERED'
-        }
-      });
-    } catch (e) {
-      console.error("Error creating internal message for quote creation:", e);
+    if (!data.project || data.conceptsData.length === 0) {
+      return { success: false, error: "Faltan datos requeridos (Proyecto y Conceptos)" };
     }
-  }
 
-  revalidatePath("/dashboard", "layout");
-  redirect(`/dashboard/quotes/${quoteId}`);
+    const quoteId = await createQuoteService(user.id, data as any);
+
+    const contactId = formData.get("contactId") as string;
+    if (contactId) {
+      try {
+        await prisma.whatsAppMessage.create({
+          data: {
+            contactId,
+            messageId: `internal_quote_${Date.now()}`,
+            direction: 'INTERNAL',
+            type: 'TEXT',
+            content: `Cotización Creada Exitosamente. Puedes verla dando clic en el botón.|||QUOTE:${quoteId}|||`,
+            status: 'DELIVERED'
+          }
+        });
+      } catch (e) {
+        console.error("Error creating internal message for quote creation:", e);
+      }
+    }
+
+    revalidatePath("/dashboard", "layout");
+    return { success: true, quoteId };
+  } catch (error: any) {
+    if (error.message === 'NEXT_REDIRECT') throw error;
+    return { success: false, error: error.message || "Error al crear la cotización" };
+  }
 }
 
 const updateQuoteSchema = z.object({
@@ -242,30 +246,35 @@ const updateQuoteSchema = z.object({
 });
 
 export async function updateQuoteAction(formData: FormData) {
-  const quoteId = formData.get("quoteId") as string;
-  const user = await requireAuth();
-  const rawData = {
-    clientId: formData.get("clientId") as string || null,
-    prospectName: (formData.get("prospectName") as string) || null,
-    saveAsClient: formData.get("saveAsClient") === "true",
-    project: formData.get("project") as string,
-    description: (formData.get("description") as string) || "",
-    imagesStr: (formData.get("images") as string) || "",
-    images: formData.get("images") ? JSON.parse(formData.get("images") as string) : [],
-    subtotal: parseFloat(formData.get("subtotal") as string) || 0,
-    tax: parseFloat(formData.get("tax") as string) || 0,
-    total: parseFloat(formData.get("total") as string) || 0,
-    realCostTotal: parseFloat(formData.get("realCostTotal") as string) || 0,
-    estimatedUtility: parseFloat(formData.get("estimatedUtility") as string) || 0,
-    taxable: formData.get("taxable") === "true",
-    conceptsData: JSON.parse(formData.get("concepts") as string || "[]"),
-  };
+  try {
+    const quoteId = formData.get("quoteId") as string;
+    const user = await requireAuth();
+    const rawData = {
+      clientId: formData.get("clientId") as string || null,
+      prospectName: (formData.get("prospectName") as string) || null,
+      saveAsClient: formData.get("saveAsClient") === "true",
+      project: formData.get("project") as string,
+      description: (formData.get("description") as string) || "",
+      imagesStr: (formData.get("images") as string) || "",
+      images: formData.get("images") ? JSON.parse(formData.get("images") as string) : [],
+      subtotal: parseFloat(formData.get("subtotal") as string) || 0,
+      tax: parseFloat(formData.get("tax") as string) || 0,
+      total: parseFloat(formData.get("total") as string) || 0,
+      realCostTotal: parseFloat(formData.get("realCostTotal") as string) || 0,
+      estimatedUtility: parseFloat(formData.get("estimatedUtility") as string) || 0,
+      taxable: formData.get("taxable") === "true",
+      conceptsData: JSON.parse(formData.get("concepts") as string || "[]"),
+    };
 
-  const data = updateQuoteSchema.parse(rawData);
+    const data = updateQuoteSchema.parse(rawData);
 
-  await updateQuoteDataService(user.id, quoteId, data as any);
-  revalidatePath("/dashboard", "layout");
-  redirect(`/dashboard/quotes/${quoteId}`);
+    await updateQuoteDataService(user.id, quoteId, data as any);
+    revalidatePath("/dashboard", "layout");
+    return { success: true, quoteId };
+  } catch (error: any) {
+    if (error.message === 'NEXT_REDIRECT') throw error;
+    return { success: false, error: error.message || "Error al actualizar la cotización" };
+  }
 }
 
 export async function saveQuickQuoteAction(mockQuote: any, saveAsClient: boolean = false) {

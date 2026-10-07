@@ -74,9 +74,10 @@ export const authOptions: NextAuthOptions = {
 
 export async function requireAuth() {
   const { getServerSession } = await import("next-auth/next");
+  const { redirect } = await import("next/navigation");
   const session = await getServerSession(authOptions);
   if (!(session?.user as any)?.id) {
-    throw new Error("No autorizado");
+    redirect("/login");
   }
   return session!.user as any;
 }

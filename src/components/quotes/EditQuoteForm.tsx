@@ -11,6 +11,8 @@ import ClientSelector from "@/components/quotes/ClientSelector";
 import ConfirmSaveModal from "@/components/ui/ConfirmSaveModal";
 import { ImageUploadUI } from "@/components/ui/ImageUploadUI";
 import { useImageUpload } from "@/hooks/useImageUpload";
+import { useRouter } from "next/navigation";
+import { toast } from "react-hot-toast";
 import CalculationAudit from "@/components/quotes/CalculationAudit";
 
 
@@ -26,6 +28,7 @@ interface EditQuoteFormProps {
 export default function EditQuoteForm({ quote, clients, materials, products = [], globalCosts, userId }: EditQuoteFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
+  const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
@@ -267,7 +270,7 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
 
   return (
     <>
-    <form ref={formRef} action={updateQuoteAction} className="space-y-8">
+    <form ref={formRef} className="space-y-8">
       <input type="hidden" name="quoteId" value={quote.id} />
       <input type="hidden" name="userId" value={quote.userId} />
       <input type="hidden" name="subtotal" value={subtotal} />
@@ -840,12 +843,24 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
 
     <ConfirmSaveModal
       isOpen={showConfirm}
-      onConfirm={() => {
+      onConfirm={async () => {
         setShowConfirm(false);
         setIsSubmitting(true);
-        setTimeout(() => {
-          submitBtnRef.current?.click();
-        }, 50);
+        try {
+          const formData = new FormData(formRef.current!);
+          const result = await updateQuoteAction(formData);
+          if (result && !result.success) {
+            toast.error(result.error || "Error al actualizar la cotización");
+            setIsSubmitting(false);
+          } else if (result && result.success) {
+            toast.success("Cotización actualizada con éxito");
+            router.push(`/dashboard/quotes/${result.quoteId}`);
+          }
+        } catch (error: any) {
+          if (error.message === 'NEXT_REDIRECT') throw error;
+          toast.error(error.message || "Error inesperado al conectarse al servidor");
+          setIsSubmitting(false);
+        }
       }}
       onCancel={() => setShowConfirm(false)}
       title="¿Guardar cambios en cotización?"

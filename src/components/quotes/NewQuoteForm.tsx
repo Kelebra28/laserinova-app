@@ -10,6 +10,8 @@ import ConfirmSaveModal from "@/components/ui/ConfirmSaveModal";
 import { ImageUploadUI } from "@/components/ui/ImageUploadUI";
 import { useImageUpload } from "@/hooks/useImageUpload";
 import { AutocompleteInput } from "@/components/ui/AutocompleteInput";
+import { useRouter } from "next/navigation";
+import { toast } from "react-hot-toast";
 import CalculationAudit from "@/components/quotes/CalculationAudit";
 
 
@@ -25,6 +27,7 @@ interface NewQuoteFormProps {
 export default function NewQuoteForm({ clients, materials, products = [], globalCosts, userId, initialData }: NewQuoteFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
+  const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
@@ -359,7 +362,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
 
   return (
     <>
-    <form ref={formRef} action={createQuoteAction} className="space-y-8">
+    <form ref={formRef} className="space-y-8">
       {/* Datos ocultos para enviar al server */}
       <input type="hidden" name="userId" value={userId} />
       <input type="hidden" name="subtotal" value={subtotal} />
@@ -923,11 +926,21 @@ export default function NewQuoteForm({ clients, materials, products = [], global
               </div>
             </div>
 
-            <div className="mt-12 flex justify-end">
+      <div className="mt-12 flex justify-end">
               <button
                 type="button"
-                disabled={isSubmitting}
-                onClick={() => setShowConfirm(true)}
+                disabled={isSubmitting || concepts.length === 0}
+                onClick={() => {
+                  if (concepts.length === 0) {
+                    toast.error("Debes agregar al menos un concepto a la cotización");
+                    return;
+                  }
+                  if (!project) {
+                    toast.error("Debes agregar un título al proyecto");
+                    return;
+                  }
+                  setShowConfirm(true);
+                }}
                 className="flex items-center py-4 px-12 text-sm font-black uppercase tracking-widest rounded-lg shadow-lg shadow-red-900/20 bg-red-600 hover:bg-red-700 transition-all active:scale-95 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
@@ -937,17 +950,28 @@ export default function NewQuoteForm({ clients, materials, products = [], global
           </div>
         </div>
       </div>
-      <button type="submit" ref={submitBtnRef} className="hidden" />
     </form>
 
     <ConfirmSaveModal
       isOpen={showConfirm}
-      onConfirm={() => {
+      onConfirm={async () => {
         setShowConfirm(false);
         setIsSubmitting(true);
-        setTimeout(() => {
-          submitBtnRef.current?.click();
-        }, 50);
+        try {
+          const formData = new FormData(formRef.current!);
+          const result = await createQuoteAction(formData);
+          if (result && !result.success) {
+            toast.error(result.error || "Error al guardar la cotización");
+            setIsSubmitting(false);
+          } else if (result && result.success) {
+            toast.success("Cotización guardada exitosamente");
+            router.push(`/dashboard/quotes/${result.quoteId}`);
+          }
+        } catch (error: any) {
+          if (error.message === 'NEXT_REDIRECT') throw error;
+          toast.error(error.message || "Error inesperado al conectarse al servidor");
+          setIsSubmitting(false);
+        }
       }}
       onCancel={() => setShowConfirm(false)}
       title="¿Guardar cotización?"
