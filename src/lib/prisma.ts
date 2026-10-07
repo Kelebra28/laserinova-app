@@ -23,7 +23,7 @@ function createPrismaClient() {
       user: url.username,
       password: password,
       database: url.pathname.substring(1),
-      connectionLimit: process.env.NODE_ENV === 'development' ? 1 : 3, // 1 en dev por los múltiples workers de Next.js, 3 en prod
+      connectionLimit: 3, // Siempre 3. El bloqueo real fue por las 500 conexiones/hora causadas por el idleTimeout de 60ms, no por concurrencia.
       idleTimeout: 60000, 
       connectTimeout: 10000, // 10 segundos máximo para fallar rápido
       acquireTimeout: 15000,

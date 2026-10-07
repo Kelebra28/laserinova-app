@@ -6,6 +6,9 @@ const { loadEnvConfig } = require('@next/env');
 // Cargar .env manualmente (Requerido para server.js personalizado en Hostinger)
 loadEnvConfig(process.cwd());
 
+// Forzar IPv4 para evitar "fetch failed" en Hostinger (undici bug con localhost)
+require('dns').setDefaultResultOrder('ipv4first');
+
 // Aumentar el límite de listeners para evitar advertencias de MaxListenersExceededWarning en Node/Next.js (especialmente con [Gzip])
 require('events').EventEmitter.defaultMaxListeners = 25;
 

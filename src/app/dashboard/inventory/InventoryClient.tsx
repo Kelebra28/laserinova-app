@@ -12,6 +12,7 @@ export default function InventoryClient({ initialCategories, autoDeductInitial }
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [activeCategoryId, setActiveCategoryId] = useState(initialCategories[0]?.id || null);
+  const [searchCategory, setSearchCategory] = useState("");
 
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -130,6 +131,7 @@ export default function InventoryClient({ initialCategories, autoDeductInitial }
   };
 
   const activeCategory = categories.find(c => c.id === activeCategoryId);
+  const filteredCategories = categories.filter(c => c.name.toLowerCase().includes(searchCategory.toLowerCase()));
 
   return (
     <div className="space-y-6">
@@ -163,8 +165,8 @@ export default function InventoryClient({ initialCategories, autoDeductInitial }
 
       <div className="flex flex-col md:flex-row gap-6">
         {/* Categories Sidebar */}
-        <div className="w-full md:w-64 space-y-4">
-          <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+        <div className="w-full md:w-72 flex-shrink-0">
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm md:sticky md:top-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xs font-black text-gray-800 uppercase tracking-widest">Categorías</h2>
               <button 
@@ -190,8 +192,20 @@ export default function InventoryClient({ initialCategories, autoDeductInitial }
               </form>
             )}
 
-            <div className="space-y-1">
-              {categories.map(cat => (
+            {!isAddingCategory && (
+              <div className="mb-4">
+                <input 
+                  type="text"
+                  placeholder="Buscar categoría..."
+                  value={searchCategory}
+                  onChange={(e) => setSearchCategory(e.target.value)}
+                  className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50/50"
+                />
+              </div>
+            )}
+
+            <div className="space-y-1 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
+              {filteredCategories.map(cat => (
                 <button
                   key={cat.id}
                   onClick={() => setActiveCategoryId(cat.id)}
@@ -200,14 +214,14 @@ export default function InventoryClient({ initialCategories, autoDeductInitial }
                   {cat.name}
                 </button>
               ))}
-              {categories.length === 0 && <p className="text-xs text-gray-400 text-center py-2">No hay categorías</p>}
+              {filteredCategories.length === 0 && <p className="text-xs text-gray-400 text-center py-4">No se encontraron categorías</p>}
             </div>
           </div>
         </div>
 
         {/* Products Area */}
-        <div className="flex-1">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="flex-1 min-w-0">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col max-h-[calc(100vh-140px)]">
             {activeCategory ? (
               <>
                 <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gray-50/50">
@@ -235,6 +249,10 @@ export default function InventoryClient({ initialCategories, autoDeductInitial }
                     <div>
                       <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Color</label>
                       <input name="color" className="w-full border-gray-200 rounded-lg text-sm px-3 py-2" placeholder="Negro Mate" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Proveedor</label>
+                      <input name="provider" className="w-full border-gray-200 rounded-lg text-sm px-3 py-2" placeholder="Ej. ACME Corp" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Stock Inicial</label>
@@ -306,10 +324,10 @@ export default function InventoryClient({ initialCategories, autoDeductInitial }
                   </form>
                 )}
 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
                   <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-gray-100 bg-gray-50/50">
+                    <thead className="sticky top-0 z-10 shadow-sm">
+                      <tr className="border-b border-gray-100 bg-gray-50">
                         <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Producto</th>
                         <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Atributos</th>
                         <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Stock</th>
@@ -341,7 +359,10 @@ export default function InventoryClient({ initialCategories, autoDeductInitial }
                               </div>
                             </td>
                             <td className="p-4">
-                              {p.color && <span className="inline-block px-2 py-1 bg-gray-100 text-gray-600 text-[10px] font-bold rounded uppercase tracking-wider">{p.color}</span>}
+                              <div className="flex flex-wrap gap-1">
+                                {p.color && <span className="inline-block px-2 py-1 bg-gray-100 text-gray-600 text-[9px] font-bold rounded uppercase tracking-wider">{p.color}</span>}
+                                {p.provider && <span className="inline-block px-2 py-1 bg-indigo-50 text-indigo-600 text-[9px] font-bold rounded uppercase tracking-wider">{p.provider}</span>}
+                              </div>
                             </td>
                             <td className="p-4 text-center">
                               {editingStockId === p.id ? (
