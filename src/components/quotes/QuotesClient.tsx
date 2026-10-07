@@ -40,7 +40,7 @@ export default function QuotesClient() {
   const [searchTerm, setSearchTerm] = useState("");
 
   // Query para la lista principal (re-fetch cuando cambia la URL de filtros, pero trae todo)
-  const { data: listData, isLoading: isLoadingList } = useQuery({
+  const { data: listData, isLoading: isLoadingList, error: listError } = useQuery({
     queryKey: ["quotesList", month, clientId, status],
     queryFn: async () => {
       const res = await getQuotesList({ search: "", month, clientId, status, page: "1", limit: "1000" });
@@ -51,7 +51,7 @@ export default function QuotesClient() {
   });
 
   // Query para el Kanban (no depende de los filtros de la lista)
-  const { data: kanbanData, isLoading: isLoadingKanban } = useQuery({
+  const { data: kanbanData, isLoading: isLoadingKanban, error: kanbanError } = useQuery({
     queryKey: ["quotesKanban"],
     queryFn: async () => {
       const res = await getActiveQuotesKanban();
@@ -86,6 +86,18 @@ export default function QuotesClient() {
   }, [allQuotes, searchTerm]);
 
   if (isLoadingList || isLoadingKanban) return <DashboardSkeleton />;
+  
+  if (listError || kanbanError) {
+    return (
+      <div className="p-10 text-center text-red-500 font-bold bg-white rounded-3xl shadow-sm border border-red-100">
+        Error de conexión en Hostinger:<br/>
+        <span className="text-sm font-mono block mt-2 text-red-800">
+          List: {(listError as Error)?.message || 'OK'} <br/>
+          Kanban: {(kanbanError as Error)?.message || 'OK'}
+        </span>
+      </div>
+    );
+  }
 
   const totalItems = filteredQuotes.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
