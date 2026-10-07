@@ -46,6 +46,9 @@ export default function CloneQuoteButton({ quoteId, clients }: CloneQuoteButtonP
       if (result.success) {
         setIsOpen(false);
         router.push(`/dashboard/quotes/${result.quoteId}`);
+      } else {
+        setErrorMsg(result.error || "Error al copiar la cotización.");
+        setIsLoading(false);
       }
     } catch (err: any) {
       console.error(err);
