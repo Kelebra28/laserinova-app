@@ -52,6 +52,7 @@ export default function DashboardClient() {
         <div className="flex items-center gap-3 ml-12 md:ml-0">
           <Link 
             href="/dashboard/quotes/new"
+            prefetch={false}
             className="group relative flex items-center gap-2 bg-gray-900 text-white px-6 py-3 rounded-2xl font-bold hover:bg-black transition-all shadow-xl hover:shadow-gray-900/20 active:scale-95"
           >
             <PlusIcon className="h-5 w-5 text-red-500 group-hover:rotate-90 transition-transform duration-300" />

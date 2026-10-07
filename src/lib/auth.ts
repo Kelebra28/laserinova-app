@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET,
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -73,11 +74,27 @@ export const authOptions: NextAuthOptions = {
 };
 
 export async function requireAuth() {
-  const { getServerSession } = await import("next-auth/next");
-  const { redirect } = await import("next/navigation");
-  const session = await getServerSession(authOptions);
-  if (!(session?.user as any)?.id) {
-    redirect("/login");
+  const { cookies } = await import("next/headers");
+  const { decode } = await import("next-auth/jwt");
+  
+  const cookieStore = await cookies();
+  // Vercel usa __Secure- en producción, localhost/HTTP usa el prefijo normal
+  const tokenCookie = 
+    cookieStore.get("next-auth.session-token") || 
+    cookieStore.get("__Secure-next-auth.session-token");
+  
+  if (!tokenCookie?.value) {
+    throw new Error("No se pudo obtener la sesión de usuario en el servidor (Posible fallo de cookies o caché).");
   }
-  return session!.user as any;
+  
+  const decoded = await decode({
+    token: tokenCookie.value,
+    secret: process.env.NEXTAUTH_SECRET as string,
+  });
+  
+  if (!decoded || !decoded.id) {
+    throw new Error("Token de sesión inválido o expirado.");
+  }
+  
+  return decoded as any;
 }

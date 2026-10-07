@@ -15,9 +15,9 @@ export default function QueryProvider({ children }: QueryProviderProps) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60 * 1000, // Los datos se consideran frescos por 1 minuto
-            refetchOnWindowFocus: true, // Refresca si cambias de ventana y vuelves
-            retry: 1, // Solo reintenta 1 vez si falla
+            staleTime: 60 * 1000 * 5, // Aumentado a 5 minutos para relajar a Hostinger
+            refetchOnWindowFocus: false, // CRÍTICO: Evita spam de requests al cambiar de pestaña
+            retry: false, // CRÍTICO: Cero reintentos. Si falla, falla 1 vez y ya, para no ser baneado por Hostinger
           },
         },
       })

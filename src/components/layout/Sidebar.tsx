@@ -105,6 +105,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               <Link
                 key={item.name}
                 href={item.href}
+                prefetch={false}
                 onClick={() => onClose?.()}
                 className={`
                   group flex items-center px-3 py-3 text-xs font-bold rounded-xl transition-all duration-300 uppercase tracking-widest

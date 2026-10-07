@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { toast } from "react-hot-toast";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -85,19 +86,12 @@ export default function QuotesClient() {
     );
   }, [allQuotes, searchTerm]);
 
+  useEffect(() => {
+    if (listError) toast.error(`Error cargando lista: ${(listError as Error).message}`);
+    if (kanbanError) toast.error(`Error cargando kanban: ${(kanbanError as Error).message}`);
+  }, [listError, kanbanError]);
+
   if (isLoadingList || isLoadingKanban) return <DashboardSkeleton />;
-  
-  if (listError || kanbanError) {
-    return (
-      <div className="p-10 text-center text-red-500 font-bold bg-white rounded-3xl shadow-sm border border-red-100">
-        Error de conexión en Hostinger:<br/>
-        <span className="text-sm font-mono block mt-2 text-red-800">
-          List: {(listError as Error)?.message || 'OK'} <br/>
-          Kanban: {(kanbanError as Error)?.message || 'OK'}
-        </span>
-      </div>
-    );
-  }
 
   const totalItems = filteredQuotes.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
@@ -121,6 +115,7 @@ export default function QuotesClient() {
         <div className="flex flex-wrap items-center gap-3">
           <Link
             href="/dashboard/quotes/quick"
+            prefetch={false}
             className="inline-flex items-center justify-center px-5 py-2.5 border border-gray-200 shadow-sm text-[10px] font-black uppercase tracking-widest rounded-xl text-gray-600 bg-white hover:bg-gray-50 transition-all active:scale-95"
           >
             <FileText className="-ml-1 mr-2 h-4 w-4 text-gray-400" aria-hidden="true" />
@@ -128,6 +123,7 @@ export default function QuotesClient() {
           </Link>
           <Link
             href="/dashboard/quotes/new"
+            prefetch={false}
             className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-red-600/20 text-white bg-red-600 hover:bg-red-700 transition-all active:scale-95"
           >
             <Plus className="-ml-1 mr-2 h-4 w-4" aria-hidden="true" />
