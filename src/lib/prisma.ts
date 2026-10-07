@@ -23,10 +23,12 @@ function createPrismaClient() {
       user: url.username,
       password: password,
       database: url.pathname.substring(1),
-      connectionLimit: 3, // Siempre 3. El bloqueo real fue por las 500 conexiones/hora causadas por el idleTimeout de 60ms, no por concurrencia.
+      connectionLimit: process.env.NODE_ENV === 'development' ? 1 : 3, // REGLA ESTRICTA DE HOSTINGER
       idleTimeout: 60000, 
       connectTimeout: 10000, // 10 segundos máximo para fallar rápido
       acquireTimeout: 15000,
+      charset: "utf8mb4",
+      collation: "utf8mb4_unicode_ci",
     });
 
     if (process.env.NODE_ENV !== "production") {

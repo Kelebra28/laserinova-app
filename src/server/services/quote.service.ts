@@ -372,12 +372,10 @@ export async function approveQuoteVersionService(groupId: string, approvedQuoteI
 
 export async function generateNextFolioService(): Promise<string> {
   const year = new Date().getFullYear();
-  // Buscar la última cotización del año actual sin importar si es LI o LIA
-  const lastQuote = await prisma.quote.findFirst({
-    where: { folio: { contains: `-${year}-` } },
-    orderBy: { createdAt: "desc" },
-    select: { folio: true },
-  });
+  // Evitamos prisma.quote.findFirst() por el bug de Collation (utf8mb4_bin) en MariaDB al usar LIKE/startsWith
+  const rawQuery = `SELECT folio FROM Quote WHERE folio LIKE 'LI-${year}-%' ORDER BY folio DESC LIMIT 1`;
+  const result: any[] = await prisma.$queryRawUnsafe(rawQuery);
+  const lastQuote = result.length > 0 ? result[0] : null;
   
   let nextNumber = 1;
   if (lastQuote) {
