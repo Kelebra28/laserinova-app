@@ -7,11 +7,8 @@ const globalForPrisma = global as unknown as {
 };
 
 function createPrismaClient() {
-  if (!process.env.DATABASE_URL) {
-    return new PrismaClient();
-  }
-
-  const url = new URL(process.env.DATABASE_URL);
+  const urlString = process.env.DATABASE_URL || 'mysql://dummy:dummy@localhost:3306/dummy';
+  const url = new URL(urlString);
   const password = decodeURIComponent(url.password).replace(/\\/g, '');
   
   const pool = mariadb.createPool({
