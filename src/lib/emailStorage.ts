@@ -32,9 +32,9 @@ export const getStorageBasePath = () => {
 
 export const saveEmailToDisk = (messageId: string, html: string = '', text: string = '') => {
   const safeId = messageId.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const dirPath = path.join(getStorageBasePath(), safeId);
+  const dirPath = path.join(/*turbopackIgnore: true*/ getStorageBasePath(), safeId);
   
-  if (!fs.existsSync(dirPath)) {
+  if (!fs.existsSync(/*turbopackIgnore: true*/ dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
   }
 
@@ -45,15 +45,15 @@ export const saveEmailToDisk = (messageId: string, html: string = '', text: stri
 };
 
 export const loadEmailFromDisk = (storagePath: string) => {
-  const dirPath = path.join(getStorageBasePath(), storagePath);
+  const dirPath = path.join(/*turbopackIgnore: true*/ getStorageBasePath(), storagePath);
   let html = '';
   let text = '';
   
   try {
-    if (fs.existsSync(path.join(dirPath, 'body.html'))) {
+    if (fs.existsSync(/*turbopackIgnore: true*/ path.join(dirPath, 'body.html'))) {
       html = fs.readFileSync(path.join(dirPath, 'body.html'), 'utf-8');
     }
-    if (fs.existsSync(path.join(dirPath, 'body.txt'))) {
+    if (fs.existsSync(/*turbopackIgnore: true*/ path.join(dirPath, 'body.txt'))) {
       text = fs.readFileSync(path.join(dirPath, 'body.txt'), 'utf-8');
     }
   } catch (error) {
