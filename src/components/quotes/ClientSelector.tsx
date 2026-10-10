@@ -55,6 +55,15 @@ export default function ClientSelector({
     });
   }, [clients, searchTerm]);
 
+  useEffect(() => {
+    if (prospectName && prospectName !== localProspect) {
+      setLocalProspect(prospectName);
+      if (!value) {
+        setMode("prospect");
+      }
+    }
+  }, [prospectName, value]);
+
   const selectedClient = clients.find((c) => c.id === value);
 
   const switchToProspect = () => {

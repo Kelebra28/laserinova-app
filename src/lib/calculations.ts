@@ -155,6 +155,7 @@ export function calculateConcept(input: CalculationInput, globals: GlobalCosts):
     case "PRODUCTO":
     case "OTRO":
       realCost = input.manualCost || 0;
+      materialBaseCost = realCost;
       suggestedPrice = input.manualUnitPrice || 0;
       break;
 

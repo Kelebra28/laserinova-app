@@ -76,7 +76,17 @@ export default function NewQuoteForm({ clients, materials, products = [], global
         // If we want to strictly match, we need contactId -> clientId mapping. Let's just set the project for now.
       }
       if (initialData.project) setProject(initialData.project);
-      if (initialData.name) setProspectName(initialData.name);
+      
+      if (initialData.name) {
+        const searchName = initialData.name.toLowerCase().trim();
+        const matchedClient = clients.find(c => c.name.toLowerCase().includes(searchName) || searchName.includes(c.name.toLowerCase()));
+        if (matchedClient) {
+          setClientId(matchedClient.id);
+        } else {
+          setProspectName(initialData.name);
+        }
+      }
+      
       if (initialData.email) setProspectEmail(initialData.email);
       if (initialData.desc) setDescription(initialData.desc);
       
@@ -127,6 +137,13 @@ export default function NewQuoteForm({ clients, materials, products = [], global
         if (initType === "RESALE" && matchedProduct) {
            mUnitPrice = String(matchedProduct.unitPrice || 0);
            mUnitCost = String(matchedProduct.unitCost || 0);
+           const result = calculateConcept({
+             type: "RESALE",
+             quantity: initQuantity,
+             manualUnitPrice: Number(mUnitPrice),
+             manualCost: Number(mUnitCost)
+           }, { ...globalCosts, margen_default: Number(margin) || 35 });
+           calculated = { ...result, utility: (result.suggestedPrice) - result.realCost };
            finalUnitPrice = mUnitPrice;
            totalAmount = Number(mUnitPrice) * initQuantity;
         } else if (initMaterial) {
@@ -159,6 +176,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
             description: initialData.desc || initialData.project || "",
             quantity: initQuantity,
             materialId: matchedMaterialId,
+            productId: matchedProduct ? matchedProduct.id : "",
             clientProvidesMaterial: false,
             partWidth: initialData.w || "",
             partHeight: initialData.h || "",
@@ -554,7 +572,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                           const prodId = e.target.value;
                           const selectedProd = products.find(p => p.id === prodId);
                           if (selectedProd) {
-                            const desc = `${selectedProd.name}${selectedProd.model ? ` (${selectedProd.model})` : ""}${selectedProd.color ? ` - ${selectedProd.color}` : ""}`;
+                            const desc = selectedProd.model ? selectedProd.name.split(selectedProd.model)[0].trim() : selectedProd.name;
                             updateConcept(concept.id, "description", desc);
                             updateConcept(concept.id, "manualUnitPrice", selectedProd.unitPrice);
                             updateConcept(concept.id, "manualUnitCost", selectedProd.unitCost);
@@ -565,14 +583,18 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                             }
                           }
                         }}
+                        value={concept.productId || ""}
                         className="mt-1 block w-full sm:text-sm border-indigo-300 rounded-md py-1.5 px-2 border bg-indigo-50 text-indigo-900 font-bold focus:ring-indigo-500 focus:border-indigo-500"
                       >
-                        <option value="">-- Buscar artículo en almacén --</option>
-                        {products.map((p: any) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} {p.model ? `(${p.model})` : ""} - {p.color || "Sin color"} (${p.unitPrice} MXN)
-                          </option>
-                        ))}
+                        <option value="">-- Buscar artículo en almacén 🔍 --</option>
+                        {products.map((p: any) => {
+                          const cleanName = p.model ? p.name.split(p.model)[0].trim() : p.name;
+                          return (
+                            <option key={p.id} value={p.id}>
+                              {cleanName}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   )}
