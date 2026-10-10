@@ -19,26 +19,29 @@ export async function getDobleVelaStock(modelo: string) {
     const data = JSON.parse(match[1]);
     if (!data.Resultado || data.Resultado.length === 0) return null;
 
-    // Sumar solo almacenes CDMX según documentación
-    let totalStock = 0;
-    const item = data.Resultado[0];
+    // Procesar todos los colores/variantes de ese modelo
     const almacenesCDMX = [7, 9, 15, 20, 24];
     
-    almacenesCDMX.forEach(num => {
-      // Nota: El JSON real de Doble Vela no trae acento en "Almacen"
-      const key = `Disponible Almacen ${num}`;
-      if (item[key]) {
-        totalStock += parseInt(item[key], 10) || 0;
-      }
+    const variantsStock = data.Resultado.map((item: any) => {
+      let totalStock = 0;
+      almacenesCDMX.forEach(num => {
+        const key = `Disponible Almacen ${num}`;
+        if (item[key]) {
+          totalStock += parseInt(item[key], 10) || 0;
+        }
+      });
+
+      return {
+        clave: item.CLAVE,
+        modelo: item.MODELO,
+        color: item.COLOR,
+        stockReal: totalStock,
+        precioCosto: item.Price || 0,
+        imageUrl: `https://doblevela.com/images/large/${item.MODELO}_lrg.jpg`
+      };
     });
 
-    return {
-      modelo: item.MODELO,
-      descripcion: item.NOMBRE,
-      stockReal: totalStock,
-      precioCosto: item.Price || 0,
-      imageUrl: `https://doblevela.com/images/large/${item.MODELO}_lrg.jpg`
-    };
+    return variantsStock;
   } catch (error) {
     console.error("Error fetching Doble Vela API:", error);
     return null;

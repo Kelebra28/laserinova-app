@@ -21,7 +21,8 @@ import {
   Star,
   Banknote,
   Bot,
-  MessageCircle
+  MessageCircle,
+  BrainCircuit
 } from "lucide-react";
 import { useSession } from "next-auth/react";
  
@@ -29,6 +30,7 @@ const menuItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permKey: "dashboard" },
   { name: "Chats", href: "/dashboard/chats", icon: MessageCircle, permKey: "chats" },
   { name: "Agente IA", href: "/dashboard/agent", icon: Bot, permKey: "agent" },
+  { name: "Cerebro IA", href: "/dashboard/agent/knowledge", icon: BrainCircuit, permKey: "agent", adminOnly: true },
   { name: "Correo", href: "/dashboard/email", icon: Mail, permKey: "email" },
   { name: "Cotizaciones", href: "/dashboard/quotes", icon: FileText, permKey: "quotes" },
   { name: "Recibos", href: "/dashboard/receipts", icon: Receipt, permKey: "receipts" },
@@ -38,6 +40,7 @@ const menuItems = [
   { name: "Cobranza", href: "/dashboard/payment-requests", icon: Banknote, permKey: "payment_requests" },
   { name: "Finanzas", href: "/dashboard/finance", icon: DollarSign, permKey: "finance", adminOnly: true },
   { name: "Inventario", href: "/dashboard/inventory", icon: Box, permKey: "inventory" },
+  { name: "Productos", href: "/dashboard/products", icon: Package, permKey: "products" },
   { name: "Materiales", href: "/dashboard/materials", icon: Package, permKey: "materials" },
   { name: "Procesos", href: "/dashboard/processes", icon: Cpu, permKey: "processes" },
   { name: "Etiquetas", href: "/dashboard/labels", icon: Printer, permKey: "labels" },
@@ -97,8 +100,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               if (permissions[item.permKey] === false) return null; // Ocultar si está explícitamente denegado
             }
             
-            const isActive = item.href === "/dashboard" 
-              ? pathname === "/dashboard" 
+            const isActive = (item.href === "/dashboard" || item.href === "/dashboard/agent")
+              ? pathname === item.href 
               : pathname === item.href || pathname.startsWith(item.href + "/");
 
             return (

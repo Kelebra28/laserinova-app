@@ -45,19 +45,31 @@ export async function getRelevantRules(userMessage: string, genAI?: GoogleGenera
       const result = await embeddingModel.embedContent(userMessage);
       const vector = result.embedding.values;
 
-      // 2. Buscar en Pinecone (namespace 'secretary') las 2 reglas más similares
-      const queryResponse = await index.namespace('secretary').query({
-        vector: vector,
-        topK: 2,
-        includeMetadata: true
-      });
+      // 2. Buscar en Pinecone (Búsqueda Ruteada Paralela Multi-Namespace)
+      const namespacesToQuery = ["sales_policies", "material_rules", "product_protocols", "general_rules"];
+      
+      const queryPromises = namespacesToQuery.map(ns => 
+        index.namespace(ns).query({
+          vector: vector,
+          topK: 2,
+          includeMetadata: true
+        })
+      );
 
-      if (queryResponse.matches.length > 0) {
-        const relevantChunks = queryResponse.matches
-          .filter(match => match.score && match.score > 0.6) // Filtro de relevancia (similitud mínima)
-          .map(match => match.metadata?.content as string)
+      const responses = await Promise.all(queryPromises);
+      
+      // Juntar todos los matches, ordenarlos por puntaje de relevancia y tomar los mejores 4
+      const allMatches = responses
+        .flatMap(res => res.matches)
+        .sort((a, b) => (b.score || 0) - (a.score || 0))
+        .slice(0, 4);
+
+      if (allMatches.length > 0) {
+        const relevantChunks = allMatches
+          .filter(match => match.score && match.score > 0.6) // Filtro de relevancia
+          .map(match => `[${match.metadata?.namespace}] ${match.metadata?.content as string}`)
           .filter(Boolean);
-          
+
         if (relevantChunks.length > 0) {
           return relevantChunks.join('\n\n');
         }

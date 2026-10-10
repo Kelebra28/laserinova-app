@@ -93,25 +93,48 @@ model ProductCategory {
 }
 
 model Product {
-  id            String          @id @default(uuid())
-  categoryId    String
-  name          String
-  model         String?
-  brand         String?
-  provider      String?
-  color         String?
-  stockQuantity Int             @default(0)
-  unitCost      Float           @default(0)
-  unitPrice     Float           @default(0)
-  image         String?         @db.Text
-  notes         String?         @db.Text
-  active        Boolean         @default(true)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  category      ProductCategory @relation(fields: [categoryId], references: [id])
-  quoteConcepts QuoteConcept[]
+  id               String          @id @default(uuid())
+  sku              String?         @unique // CLAVE de Doble Vela (ej. A2558.01)
+  categoryId       String
+  name             String
+  model            String?
+  brand            String?
+  provider         String?
+  color            String?
+  stockQuantity    Int             @default(0)
+  unitCost         Float           @default(0)
+  unitPrice        Float           @default(0)
+  image            String?         @db.Text
+  images           String?         @db.LongText
+  notes            String?         @db.Text
+  
+  // --- Nuevos Campos Técnicos para Catálogo ---
+  description      String?         @db.Text
+  material         String?         @db.Text
+  measurements     String?         @db.Text
+  packageType      String?
+  masterBox        String?
+  weight           String?
+  printTechniques  String?         @db.Text
+  
+  active           Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  category         ProductCategory @relation(fields: [categoryId], references: [id])
+  quoteConcepts    QuoteConcept[]
 
   @@index([categoryId], map: "Product_categoryId_fkey")
+}
+
+model AgentRule {
+  id          String   @id @default(uuid())
+  namespace   String   // ej. "sales_policies", "material_rules", "product_protocols"
+  title       String?  // Título corto opcional para la interfaz visual
+  content     String   @db.LongText // El texto completo de la regla
+  isVectorized Boolean @default(false) // Para saber si ya está en Pinecone
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model CostConfiguration {
