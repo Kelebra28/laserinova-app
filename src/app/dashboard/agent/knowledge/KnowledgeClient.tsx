@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { BrainCircuit, Search, Database, Bot, FileText, CheckCircle2, X, Loader2, Edit2, Power } from "lucide-react";
+import Link from "next/link";
+import { BrainCircuit, Search, Database, Bot, FileText, CheckCircle2, X, Loader2, Edit2, Power, BookOpen } from "lucide-react";
 import { createAgentRule, updateAgentRule, toggleAgentRule } from "@/server/actions/agent-rules.actions";
 
 interface AgentRule {
@@ -123,6 +124,13 @@ export function KnowledgeClient({ initialRules }: KnowledgeClientProps) {
                 <p className="text-sm font-bold text-zinc-800">{initialRules.length}</p>
               </div>
             </div>
+            <Link 
+              href="/dashboard/agent/knowledge/guide"
+              className="bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-5 py-2 rounded-xl text-sm font-semibold transition-all border border-zinc-200 flex items-center gap-2"
+            >
+              <BookOpen className="w-4 h-4" />
+              Guía de IA
+            </Link>
             <button 
               onClick={() => setIsModalOpen(true)}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-sm font-semibold transition-all shadow-md shadow-indigo-200 flex items-center gap-2"
