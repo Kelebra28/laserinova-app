@@ -220,6 +220,20 @@ export async function createQuoteAction(formData: FormData) {
       }
     }
 
+    const whatsappMessageId = formData.get("whatsappMessageId") as string;
+    if (whatsappMessageId) {
+      try {
+        await prisma.whatsAppMessage.update({
+          where: { id: whatsappMessageId },
+          data: {
+            content: `Cotización Creada Exitosamente. |||QUOTE:${quoteId}|||`
+          }
+        });
+      } catch (e) {
+        console.error("Error updating original WhatsApp message:", e);
+      }
+    }
+
     revalidatePath("/dashboard", "layout");
     return { success: true, quoteId };
   } catch (error: any) {

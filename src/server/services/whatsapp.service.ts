@@ -261,8 +261,10 @@ async function executeAIAgentResponse(contactId: string) {
           diseno_incluido: { type: SchemaType.BOOLEAN, description: 'True si el cliente tiene diseño en vectores, False si no.' },
           nombre_cliente: { type: SchemaType.STRING, description: 'Nombre de la persona con la que estás hablando (Obligatorio)' },
           correo_cliente: { type: SchemaType.STRING, description: 'Correo electrónico del cliente (Opcional, puede venir vacío)' },
+          tipo_concepto: { type: SchemaType.STRING, description: 'Si el proyecto es un producto del catálogo (ej. Termos, libretas) manda "REVENTA". Si es material suelto manda "CORTE" o "GRABADO".' },
+          descripcion_concepto: { type: SchemaType.STRING, description: 'Descripción detallada del concepto (ej. "Termo Space de 550ml con grabado láser")' },
         },
-        required: ['project_name', 'material', 'ancho_cm', 'alto_cm', 'cantidad', 'nombre_cliente'],
+        required: ['project_name', 'material', 'ancho_cm', 'alto_cm', 'cantidad', 'nombre_cliente', 'tipo_concepto'],
       }
     };
 
@@ -273,6 +275,19 @@ async function executeAIAgentResponse(contactId: string) {
         type: SchemaType.OBJECT,
         properties: { motivo: { type: SchemaType.STRING, description: 'Motivo de la transferencia' } },
         required: ['motivo'],
+      }
+    };
+
+    const buscar_productos_en_catalogo: FunctionDeclaration = {
+      name: 'buscar_productos_en_catalogo',
+      description: 'Busca productos reales en la base de datos (catálogo) para ofrecerle opciones al cliente. Úsalo cuando el cliente pregunte qué tipos de termos, tazas, libretas u otros artículos promocionales tienes.',
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: { 
+          termino_busqueda: { type: SchemaType.STRING, description: 'Palabra o frase de búsqueda (ej. "termo", "taza azul", "cilindro acero")' },
+          pagina: { type: SchemaType.INTEGER, description: 'Página de resultados (usa 1 la primera vez, y 2, 3... si el cliente pide ver "más opciones" o "otros modelos")' }
+        },
+        required: ['termino_busqueda'],
       }
     };
 
@@ -302,7 +317,7 @@ async function executeAIAgentResponse(contactId: string) {
     const model = genAI.getGenerativeModel({ 
       model: "gemini-3.5-flash",
       systemInstruction,
-      tools: [{ functionDeclarations: [notificar_solicitud_cotizacion, transferir_a_humano] }]
+      tools: [{ functionDeclarations: [notificar_solicitud_cotizacion, transferir_a_humano, buscar_productos_en_catalogo] }]
     });
 
 
@@ -392,6 +407,113 @@ async function executeAIAgentResponse(contactId: string) {
           });
 
           responseText = `Entiendo, transferiré esta conversación a uno de nuestros asesores para que te atienda personalmente. (Motivo: ${args.motivo})`;
+        } else if (call.name === 'buscar_productos_en_catalogo') {
+          const args = call.args as any;
+          const searchKeyword = args.termino_busqueda || "termo";
+          const pagina = args.pagina || 1;
+          const skip = Math.max(0, (pagina - 1) * 3);
+          
+          const searchTokens = searchKeyword.split(/\s+/).filter((t: string) => t.length > 1);
+          const whereClause: any = { active: true };
+          if (searchTokens.length > 0) {
+            whereClause.AND = searchTokens.map((t: string) => ({
+              name: { contains: t }
+            }));
+          }
+          
+          const foundProducts = await prisma.product.findMany({
+            where: whereClause,
+            take: 3,
+            skip: skip,
+            distinct: ['model'],
+            select: { name: true, model: true, sku: true, unitPrice: true, color: true, image: true, images: true }
+          });
+
+          // 1. Enviar imágenes de WhatsApp si hay productos
+          for (const prod of foundProducts) {
+             let imageUrl = null;
+             
+             // Priorizar la imagen genérica (que suele tener todos los colores)
+             if (prod.images) {
+                try {
+                   const parsedImages = JSON.parse(prod.images);
+                   if (Array.isArray(parsedImages) && parsedImages.length > 0) {
+                      imageUrl = parsedImages[0];
+                   }
+                } catch(e) {}
+             }
+             // Si no hay imagen genérica, usar la específica del color
+             if (!imageUrl) {
+                 imageUrl = prod.image;
+             }
+
+             if (imageUrl) {
+                let cleanName = prod.name;
+                if (prod.color) cleanName = cleanName.replace(new RegExp(prod.color, 'i'), '').trim();
+                if (prod.model) cleanName = cleanName.replace(new RegExp(prod.model, 'i'), '').trim();
+                // Limpiar posibles espacios dobles o guiones
+                cleanName = cleanName.replace(/[-\s]+$/, '').trim();
+
+                const caption = `🔥 ${cleanName || prod.name}\n💰 Precio: $${prod.unitPrice.toFixed(2)} MXN`;
+                
+                // Enviar a WhatsApp Real
+                if (!contact.name?.includes("Simulador")) {
+                   await sendMessageToMeta(contact.phone, {
+                      type: 'image',
+                      image: { link: imageUrl, caption }
+                   }).catch(console.error);
+                }
+
+                // Guardar en la DB para que se vea en el UI
+                const sentImgMsg = await prisma.whatsAppMessage.create({
+                  data: {
+                    contactId: contact.id,
+                    messageId: `bot_img_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+                    direction: 'OUTBOUND',
+                    type: 'IMAGE',
+                    mediaUrl: imageUrl,
+                    content: caption,
+                    status: 'DELIVERED',
+                  }
+                });
+                notificationEmitter.emit('whatsapp_message', { message: sentImgMsg, contact });
+             }
+          }
+
+          // Agregar la llamada de función al historial
+          if (result.response.candidates && result.response.candidates[0].content) {
+            contents.push(result.response.candidates[0].content);
+          }
+
+          // Responder con los resultados a Gemini indicando que ya mandamos fotos
+          contents.push({
+            role: "user",
+            parts: [{
+              functionResponse: {
+                name: "buscar_productos_en_catalogo",
+                response: {
+                  productos: foundProducts.length > 0 ? foundProducts.map(p => ({
+                    nombre: p.name,
+                    estado: "FOTOS Y PRECIOS ENVIADOS EXITOSAMENTE POR WHATSAPP AL CLIENTE. Diles algo corto como 'Ahí te mandé unas fotos con los precios, ¿cuál te gusta más?'"
+                  })) : [{ mensaje: "No se encontraron productos con ese término." }]
+                }
+              }
+            }]
+          });
+
+          // Segunda llamada a Gemini para que elabore la respuesta natural
+          try {
+            const followUpResult = await model.generateContent({ contents });
+            const funcs = followUpResult.response.functionCalls();
+            if (funcs && funcs.length > 0) {
+              responseText = foundProducts.length > 0 ? "Ahí te envié algunas opciones con sus precios. ¿Te interesa alguna?" : "No encontré productos con ese término exacto, ¿tienes algún otro en mente?";
+            } else {
+              responseText = followUpResult.response.text();
+            }
+          } catch(e) {
+            responseText = foundProducts.length > 0 ? "Ahí te envié algunas opciones con sus precios. ¿Te interesa alguna?" : "No encontré productos con ese término exacto, ¿tienes algún otro en mente?";
+          }
+
         } else if (call.name === 'notificar_solicitud_cotizacion') {
           const args = call.args as any;
 
@@ -407,6 +529,8 @@ async function executeAIAgentResponse(contactId: string) {
               diseno_incluido: args.diseno_incluido,
               nombre_cliente: args.nombre_cliente,
               correo_cliente: args.correo_cliente,
+              tipo_concepto: args.tipo_concepto,
+              descripcion_concepto: args.descripcion_concepto,
             },
             contact,
             genAI
@@ -451,7 +575,7 @@ async function executeAIAgentResponse(contactId: string) {
       }
 
       if (!responseText) {
-        responseText = "Entendido. ¿Puedo ayudarte con algo más?";
+        responseText = "Entendido. ¿Tienes alguna otra duda o te puedo ayudar con algo más?";
       }
     } catch (error: any) {
       console.error("Error crítico en Gemini (main):", error);

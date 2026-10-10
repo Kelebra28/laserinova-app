@@ -78,38 +78,41 @@ export default function NewQuoteForm({ clients, materials, products = [], global
       if (initialData.project) setProject(initialData.project);
       if (initialData.name) setProspectName(initialData.name);
       if (initialData.email) setProspectEmail(initialData.email);
+      if (initialData.desc) setDescription(initialData.desc);
       
       // If there's width, height, or qty, create a default concept
       if ((initialData.w || initialData.h || initialData.qty) && concepts.length === 0) {
+        const initType = initialData.type || "CORTE";
         let matchedMaterialId = "";
+        let matchedProduct = null;
+
         if (initialData.material) {
           const searchName = initialData.material.toLowerCase().trim();
           const searchTokens = searchName.split(/\s+/);
-          let bestMatch = null;
-          let highestScore = 0;
           
-          for (const m of materials) {
-            const matName = m.name.toLowerCase();
-            if (matName === searchName) {
-              bestMatch = m;
-              break; // exact match wins
+          if (initType === "RESALE" || initType === "PRODUCTO") {
+            // Buscar en productos
+            let bestScore = 0;
+            for (const p of products) {
+              const pName = p.name.toLowerCase();
+              if (pName === searchName) { matchedProduct = p; break; }
+              let score = 0;
+              searchTokens.forEach((t: string) => { if (t.length > 2 && pName.includes(t)) score++; });
+              const penalty = Math.abs(pName.length - searchName.length) * 0.01;
+              if (score - penalty > bestScore) { bestScore = score - penalty; matchedProduct = p; }
             }
-            let score = 0;
-            searchTokens.forEach((token: string) => {
-              // Only score meaningful tokens, avoid just matching "mm"
-              if (token.length > 1 && matName.includes(token)) score++;
-            });
-            
-            // Penalty for extra words in the material name (e.g. "blanca")
-            const lengthDiff = Math.abs(matName.length - searchName.length);
-            const finalScore = score - (lengthDiff * 0.01);
-
-            if (finalScore > highestScore) {
-              highestScore = finalScore;
-              bestMatch = m;
+          } else {
+            // Buscar en materiales
+            let bestScore = 0;
+            for (const m of materials) {
+              const mName = m.name.toLowerCase();
+              if (mName === searchName) { matchedMaterialId = m.id; break; }
+              let score = 0;
+              searchTokens.forEach((t: string) => { if (t.length > 1 && mName.includes(t)) score++; });
+              const penalty = Math.abs(mName.length - searchName.length) * 0.01;
+              if (score - penalty > bestScore) { bestScore = score - penalty; matchedMaterialId = m.id; }
             }
           }
-          if (bestMatch) matchedMaterialId = bestMatch.id;
         }
 
         const initQuantity = Number(initialData.qty) || 1;
@@ -118,10 +121,17 @@ export default function NewQuoteForm({ clients, materials, products = [], global
         let calculated = null;
         let finalUnitPrice = "";
         let totalAmount = 0;
+        let mUnitPrice = "";
+        let mUnitCost = "";
         
-        if (initMaterial) {
+        if (initType === "RESALE" && matchedProduct) {
+           mUnitPrice = String(matchedProduct.unitPrice || 0);
+           mUnitCost = String(matchedProduct.unitCost || 0);
+           finalUnitPrice = mUnitPrice;
+           totalAmount = Number(mUnitPrice) * initQuantity;
+        } else if (initMaterial) {
            const result = calculateConcept({
-             type: "CORTE",
+             type: initType,
              quantity: initQuantity,
              material: {
                length: initMaterial.length,
@@ -145,20 +155,20 @@ export default function NewQuoteForm({ clients, materials, products = [], global
         setConcepts([
           {
             id: crypto.randomUUID(),
-            type: "CORTE",
-            description: initialData.project || "",
+            type: initType,
+            description: initialData.desc || initialData.project || "",
             quantity: initQuantity,
             materialId: matchedMaterialId,
             clientProvidesMaterial: false,
             partWidth: initialData.w || "",
             partHeight: initialData.h || "",
             timeMin: "",
-            manualUnitPrice: "",
-            manualUnitCost: "",
+            manualUnitPrice: mUnitPrice,
+            manualUnitCost: mUnitCost,
             materialCost: calculated ? calculated.materialCost : 0,
             productionCost: calculated ? calculated.productionCost : 0,
-            realCost: calculated ? calculated.realCost : 0,
-            suggestedPrice: calculated ? calculated.suggestedPrice : 0,
+            realCost: calculated ? calculated.realCost : (Number(mUnitCost) * initQuantity),
+            suggestedPrice: calculated ? calculated.suggestedPrice : totalAmount,
             totalAmount: totalAmount,
             calculated: calculated,
             finalUnitPrice: finalUnitPrice,
@@ -444,6 +454,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
                 Precio de Mayoreo
               </label>
               <input type="hidden" name="isWholesale" value={isWholesale ? "true" : "false"} />
+              <input type="hidden" name="whatsappMessageId" value={initialData?.msgId || ""} />
             </div>
 
             <div

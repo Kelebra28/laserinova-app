@@ -128,6 +128,8 @@ export async function executeChalanEstimate(
     estimatedTimeMin: estimatedTimeMin,
     name: input.nombre_cliente || "",
     email: input.correo_cliente || "",
+    type: input.tipo_concepto === "REVENTA" ? "RESALE" : (input.tipo_concepto || "CORTE"),
+    description: input.descripcion_concepto || "",
   };
   const quotePayload = `|||${encodeURIComponent(JSON.stringify(quoteData))}|||`;
 

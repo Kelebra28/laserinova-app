@@ -64,11 +64,17 @@ export async function getMessagesAction(contactId: string) {
       status: true,
       timestamp: true,
       mimeType: true,
-      // intentionally omitting mediaUrl
+      mediaUrl: true,
     }
   });
 
-  return { success: true, data: messages };
+  // Strip Base64 data to avoid massive JSON payloads, but keep external HTTP URLs
+  const cleanedData = messages.map(msg => ({
+    ...msg,
+    mediaUrl: msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : (msg.mediaUrl ? 'FETCH_REQUIRED' : null)
+  }));
+
+  return { success: true, data: cleanedData };
 }
 
 

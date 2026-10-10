@@ -26,6 +26,10 @@ export async function GET(
       return new NextResponse("Not Found", { status: 404 });
     }
 
+    if (message.mediaUrl.startsWith('http')) {
+      return NextResponse.redirect(message.mediaUrl);
+    }
+
     // mediaUrl format: data:image/png;base64,iVBORw0KGgo...
     const matches = message.mediaUrl.match(/^data:([^;]+);base64,(.+)$/);
     if (!matches) {

@@ -8,6 +8,8 @@ export interface ChalanEstimateInput {
   diseno_incluido: boolean;
   nombre_cliente?: string;
   correo_cliente?: string;
+  tipo_concepto?: string;
+  descripcion_concepto?: string;
 }
 
 export interface ChalanContext {

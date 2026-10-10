@@ -742,8 +742,11 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                         if (data.estimatedTimeMin) queryParams += `&t=${data.estimatedTimeMin}`;
                         if (data.name) queryParams += `&name=${encodeURIComponent(data.name)}`;
                         if (data.email) queryParams += `&email=${encodeURIComponent(data.email)}`;
+                        if (data.type) queryParams += `&type=${encodeURIComponent(data.type)}`;
+                        if (data.description) queryParams += `&desc=${encodeURIComponent(data.description)}`;
+                        queryParams += `&msgId=${msg.id}`;
                         buttonLink = `/dashboard/quotes/new${queryParams}`;
-                        buttonText = "Generar Cotización";
+                        buttonText = "Generar Cotización ⚡";
                       } catch(e) {}
                     }
                   }
@@ -798,17 +801,17 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                     >
                       {msg.type === 'AUDIO' && (
                         <div className="mb-2">
-                          <audio controls src={`/api/media/${msg.id}`} className="w-full h-10 filter invert opacity-90" />
+                          <audio controls src={msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `/api/media/${msg.id}`} className="w-full h-10 filter invert opacity-90" />
                         </div>
                       )}
                       {msg.type === 'IMAGE' ? (
                         <div className="flex flex-col gap-1">
-                          <img src={`/api/media/${msg.id}`} alt="Adjunto" className="rounded-xl max-w-full max-h-60 object-contain shadow-md" />
-                          {msg.content && msg.content !== '📷 Imagen adjunta' && <span className="text-sm mt-1">{msg.content}</span>}
+                          <img src={msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `/api/media/${msg.id}`} alt="Adjunto" className="rounded-xl max-w-full max-h-60 object-contain shadow-md" />
+                          {msg.content && msg.content !== '📷 Imagen adjunta' && <span className="text-sm mt-1 whitespace-pre-wrap">{msg.content}</span>}
                         </div>
                       ) : msg.type === 'DOCUMENT' ? (
                         <div className="flex flex-col gap-1 bg-black/20 p-2 rounded-lg">
-                          <a href={`/api/media/${msg.id}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:underline">
+                          <a href={msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `/api/media/${msg.id}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:underline">
                             <FileText size={16} />
                             <span className="text-sm truncate max-w-[200px]">{msg.content || 'Documento adjunto'}</span>
                           </a>
