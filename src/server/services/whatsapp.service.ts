@@ -626,3 +626,39 @@ async function executeAIAgentResponse(contactId: string) {
   }
 }
 
+export async function deleteConversationService(contactId: string) {
+  return await prisma.$transaction(async (tx) => {
+    // 1. Desvincular cotizaciones para que no se pierdan ni fallen por FK
+    await tx.quote.updateMany({
+      where: { contactId },
+      data: { contactId: null },
+    });
+
+    // 2. Eliminar logs de IA si existen
+    await tx.aiUsageLog.deleteMany({
+      where: { contactId },
+    });
+
+    // 3. Eliminar todos los mensajes asociados
+    await tx.whatsAppMessage.deleteMany({
+      where: { contactId },
+    });
+
+    // 4. Eliminar el contacto de WhatsApp
+    await tx.whatsAppContact.delete({
+      where: { id: contactId },
+    });
+
+    return true;
+  });
+}
+
+export async function clearConversationMessagesService(contactId: string) {
+  return await prisma.$transaction(async (tx) => {
+    await tx.whatsAppMessage.deleteMany({
+      where: { contactId },
+    });
+    return true;
+  });
+}
+

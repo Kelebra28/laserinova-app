@@ -42,7 +42,11 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
   const isLoss = !isCancelled && (quote.realUtilityTotal || 0) < 0;
 
   const parsedImages = quote.images ? (typeof quote.images === 'string' ? JSON.parse(quote.images) : quote.images) : [];
-  const images: string[] = Array.isArray(parsedImages) ? parsedImages : [];
+  const directImages: string[] = Array.isArray(parsedImages) ? parsedImages : [];
+  const conceptImages: string[] = quote.concepts
+    ?.map((c: any) => c.product?.image)
+    .filter((img: any): img is string => typeof img === 'string' && img.length > 0) || [];
+  const images: string[] = Array.from(new Set([...directImages, ...conceptImages]));
 
   return (
     <div className="space-y-6 max-w-7xl pb-10">
@@ -187,7 +191,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
 
                     return (
                       <tr key={concept.id} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="px-6 py-4 text-sm text-gray-600 font-bold">{concept.quantity}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600 font-bold">{concept.quantity.toLocaleString('es-MX')}</td>
                         <td className="px-6 py-4">
                           <div className="text-sm font-black text-gray-900">{concept.description}</div>
                           {concept.material && (

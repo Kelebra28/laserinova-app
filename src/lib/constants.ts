@@ -57,3 +57,17 @@ export const PAYMENT_STATUS_COLORS: Record<string, string> = {
   PAID: "bg-emerald-100 text-emerald-800 border-emerald-200",
   REFUNDED: "bg-red-100 text-red-800 border-red-200"
 };
+
+export function formatNumber(val: number | string | null | undefined): string {
+  if (val === null || val === undefined || val === "") return "0";
+  const num = typeof val === "string" ? parseFloat(val) : val;
+  if (isNaN(num)) return "0";
+  return num.toLocaleString("es-MX");
+}
+
+export function formatCurrency(val: number | string | null | undefined): string {
+  if (val === null || val === undefined || val === "") return "$0.00";
+  const num = typeof val === "string" ? parseFloat(val) : val;
+  if (isNaN(num)) return "$0.00";
+  return `$${num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, X, Loader2 } from "lucide-react";
 
 interface ConfirmationModalProps {
@@ -54,16 +55,27 @@ export default function ConfirmationModal({
 
   const currentVariant = variants[variant];
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  const modalContent = (
+    <div 
+      onClick={(e) => e.stopPropagation()} 
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    >
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" 
-        onClick={onClose}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
       />
       
       {/* Modal */}
-      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all z-10"
+      >
         <div className="p-8">
           <div className="flex items-start gap-4">
             <div className={`p-3 rounded-2xl ${currentVariant.iconBg}`}>
@@ -74,7 +86,11 @@ export default function ConfirmationModal({
               <p className="text-sm text-gray-500 font-medium leading-relaxed">{message}</p>
             </div>
             <button 
-              onClick={onClose}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
               className="text-gray-400 hover:text-gray-600 transition-colors"
             >
               <X className="h-5 w-5" />
@@ -86,7 +102,8 @@ export default function ConfirmationModal({
           <button
             type="button"
             disabled={isLoading}
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               onConfirm();
             }}
             className={`flex-1 py-3 px-6 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 ${currentVariant.confirmBtn}`}
@@ -103,7 +120,10 @@ export default function ConfirmationModal({
           <button
             type="button"
             disabled={isLoading}
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
             className="flex-1 py-3 px-6 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 hover:bg-gray-100 transition-all border border-gray-100 disabled:opacity-50"
           >
             {cancelText}
@@ -112,4 +132,6 @@ export default function ConfirmationModal({
       </div>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(modalContent, document.body) : modalContent;
 }

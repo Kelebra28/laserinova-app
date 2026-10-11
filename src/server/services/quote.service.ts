@@ -117,7 +117,7 @@ export async function getQuoteDetailService(quoteId: string) {
       user: true,
       concepts: {
         orderBy: { order: 'asc' },
-        include: { material: true }
+        include: { material: true, product: true }
       }
     }
   });
@@ -148,7 +148,7 @@ export async function getQuoteEditDataService(quoteId: string) {
     where: { id: quoteId },
     include: {
       concepts: {
-        include: { material: true }
+        include: { material: true, product: true }
       }
     }
   });
@@ -266,10 +266,25 @@ export async function updateQuotePaymentService(quoteId: string, realAmountColle
 }
 
 export async function deleteQuoteService(quoteId: string) {
-  await prisma.quote.delete({
-    where: { id: quoteId }
+  return await prisma.$transaction(async (tx) => {
+    // 1. Desvincular transacciones financieras asociadas
+    await tx.financialTransaction.updateMany({
+      where: { quoteId },
+      data: { quoteId: null }
+    });
+
+    // 2. Eliminar solicitudes de pago asociadas si existen
+    await tx.paymentRequest.deleteMany({
+      where: { quoteId }
+    });
+
+    // 3. Eliminar la cotización (elimina en cascada concepts, snapshots, emailLogs, surveyResponse)
+    await tx.quote.delete({
+      where: { id: quoteId }
+    });
+
+    return true;
   });
-  return true;
 }
 
 export async function duplicateQuoteAsVersionService(quoteId: string) {

@@ -4,7 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Search, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { getHexForColor } from "@/lib/constants";
+import { getHexForColor, formatNumber, formatCurrency } from "@/lib/constants";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Select from "@/components/ui/Select";
 
@@ -23,6 +23,7 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
   const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
   const [searchTerm, setSearchTerm] = useState(currentSearch);
+  const [navigatingId, setNavigatingId] = useState<string | null>(null);
   
   // Categorias y Paginación
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -182,8 +183,19 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
                 <Link 
                   href={`/dashboard/products/${mainProduct.id}`} 
                   key={mainProduct.model || mainProduct.id}
-                  className="group flex flex-col bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-red-500/50 hover:shadow-lg transition-all duration-500"
+                  onClick={() => setNavigatingId(mainProduct.id)}
+                  className={`group relative flex flex-col bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-red-500/50 hover:shadow-lg transition-all duration-500 ${
+                    navigatingId === mainProduct.id ? "ring-2 ring-red-500 shadow-md" : ""
+                  }`}
                 >
+                  {/* Overlay de carga instantáneo al dar clic */}
+                  {navigatingId === mainProduct.id && (
+                    <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-30 flex flex-col items-center justify-center gap-2 animate-in fade-in duration-200">
+                      <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
+                      <span className="text-xs font-bold text-zinc-800 tracking-wide">Cargando producto...</span>
+                    </div>
+                  )}
+
                   <div className="aspect-[4/3] bg-white relative overflow-hidden flex items-center justify-center p-6 border-b border-zinc-100">
                     {mainProduct.image ? (
                       <img 
@@ -200,7 +212,7 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
                     {/* Etiqueta de Stock Total */}
                     <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm border border-zinc-200 shadow-sm px-2 py-1 rounded-md text-[10px] font-bold text-zinc-700 flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      {totalStock} en stock
+                      {formatNumber(totalStock)} en stock
                     </div>
                   </div>
                   <div className="p-5 flex-1 flex flex-col justify-between">
@@ -216,7 +228,7 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
                       <div>
                         <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold mb-1">Costo Base</p>
                         <p className="text-lg font-black text-zinc-900">
-                          ${mainProduct.unitCost.toFixed(2)}
+                          {formatCurrency(mainProduct.unitCost)}
                         </p>
                       </div>
                       {group.length > 1 ? (

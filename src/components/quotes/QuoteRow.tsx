@@ -1,23 +1,56 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, ChevronRight } from "lucide-react";
+import { Loader2, ChevronRight, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
+import { deleteQuoteAction } from "@/server/actions/quote.actions";
+import { toast } from "react-hot-toast";
 
 interface QuoteRowProps {
   quote: any;
   statusColors: Record<string, string>;
   statusLabels: Record<string, string>;
+  onDeleted?: () => void;
 }
 
-export default function QuoteRow({ quote, statusColors, statusLabels }: QuoteRowProps) {
+export default function QuoteRow({ quote, statusColors, statusLabels, onDeleted }: QuoteRowProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
 
-  const handleNavigate = () => {
+  const handleNavigate = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (
+      isDeleteModalOpen || 
+      isDeleting || 
+      target.closest('button') || 
+      target.closest('[role="dialog"]')
+    ) {
+      return;
+    }
     setIsLoading(true);
     router.push(`/dashboard/quotes/${quote.id}`);
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const res = await deleteQuoteAction(quote.id);
+      if (res.success) {
+        toast.success(`Cotización ${quote.folio} eliminada`);
+        setIsDeleteModalOpen(false);
+        onDeleted?.();
+      } else {
+        toast.error(res.error || "Error al eliminar cotización");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error al eliminar cotización");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -74,10 +107,39 @@ export default function QuoteRow({ quote, statusColors, statusLabels }: QuoteRow
         )}
       </td>
 
-      {/* Arrow */}
+      {/* Acciones */}
       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-        <div className="flex items-center justify-end text-gray-300 group-hover:text-red-600 transition-colors">
-          {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ChevronRight className="h-5 w-5" />}
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            data-testid={`delete-quote-${quote.folio}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDeleteModalOpen(true);
+            }}
+            title="Eliminar cotización"
+            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100 hover:scale-110 active:scale-95"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+          <div className="text-gray-300 group-hover:text-red-600 transition-colors">
+            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ChevronRight className="h-5 w-5" />}
+          </div>
+        </div>
+
+        <div onClick={(e) => e.stopPropagation()}>
+          <ConfirmationModal
+            isOpen={isDeleteModalOpen}
+            onClose={() => setIsDeleteModalOpen(false)}
+            onConfirm={handleDelete}
+            isLoading={isDeleting}
+            title="Eliminar Cotización"
+            message={`¿Estás seguro de que deseas eliminar permanentemente la cotización ${quote.folio} (${quote.project || 'Sin proyecto'})? Esta acción no se puede deshacer.`}
+            confirmText="Sí, Eliminar"
+            cancelText="Cancelar"
+            variant="danger"
+          />
         </div>
       </td>
     </tr>

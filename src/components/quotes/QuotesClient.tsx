@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { toast } from "react-hot-toast";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Plus, FileText, LayoutGrid } from "lucide-react";
@@ -30,6 +30,7 @@ const columns = [
 ];
 
 export default function QuotesClient() {
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   
   const month = searchParams.get("month") || "all";
@@ -181,6 +182,10 @@ export default function QuotesClient() {
                     quote={quote} 
                     statusColors={QUOTE_STATUS_COLORS} 
                     statusLabels={QUOTE_STATUS_LABELS} 
+                    onDeleted={() => {
+                      queryClient.invalidateQueries({ queryKey: ["quotesList"] });
+                      queryClient.invalidateQueries({ queryKey: ["quotesKanban"] });
+                    }}
                   />
                 ))
               )}

@@ -184,6 +184,7 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
     doc.text(fmt(quote.tax), pageWidth - 14, totalsY + 8, { align: "right" });
 
     doc.setFontSize(13);
+    doc.text("Total:", pageWidth - 45, totalsY + 20, { align: "right" });
     doc.text(fmt(quote.total), pageWidth - 14, totalsY + 20, { align: "right" });
 
     // Footer / Consideraciones
@@ -244,7 +245,11 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
 
     // Anexo de Imágenes en Grid
     const parsedImages = quote.images ? (typeof quote.images === 'string' ? JSON.parse(quote.images) : quote.images) : [];
-    const images: string[] = Array.isArray(parsedImages) ? parsedImages : [];
+    const directImages: string[] = Array.isArray(parsedImages) ? parsedImages : [];
+    const conceptImages: string[] = quote.concepts
+      ?.map((c: any) => c.product?.image)
+      .filter((img: any): img is string => typeof img === 'string' && img.length > 0) || [];
+    const images: string[] = Array.from(new Set([...directImages, ...conceptImages]));
 
     if (images.length > 0) {
       currentTextY += 10;
@@ -284,6 +289,16 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
           if (imgUrl.startsWith("data:image/")) {
             const base64Data = imgUrl.split(",")[1];
             imageBuffer = Buffer.from(base64Data, "base64");
+          } else if (imgUrl.startsWith("http://") || imgUrl.startsWith("https://")) {
+            try {
+              const res = await fetch(imgUrl, { signal: AbortSignal.timeout(5000) });
+              if (res.ok) {
+                const arrayBuf = await res.arrayBuffer();
+                imageBuffer = Buffer.from(arrayBuf);
+              }
+            } catch (fetchErr) {
+              console.error(`Error descargando imagen remota para PDF (${imgUrl}):`, fetchErr);
+            }
           } else {
             const imgPath = path.join(process.cwd(), "public", imgUrl);
             if (fs.existsSync(imgPath)) {

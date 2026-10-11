@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Edit, Trash2, Check, X } from "lucide-react";
 import { updateMaterial, deleteMaterial } from "@/app/dashboard/materials/actions";
+import { formatCurrency } from "@/lib/constants";
 
 export function MaterialRow({ material, categories, categoryColor }: { material: any, categories: any[], categoryColor: string }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -135,9 +136,9 @@ export function MaterialRow({ material, categories, categoryColor }: { material:
         {material.length && material.width ? `${material.length}x${material.width}cm` : "-"}
         {material.thickness ? ` (${material.thickness}mm)` : ""}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-        <div>${material.sheetPrice?.toFixed(2) || "0.00"}</div>
-        <div className="text-xs text-gray-500">${material.pricePerCm2?.toFixed(4) || "0.0000"}/cm²</div>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
+        <div>{formatCurrency(material.sheetPrice)}</div>
+        <div className="text-xs text-gray-500 font-normal">${(material.pricePerCm2 || 0).toLocaleString("es-MX", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}/cm²</div>
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
         <div className="flex justify-end space-x-2">

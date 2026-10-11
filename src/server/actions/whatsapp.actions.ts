@@ -4,9 +4,10 @@ import path from 'path';
 
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sendMessageToMeta, processAIAgentResponse } from '@/server/services/whatsapp.service';
+import { sendMessageToMeta, processAIAgentResponse, deleteConversationService, clearConversationMessagesService } from '@/server/services/whatsapp.service';
 import { notificationEmitter } from '@/lib/notification-emitter';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { revalidatePath } from 'next/cache';
 
 export async function simulateIncomingMessageAction(contactId: string, content: string) {
   try {
@@ -316,6 +317,38 @@ ${transcript}`;
   } catch (error: any) {
     console.error("Error generando resumen:", error);
     return { success: false, error: 'Error al generar resumen' };
+  }
+}
+
+export async function deleteConversationAction(contactId: string) {
+  try {
+    await requireAuth();
+    if (!contactId || typeof contactId !== 'string') {
+      return { success: false, error: 'ID de contacto no válido' };
+    }
+
+    await deleteConversationService(contactId);
+    revalidatePath('/dashboard/chats');
+    return { success: true, data: { id: contactId } };
+  } catch (error: any) {
+    console.error("Error al eliminar conversación:", error);
+    return { success: false, error: error.message || 'Error al eliminar conversación' };
+  }
+}
+
+export async function clearConversationMessagesAction(contactId: string) {
+  try {
+    await requireAuth();
+    if (!contactId || typeof contactId !== 'string') {
+      return { success: false, error: 'ID de contacto no válido' };
+    }
+
+    await clearConversationMessagesService(contactId);
+    revalidatePath('/dashboard/chats');
+    return { success: true, data: { id: contactId } };
+  } catch (error: any) {
+    console.error("Error al vaciar conversación:", error);
+    return { success: false, error: error.message || 'Error al vaciar conversación' };
   }
 }
 

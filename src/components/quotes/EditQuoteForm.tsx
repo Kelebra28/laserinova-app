@@ -14,6 +14,7 @@ import { useImageUpload } from "@/hooks/useImageUpload";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import CalculationAudit from "@/components/quotes/CalculationAudit";
+import { ProductCombobox } from "@/components/quotes/ProductCombobox";
 
 
 interface EditQuoteFormProps {
@@ -47,7 +48,7 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
   const handleRemoveImage = async (index: number) => {
     const urlToRemove = images[index];
     setImages(prev => prev.filter((_, i) => i !== index));
-    if (urlToRemove) {
+    if (urlToRemove && urlToRemove.startsWith('/uploads/')) {
       await deleteImage(urlToRemove);
     }
   };
@@ -60,6 +61,8 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
       description: c.description,
       quantity: c.quantity,
       materialId: c.materialId,
+      productId: c.productId || null,
+      productImage: c.product?.image || products.find((p: any) => p.id === c.productId)?.image || null,
       partWidth: c.width,
       partHeight: c.height,
       timeMin: c.cutTime,
@@ -220,6 +223,8 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
         description: "",
         quantity: 1,
         materialId: "",
+        productId: null,
+        productImage: null,
         partWidth: 0,
         partHeight: 0,
         timeMin: 0,
@@ -244,7 +249,114 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
   };
 
   const removeConcept = (id: string) => {
+    const targetConcept = concepts.find(c => c.id === id);
+    const oldProductImage = targetConcept?.productImage;
+
+    if (oldProductImage) {
+      setImages(prev => {
+        const isUsedByOther = concepts.some(c => c.id !== id && c.productImage === oldProductImage);
+        if (!isUsedByOther) {
+          return prev.filter(img => img !== oldProductImage);
+        }
+        return prev;
+      });
+    }
+
     setConcepts(concepts.filter(c => c.id !== id));
+  };
+
+  const selectProductForConcept = (conceptId: string, product: any) => {
+    // 1. Obtener imagen anterior del concepto antes de actualizarlo
+    const currentConcept = concepts.find(c => c.id === conceptId);
+    const oldProductImage = currentConcept?.productImage || null;
+    const newProductImage = product.image || null;
+
+    // 2. Gestionar imágenes sin duplicados y reemplazando la del producto anterior
+    setImages(prev => {
+      let next = [...prev];
+      const isUsedByOther = concepts.some(c => c.id !== conceptId && c.productImage === oldProductImage);
+      if (oldProductImage && !isUsedByOther) {
+        next = next.filter(img => img !== oldProductImage);
+      }
+      if (newProductImage && !next.includes(newProductImage)) {
+        next.push(newProductImage);
+      }
+      return next;
+    });
+
+    // 3. Actualizar el concepto con el nuevo producto
+    setConcepts(prevConcepts => prevConcepts.map(c => {
+      if (c.id === conceptId) {
+        const currentMargin = c.margin ? Number(c.margin) : (Number(margin) || 35);
+        const marginFactor = currentMargin >= 100 ? 0.01 : (100 - currentMargin) / 100;
+        const unitCost = Number(product.unitCost) || 0;
+        const suggestedSalePrice = product.unitPrice > 0 
+          ? product.unitPrice 
+          : (unitCost > 0 ? Math.round((unitCost / marginFactor) * 100) / 100 : 0);
+        
+        const qty = Number(c.quantity) || 1;
+        const finalUnitPrice = suggestedSalePrice;
+        const totalAmount = finalUnitPrice * qty;
+        const realCost = unitCost * qty;
+        const suggestedPrice = suggestedSalePrice * qty;
+
+        const cleanDesc = product.model ? product.name.split(product.model)[0].trim() : product.name;
+
+        return {
+          ...c,
+          productId: product.id,
+          productImage: newProductImage,
+          description: cleanDesc,
+          manualUnitPrice: suggestedSalePrice,
+          manualUnitCost: unitCost,
+          finalUnitPrice: finalUnitPrice,
+          totalAmount: totalAmount,
+          calculated: {
+            materialBaseCost: realCost,
+            materialWastageCost: 0,
+            materialCost: realCost,
+            productionCost: 0,
+            realCost: realCost,
+            suggestedPrice: suggestedPrice,
+            finalUnitPrice: finalUnitPrice,
+            totalAmount: totalAmount,
+            utility: totalAmount - realCost
+          }
+        };
+      }
+      return c;
+    }));
+  };
+
+  const clearProductForConcept = (conceptId: string) => {
+    const currentConcept = concepts.find(c => c.id === conceptId);
+    const oldProductImage = currentConcept?.productImage || null;
+
+    if (oldProductImage) {
+      setImages(prev => {
+        const isUsedByOther = concepts.some(c => c.id !== conceptId && c.productImage === oldProductImage);
+        if (!isUsedByOther) {
+          return prev.filter(img => img !== oldProductImage);
+        }
+        return prev;
+      });
+    }
+
+    setConcepts(prevConcepts => prevConcepts.map(c => {
+      if (c.id === conceptId) {
+        return {
+          ...c,
+          productId: null,
+          productImage: null,
+          manualUnitPrice: "",
+          manualUnitCost: "",
+          finalUnitPrice: 0,
+          totalAmount: 0,
+          calculated: null
+        };
+      }
+      return c;
+    }));
   };
 
   const { subtotal, iva, total, costoReal, utilidad } = useMemo(() => {
@@ -446,31 +558,13 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
                 {(concept.type === "RESALE" || concept.type === "PRODUCTO") && products.length > 0 ? (
                   <>
                     <div className="sm:col-span-4">
-                      <label className="block text-[10px] font-bold text-indigo-700 uppercase tracking-widest mb-2 ml-1">Seleccionar del Inventario</label>
-                      <select
-                        onChange={(e) => {
-                          const prodId = e.target.value;
-                          const selectedProd = products.find(p => p.id === prodId);
-                          if (selectedProd) {
-                            const desc = `${selectedProd.name}${selectedProd.model ? ` (${selectedProd.model})` : ""}${selectedProd.color ? ` - ${selectedProd.color}` : ""}`;
-                            updateConcept(concept.id, "description", desc);
-                            updateConcept(concept.id, "manualUnitPrice", selectedProd.unitPrice);
-                            updateConcept(concept.id, "manualUnitCost", selectedProd.unitCost);
-                            
-                            if (selectedProd.image && !images.includes(selectedProd.image)) {
-                              setImages(prev => [...prev, selectedProd.image]);
-                            }
-                          }
-                        }}
-                        className="w-full text-sm font-bold border-indigo-200 rounded-xl px-4 py-3 bg-indigo-50/50 focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600 transition-all outline-none text-indigo-900 shadow-sm"
-                      >
-                        <option value="">-- Buscar en almacén --</option>
-                        {products.map((p: any) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} {p.model ? `(${p.model})` : ""} - {p.color || "Sin color"} (${p.unitPrice} MXN)
-                          </option>
-                        ))}
-                      </select>
+                      <label className="block text-[10px] font-bold text-indigo-700 uppercase tracking-widest mb-1.5 ml-1">Artículo del Catálogo</label>
+                      <ProductCombobox
+                        products={products}
+                        selectedProductId={concept.productId}
+                        onSelectProduct={(prod) => selectProductForConcept(concept.id, prod)}
+                        onClear={() => clearProductForConcept(concept.id)}
+                      />
                     </div>
                     <div className="sm:col-span-4">
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Descripción</label>

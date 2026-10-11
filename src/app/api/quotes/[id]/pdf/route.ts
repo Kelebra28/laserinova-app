@@ -26,7 +26,7 @@ export async function GET(
       client: true,
       concepts: {
         orderBy: { order: 'asc' },
-        include: { material: true }
+        include: { material: true, product: true }
       }
     }
   });
@@ -44,7 +44,7 @@ export async function GET(
         client: true,
         concepts: {
           orderBy: { order: 'asc' },
-          include: { material: true }
+          include: { material: true, product: true }
         }
       },
       orderBy: { createdAt: 'asc' }

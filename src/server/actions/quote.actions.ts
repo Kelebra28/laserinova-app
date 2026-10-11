@@ -110,7 +110,7 @@ export async function updateQuotePayment(formData: FormData) {
 }
 
 export async function deleteQuote(formData: FormData) {
-  await requireAuth(["ADMIN"]);
+  await requireAuth();
   const quoteId = formData.get("quoteId") as string;
   if (!quoteId) throw new Error("Datos incompletos");
 
@@ -119,6 +119,24 @@ export async function deleteQuote(formData: FormData) {
   revalidatePath(`/dashboard/finance`);
   revalidatePath(`/dashboard`);
   redirect(`/dashboard/quotes`);
+}
+
+export async function deleteQuoteAction(quoteId: string) {
+  try {
+    await requireAuth();
+    if (!quoteId || typeof quoteId !== "string") {
+      return { success: false, error: "ID de cotización no válido" };
+    }
+
+    await deleteQuoteService(quoteId);
+    revalidatePath(`/dashboard/quotes`);
+    revalidatePath(`/dashboard/finance`);
+    revalidatePath(`/dashboard`);
+    return { success: true, data: { id: quoteId } };
+  } catch (error: any) {
+    console.error("Error al eliminar cotización:", error);
+    return { success: false, error: error.message || "Error al eliminar la cotización" };
+  }
 }
 
 export async function duplicateQuoteAsVersion(quoteId: string) {
@@ -342,7 +360,7 @@ export async function sendQuoteViaWhatsAppAction(quoteId: string) {
         client: true,
         concepts: {
           orderBy: { order: 'asc' },
-          include: { material: true }
+          include: { material: true, product: true }
         }
       }
     });

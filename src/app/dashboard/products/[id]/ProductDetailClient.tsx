@@ -11,7 +11,7 @@ interface ProductDetailClientProps {
   liveStockData: any[] | null;
 }
 
-import { getHexForColor } from "@/lib/constants";
+import { getHexForColor, formatNumber, formatCurrency } from "@/lib/constants";
 
 export function ProductDetailClient({ initialProduct, variants, liveStockData }: ProductDetailClientProps) {
   // Estado para el producto seleccionado actualmente
@@ -80,10 +80,10 @@ export function ProductDetailClient({ initialProduct, variants, liveStockData }:
                 </span>
               </div>
               <p className={`text-4xl font-black ${isLive ? 'text-blue-700' : 'text-zinc-900'}`}>
-                ${(displayPrice * 1.16).toFixed(2)} <span className="text-sm font-medium text-zinc-500 ml-1">con IVA</span>
+                {formatCurrency(displayPrice * 1.16)} <span className="text-sm font-medium text-zinc-500 ml-1">con IVA</span>
               </p>
               <p className="text-sm font-medium text-zinc-400 mt-1">
-                ${displayPrice.toFixed(2)} sin IVA
+                {formatCurrency(displayPrice)} sin IVA
               </p>
               {isLive && (
                 <div className="absolute top-0 right-0 bg-blue-100 px-3 py-1 rounded-bl-xl text-[10px] font-bold text-blue-700 flex items-center gap-1 border-b border-l border-blue-200">
@@ -104,7 +104,7 @@ export function ProductDetailClient({ initialProduct, variants, liveStockData }:
                 </span>
               </div>
               <p className={`text-3xl font-black ${isLive ? 'text-green-700' : 'text-zinc-900'}`}>
-                {isLive ? activeLiveStock.stockReal : activeVariant.stockQuantity}
+                {formatNumber(isLive ? activeLiveStock.stockReal : activeVariant.stockQuantity)}
                 <span className="text-sm font-normal text-zinc-500 ml-2">unidades</span>
               </p>
               {isLive && (
@@ -157,7 +157,7 @@ export function ProductDetailClient({ initialProduct, variants, liveStockData }:
                           {variant.color?.replace(/^\d+\s*-\s*/, '')}
                         </span>
                         <span className={`text-[10px] font-black ${isSelected ? 'text-zinc-900' : 'text-zinc-500'}`}>
-                          {stockDisplay} pzs
+                          {formatNumber(stockDisplay)} pzs
                         </span>
                       </div>
                     </button>

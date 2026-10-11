@@ -4,9 +4,10 @@ import Link from 'next/link';
 
 import { useState, useEffect, useRef } from 'react';
 import { useWhatsAppEvents } from '@/hooks/useWhatsAppEvents';
-import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simulateIncomingMessageAction, createDummyContactAction, sendMediaMessageAction, generateSummaryAction } from '@/server/actions/whatsapp.actions';
+import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simulateIncomingMessageAction, createDummyContactAction, sendMediaMessageAction, generateSummaryAction, deleteConversationAction } from '@/server/actions/whatsapp.actions';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -34,6 +35,8 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryText, setSummaryText] = useState('');
   const [summaryCache, setSummaryCache] = useState<Record<string, { text: string; messageCount: number }>>({});
+  const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
+  const [isDeletingContact, setIsDeletingContact] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -499,6 +502,29 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
     }
   };
 
+  const handleDeleteConversation = async () => {
+    if (!contactToDelete) return;
+    setIsDeletingContact(true);
+    try {
+      const res = await deleteConversationAction(contactToDelete.id);
+      if (res.success) {
+        toast.success("Conversación eliminada");
+        setContacts(prev => prev.filter(c => c.id !== contactToDelete.id));
+        if (activeContact?.id === contactToDelete.id) {
+          setActiveContact(null);
+          setMessages([]);
+        }
+        setContactToDelete(null);
+      } else {
+        toast.error(res.error || "Error al eliminar conversación");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error al eliminar conversación");
+    } finally {
+      setIsDeletingContact(false);
+    }
+  };
+
   let pendingQuoteUrl = '';
   if (activeContact && messages.length > 0) {
     const quoteMsg = [...messages].reverse().find(m => m.direction === 'INTERNAL' && m.content.includes('|||'));
@@ -562,7 +588,7 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                 key={contact.id} 
                 onClick={() => loadMessages(contact)}
                 className={cn(
-                  "p-3 mx-2 my-1 rounded-xl cursor-pointer transition-colors flex gap-3 items-center",
+                  "p-3 mx-2 my-1 rounded-xl cursor-pointer transition-colors flex gap-3 items-center group",
                   activeContact?.id === contact.id ? "bg-[#2a3942]" : "hover:bg-[#202c33]"
                 )}
               >
@@ -580,11 +606,24 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                   {/* Fila superior: Nombre y Fecha */}
                   <div className="flex justify-between items-center mb-0.5">
                     <span className="font-normal text-[#e9edef] truncate text-base">{contact.name || contact.phone}</span>
-                    {contact.messages?.[0] && (
-                      <span className="text-[11px] text-[#8696a0] shrink-0 ml-2">
-                        {new Date(contact.messages[0].timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {contact.messages?.[0] && (
+                        <span className="text-[11px] text-[#8696a0]">
+                          {new Date(contact.messages[0].timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setContactToDelete(contact);
+                        }}
+                        title="Eliminar conversación"
+                        className="opacity-0 group-hover:opacity-100 p-1 text-[#8696a0] hover:text-red-400 hover:bg-[#313d45] rounded-md transition-all"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
                   
                   {/* Fila inferior: Mensaje e Iconos (Bot/Unread) */}
@@ -707,6 +746,18 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
                 title="Resumir con IA"
               >
                 <Sparkles size={18} />
+              </Button>
+
+              {/* Botón Eliminar Conversación */}
+              <Button 
+                variant="ghost" 
+                size="icon"
+                data-testid="delete-chat-header-btn"
+                onClick={() => setContactToDelete(activeContact)}
+                className="rounded-xl w-9 h-9 bg-[#111b21] border border-[#313d45] hover:border-red-500/50 text-[#8696a0] hover:text-red-400 hover:bg-red-500/10 transition-all shadow-sm active:scale-95"
+                title="Eliminar conversación completa"
+              >
+                <Trash2 size={18} />
               </Button>
             </div>
           </div>
@@ -1067,6 +1118,19 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
           </div>
         </div>
       )}
+
+      {/* Modal Confirmación Borrar Conversación */}
+      <ConfirmationModal
+        isOpen={!!contactToDelete}
+        onClose={() => setContactToDelete(null)}
+        onConfirm={handleDeleteConversation}
+        isLoading={isDeletingContact}
+        title="Eliminar Conversación"
+        message={`¿Estás seguro de que deseas eliminar permanentemente el chat con ${contactToDelete?.name || contactToDelete?.phone || 'este contacto'}? Se borrará todo el historial de mensajes de forma definitiva.`}
+        confirmText="Sí, Eliminar Chat"
+        cancelText="Cancelar"
+        variant="danger"
+      />
     </div>
   );
 }
