@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Search, X, Check, Package, Sparkles, ChevronDown } from "lucide-react";
 import { getHexForColor, formatNumber, formatCurrency } from "@/lib/constants";
+import { normalizeText, getWordVariations } from "@/lib/search";
 
 export interface ProductItem {
   id: string;
@@ -16,6 +17,8 @@ export interface ProductItem {
   stockQuantity?: number;
   image?: string | null;
   provider?: string | null;
+  category?: { name: string } | string | null;
+  description?: string | null;
 }
 
 interface ProductGroup {
@@ -25,6 +28,7 @@ interface ProductGroup {
   cleanName: string;
   brand?: string | null;
   provider?: string | null;
+  categoryName?: string;
   unitCost: number;
   unitPrice: number;
   totalStock: number;
@@ -61,6 +65,7 @@ export function ProductCombobox({
       const key = (p.model || cleanName || p.id).toUpperCase().trim();
 
       if (!map.has(key)) {
+        const catName = typeof p.category === "object" ? p.category?.name : (p.category || "");
         map.set(key, {
           modelKey: key,
           model: p.model || "",
@@ -68,6 +73,7 @@ export function ProductCombobox({
           cleanName: cleanName || p.name,
           brand: p.brand,
           provider: p.provider,
+          categoryName: catName || "",
           unitCost: p.unitCost,
           unitPrice: p.unitPrice,
           totalStock: 0,
@@ -111,26 +117,30 @@ export function ProductCombobox({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // 2. Filtrado predictivo sin límite arbitrario de 20 (muestra TODOS los que coincidan)
+  // 2. Filtrado predictivo inteligente (acentos, singular/plural, sinónimos y categorías)
   const filteredGroups = useMemo(() => {
     if (!query.trim()) {
       return productGroups;
     }
 
-    const q = query.toLowerCase().trim();
-    const tokens = q.split(/\s+/).filter(Boolean);
+    const cleanQuery = normalizeText(query);
+    const tokens = cleanQuery.split(/\s+/).filter(Boolean);
 
     return productGroups.filter((g) => {
-      const name = (g.name || "").toLowerCase();
-      const cleanName = (g.cleanName || "").toLowerCase();
-      const model = (g.model || "").toLowerCase();
-      const brand = (g.brand || "").toLowerCase();
-      const provider = (g.provider || "").toLowerCase();
-      const colors = g.variants.map((v) => (v.color || "").toLowerCase()).join(" ");
-      const skus = g.variants.map((v) => (v.sku || "").toLowerCase()).join(" ");
-      const combined = `${name} ${cleanName} ${model} ${brand} ${provider} ${colors} ${skus}`;
+      const name = normalizeText(g.name || "");
+      const cleanName = normalizeText(g.cleanName || "");
+      const model = normalizeText(g.model || "");
+      const brand = normalizeText(g.brand || "");
+      const provider = normalizeText(g.provider || "");
+      const category = normalizeText(g.categoryName || "");
+      const colors = normalizeText(g.variants.map((v) => v.color || "").join(" "));
+      const skus = normalizeText(g.variants.map((v) => v.sku || "").join(" "));
+      const combined = `${name} ${cleanName} ${model} ${brand} ${provider} ${category} ${colors} ${skus}`;
 
-      return tokens.every((token) => combined.includes(token));
+      return tokens.every((token) => {
+        const variations = getWordVariations(token);
+        return variations.some((v) => combined.includes(v));
+      });
     });
   }, [query, productGroups]);
 
@@ -184,7 +194,22 @@ export function ProductCombobox({
                     <> • Catálogo: <span className="font-bold text-emerald-600">{formatCurrency(selectedProduct.unitPrice)}</span></>
                   )}
                   {selectedProduct.stockQuantity !== undefined && (
-                    <> • Stock Color: <span className="font-bold text-zinc-800">{formatNumber(selectedProduct.stockQuantity)} pzs</span></>
+                    <>
+                      {" • Stock Color: "}
+                      {selectedProduct.stockQuantity === 0 ? (
+                        <span className="font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                          0 pzs (Agotado)
+                        </span>
+                      ) : selectedProduct.stockQuantity <= 50 ? (
+                        <span className="font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                          {formatNumber(selectedProduct.stockQuantity)} pzs (Bajo)
+                        </span>
+                      ) : (
+                        <span className="font-bold text-zinc-800">
+                          {formatNumber(selectedProduct.stockQuantity)} pzs
+                        </span>
+                      )}
+                    </>
                   )}
                 </p>
               </div>
@@ -226,6 +251,8 @@ export function ProductCombobox({
                   const isCurrent = v.id === selectedProduct.id;
                   const hex = getHexForColor(v.color);
                   const cleanColor = (v.color || "Color").replace(/^\d+\s*-\s*/, "");
+                  const stock = v.stockQuantity || 0;
+                  const isOutOfStock = stock === 0;
 
                   return (
                     <button
@@ -234,18 +261,26 @@ export function ProductCombobox({
                       onClick={() => handleSelect(v)}
                       className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 border ${
                         isCurrent
-                          ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                          : "bg-white text-zinc-700 border-zinc-200 hover:border-indigo-400 hover:bg-indigo-50/50"
+                          ? isOutOfStock
+                            ? "bg-rose-600 text-white border-rose-600 shadow-sm"
+                            : "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                          : isOutOfStock
+                            ? "bg-zinc-50 text-zinc-400 border-dashed border-rose-200 hover:border-rose-400 hover:bg-rose-50/50"
+                            : "bg-white text-zinc-700 border-zinc-200 hover:border-indigo-400 hover:bg-indigo-50/50"
                       }`}
-                      title={`${cleanColor} (${formatNumber(v.stockQuantity)} pzs)`}
+                      title={`${cleanColor} (${isOutOfStock ? "Agotado" : `${formatNumber(stock)} pzs`})`}
                     >
                       <span
                         className="w-2.5 h-2.5 rounded-full border border-black/10 inline-block shrink-0 shadow-2xs"
                         style={{ background: hex }}
                       />
-                      <span>{cleanColor}</span>
-                      <span className={`text-[10px] ${isCurrent ? "text-indigo-200" : "text-zinc-400 font-normal"}`}>
-                        ({formatNumber(v.stockQuantity)})
+                      <span className={isOutOfStock && !isCurrent ? "line-through text-zinc-400" : ""}>{cleanColor}</span>
+                      <span className={`text-[10px] ${
+                        isCurrent 
+                          ? isOutOfStock ? "text-rose-100" : "text-indigo-200" 
+                          : isOutOfStock ? "text-rose-500 font-semibold" : "text-zinc-400 font-normal"
+                      }`}>
+                        ({isOutOfStock ? "Agotado" : formatNumber(stock)})
                       </span>
                     </button>
                   );
@@ -348,7 +383,15 @@ export function ProductCombobox({
                             <> • Venta: <strong className="text-emerald-600">{formatCurrency(group.unitPrice)}</strong></>
                           )}
                           {" • Stock Total: "}
-                          <strong className="text-zinc-800">{formatNumber(group.totalStock)} pzs</strong>
+                          {group.totalStock === 0 ? (
+                            <span className="inline-flex items-center px-1.5 py-0.2 bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold rounded">
+                              Agotado
+                            </span>
+                          ) : (
+                            <strong className={group.totalStock <= 50 ? "text-amber-700" : "text-zinc-800"}>
+                              {formatNumber(group.totalStock)} pzs
+                            </strong>
+                          )}
                           {" • "}
                           <span className="font-semibold text-indigo-600">
                             {group.variants.length} {group.variants.length === 1 ? "color" : "colores"}
@@ -368,6 +411,8 @@ export function ProductCombobox({
                       const hex = getHexForColor(v.color);
                       const cleanColor = (v.color || "Color único").replace(/^\d+\s*-\s*/, "");
                       const isSelected = v.id === selectedProductId;
+                      const stock = v.stockQuantity || 0;
+                      const isOutOfStock = stock === 0;
 
                       return (
                         <button
@@ -379,18 +424,26 @@ export function ProductCombobox({
                           }}
                           className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 border transition-all ${
                             isSelected
-                              ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                              : "bg-white text-zinc-700 border-zinc-200 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-900 shadow-2xs"
+                              ? isOutOfStock
+                                ? "bg-rose-600 text-white border-rose-600 shadow-sm"
+                                : "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                              : isOutOfStock
+                                ? "bg-zinc-50 text-zinc-400 border-dashed border-rose-200 hover:border-rose-300 hover:bg-rose-50/40 shadow-2xs"
+                                : "bg-white text-zinc-700 border-zinc-200 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-900 shadow-2xs"
                           }`}
-                          title={`${cleanColor} (${formatNumber(v.stockQuantity)} pzs)`}
+                          title={`${cleanColor} (${isOutOfStock ? "Agotado" : `${formatNumber(stock)} pzs`})`}
                         >
                           <span
                             className="w-2.5 h-2.5 rounded-full border border-black/15 inline-block shrink-0"
                             style={{ background: hex }}
                           />
-                          <span>{cleanColor}</span>
-                          <span className={`text-[10px] ${isSelected ? "text-indigo-200" : "text-zinc-400 font-medium"}`}>
-                            ({formatNumber(v.stockQuantity)})
+                          <span className={isOutOfStock && !isSelected ? "line-through text-zinc-400" : ""}>{cleanColor}</span>
+                          <span className={`text-[10px] ${
+                            isSelected 
+                              ? isOutOfStock ? "text-rose-100" : "text-indigo-200" 
+                              : isOutOfStock ? "text-rose-500 font-semibold" : "text-zinc-400 font-medium"
+                          }`}>
+                            ({isOutOfStock ? "Agotado" : formatNumber(stock)})
                           </span>
                           {isSelected && <Check className="w-3 h-3 text-white ml-0.5" />}
                         </button>

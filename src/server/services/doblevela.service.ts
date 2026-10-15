@@ -1,3 +1,5 @@
+import { CDMX_WAREHOUSES } from "@/constants";
+
 export async function getDobleVelaStock(modelo: string) {
   const url = 'http://srv-datos.dyndns.info/doblevela/service.asmx/GetExistencia';
   const params = new URLSearchParams();
@@ -20,14 +22,12 @@ export async function getDobleVelaStock(modelo: string) {
     if (!data.Resultado || data.Resultado.length === 0) return null;
 
     // Procesar todos los colores/variantes de ese modelo
-    const almacenesCDMX = [7, 9, 15, 20, 24];
-    
     const variantsStock = data.Resultado.map((item: any) => {
       let totalStock = 0;
-      almacenesCDMX.forEach(num => {
-        const key = `Disponible Almacen ${num}`;
-        if (item[key]) {
-          totalStock += parseInt(item[key], 10) || 0;
+      CDMX_WAREHOUSES.forEach(num => {
+        const val = item[`Disponible Almacen ${num}`] ?? item[`Disponible Almacén ${num}`];
+        if (val) {
+          totalStock += parseInt(val, 10) || 0;
         }
       });
 

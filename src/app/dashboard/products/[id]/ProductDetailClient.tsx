@@ -2,29 +2,22 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Box, DollarSign, Tag, Info } from "lucide-react";
+import { ArrowLeft, Box, DollarSign, Tag, Info, AlertCircle } from "lucide-react";
 import { ProductGallery } from "./ProductGallery";
+import { getHexForColor, formatNumber, formatCurrency } from "@/lib/constants";
 
 interface ProductDetailClientProps {
   initialProduct: any;
   variants: any[];
-  liveStockData: any[] | null;
+  liveStockData?: any[] | null;
 }
 
-import { getHexForColor, formatNumber, formatCurrency } from "@/lib/constants";
-
-export function ProductDetailClient({ initialProduct, variants, liveStockData }: ProductDetailClientProps) {
+export function ProductDetailClient({ initialProduct, variants }: ProductDetailClientProps) {
   // Estado para el producto seleccionado actualmente
   const [activeVariant, setActiveVariant] = useState(initialProduct);
 
-  // Encontrar el stock en vivo del producto activo si existe
-  let activeLiveStock = null;
-  if (liveStockData) {
-    activeLiveStock = liveStockData.find(s => s.clave === activeVariant.sku);
-  }
-  const isLive = !!activeLiveStock;
-
-  const displayPrice = isLive ? activeLiveStock.precioCosto : activeVariant.unitPrice;
+  const displayPrice = activeVariant.unitPrice || activeVariant.unitCost || 0;
+  const activeStock = activeVariant.stockQuantity ?? 0;
 
   // Calcular las imágenes específicas de todas las variantes
   const allVariantImages = variants.map(v => {
@@ -43,7 +36,7 @@ export function ProductDetailClient({ initialProduct, variants, liveStockData }:
         </Link>
         <div>
           <h2 className="text-3xl font-black tracking-tight text-zinc-900">Detalle de Producto</h2>
-          <p className="text-zinc-500">Consulta de información y stock en tiempo real.</p>
+          <p className="text-zinc-500">Consulta de información técnica y stock en almacenes CDMX.</p>
         </div>
       </div>
 
@@ -72,52 +65,69 @@ export function ProductDetailClient({ initialProduct, variants, liveStockData }:
 
           {/* Tarjetas de Métricas */}
           <div className="grid grid-cols-2 gap-4">
-            <div className={`border rounded-2xl p-6 relative overflow-hidden shadow-sm ${isLive ? 'bg-blue-50 border-blue-200' : 'bg-white border-zinc-200'}`}>
+            <div className="border rounded-2xl p-6 relative overflow-hidden shadow-sm bg-white border-zinc-200">
               <div className="flex items-center gap-2 text-zinc-500 mb-2">
-                <DollarSign className={`w-4 h-4 ${isLive ? 'text-blue-600' : ''}`} />
+                <DollarSign className="w-4 h-4 text-zinc-600" />
                 <span className="text-sm font-medium uppercase tracking-wider">
-                  Precio {isLive ? 'en Vivo' : 'Base'}
+                  Precio Catálogo
                 </span>
               </div>
-              <p className={`text-4xl font-black ${isLive ? 'text-blue-700' : 'text-zinc-900'}`}>
+              <p className="text-4xl font-black text-zinc-900">
                 {formatCurrency(displayPrice * 1.16)} <span className="text-sm font-medium text-zinc-500 ml-1">con IVA</span>
               </p>
               <p className="text-sm font-medium text-zinc-400 mt-1">
-                {formatCurrency(displayPrice)} sin IVA
+                {formatCurrency(displayPrice)} sin IVA • Costo: <span className="font-bold text-red-600">{formatCurrency(activeVariant.unitCost)}</span>
               </p>
-              {isLive && (
-                <div className="absolute top-0 right-0 bg-blue-100 px-3 py-1 rounded-bl-xl text-[10px] font-bold text-blue-700 flex items-center gap-1 border-b border-l border-blue-200">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-                  </span>
-                  LIVE
-                </div>
-              )}
             </div>
 
-            <div className={`border rounded-2xl p-6 relative overflow-hidden shadow-sm ${isLive ? 'bg-green-50 border-green-200' : 'bg-white border-zinc-200'}`}>
+            <div className={`border rounded-2xl p-6 relative overflow-hidden shadow-sm ${
+              activeStock === 0 
+                ? 'bg-rose-50/70 border-rose-200' 
+                : activeStock <= 50 
+                  ? 'bg-amber-50/70 border-amber-200' 
+                  : 'bg-emerald-50/70 border-emerald-200'
+            }`}>
               <div className="flex items-center gap-2 text-zinc-500 mb-2">
-                <Box className={`w-4 h-4 ${isLive ? 'text-green-600' : ''}`} />
+                <Box className={`w-4 h-4 ${
+                  activeStock === 0 ? 'text-rose-600' : activeStock <= 50 ? 'text-amber-600' : 'text-emerald-600'
+                }`} />
                 <span className="text-sm font-medium uppercase tracking-wider">
-                  Stock {isLive ? 'en Vivo' : 'Local'}
+                  Stock Almacén CDMX
                 </span>
               </div>
-              <p className={`text-3xl font-black ${isLive ? 'text-green-700' : 'text-zinc-900'}`}>
-                {formatNumber(isLive ? activeLiveStock.stockReal : activeVariant.stockQuantity)}
+              <p className={`text-3xl font-black ${
+                activeStock === 0 ? 'text-rose-700' : activeStock <= 50 ? 'text-amber-700' : 'text-emerald-700'
+              }`}>
+                {formatNumber(activeStock)}
                 <span className="text-sm font-normal text-zinc-500 ml-2">unidades</span>
               </p>
-              {isLive && (
-                <div className="absolute top-0 right-0 bg-green-100 px-3 py-1 rounded-bl-xl text-[10px] font-bold text-green-700 flex items-center gap-1 border-b border-l border-green-200">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600"></span>
-                  </span>
-                  LIVE
-                </div>
-              )}
+              <div className={`absolute top-0 right-0 px-3 py-1 rounded-bl-xl text-[10px] font-bold flex items-center gap-1.5 border-b border-l ${
+                activeStock === 0 
+                  ? 'bg-rose-100 text-rose-700 border-rose-200' 
+                  : activeStock <= 50 
+                    ? 'bg-amber-100 text-amber-800 border-amber-200' 
+                    : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  activeStock === 0 ? 'bg-rose-500 animate-pulse' : activeStock <= 50 ? 'bg-amber-500' : 'bg-emerald-500'
+                }`} />
+                {activeStock === 0 ? 'AGOTADO' : activeStock <= 50 ? 'POCAS PIEZAS' : 'DISPONIBLE'}
+              </div>
             </div>
           </div>
+
+          {/* Banner de Advertencia si está agotado */}
+          {activeStock === 0 && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl text-sm flex items-start gap-3 shadow-sm">
+              <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Sin existencias en almacenes de CDMX</p>
+                <p className="text-xs text-rose-600 mt-0.5">
+                  Esta variante o color se encuentra agotada actualmente en los almacenes de CDMX (Alm. 7, 9, 15, 20 y 24).
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Variantes de Color (Selector Interactivo) */}
           {variants.length > 1 && (
@@ -127,37 +137,53 @@ export function ProductDetailClient({ initialProduct, variants, liveStockData }:
                 {variants.map(variant => {
                   const isSelected = variant.id === activeVariant.id;
                   const hex = getHexForColor(variant.color);
-                  
-                  // Calcular stock específico para esta variante en el loop
-                  let variantLiveStock = null;
-                  if (liveStockData) {
-                    variantLiveStock = liveStockData.find(s => s.clave === variant.sku);
-                  }
-                  const stockDisplay = variantLiveStock ? variantLiveStock.stockReal : variant.stockQuantity;
+                  const stockDisplay = variant.stockQuantity || 0;
+                  const isOutOfStock = stockDisplay === 0;
                   
                   return (
                     <button
                       key={variant.id}
                       onClick={() => setActiveVariant(variant)}
-                      className={`relative flex flex-col items-center gap-2 group transition-all`}
-                      title={variant.color || 'Color'}
+                      className={`relative flex flex-col items-center gap-2 group transition-all ${
+                        isOutOfStock && !isSelected ? 'opacity-60 hover:opacity-100' : ''
+                      }`}
+                      title={`${variant.color || 'Color'} - ${isOutOfStock ? 'Agotado' : `${formatNumber(stockDisplay)} pzs`}`}
                     >
-                      <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
+                      <div className={`relative flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
                         isSelected
-                          ? 'border-red-500 shadow-md scale-110 ring-4 ring-red-50' 
-                          : 'border-zinc-200 hover:border-zinc-400 hover:scale-105'
+                          ? isOutOfStock
+                            ? 'border-rose-500 shadow-md scale-110 ring-4 ring-rose-50' 
+                            : 'border-red-500 shadow-md scale-110 ring-4 ring-red-50' 
+                          : isOutOfStock
+                            ? 'border-dashed border-rose-300 hover:border-rose-500'
+                            : 'border-zinc-200 hover:border-zinc-400 hover:scale-105'
                       }`}>
                         <div 
                           className="w-7 h-7 rounded-full shadow-inner border border-black/10" 
                           style={{ background: hex }}
                         />
+                        {isOutOfStock && (
+                          <span className="absolute inset-0 flex items-center justify-center text-[11px] font-black text-rose-600">
+                            ✕
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-col items-center">
-                        <span className={`text-[9px] uppercase font-bold tracking-wider ${isSelected ? 'text-red-600' : 'text-zinc-400 group-hover:text-zinc-600'}`}>
+                        <span className={`text-[9px] uppercase font-bold tracking-wider ${
+                          isSelected 
+                            ? isOutOfStock ? 'text-rose-600' : 'text-red-600' 
+                            : isOutOfStock ? 'text-zinc-400 line-through' : 'text-zinc-400 group-hover:text-zinc-600'
+                        }`}>
                           {variant.color?.replace(/^\d+\s*-\s*/, '')}
                         </span>
-                        <span className={`text-[10px] font-black ${isSelected ? 'text-zinc-900' : 'text-zinc-500'}`}>
-                          {formatNumber(stockDisplay)} pzs
+                        <span className={`text-[10px] font-black ${
+                          isOutOfStock 
+                            ? 'text-rose-500' 
+                            : stockDisplay <= 50 
+                              ? 'text-amber-600' 
+                              : isSelected ? 'text-zinc-900' : 'text-zinc-500'
+                        }`}>
+                          {isOutOfStock ? 'Agotado' : `${formatNumber(stockDisplay)} pzs`}
                         </span>
                       </div>
                     </button>
@@ -230,15 +256,6 @@ export function ProductDetailClient({ initialProduct, variants, liveStockData }:
               </div>
             </div>
           </div>
-
-          {liveStockData && !isLive && (
-            <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-sm flex items-start gap-3 shadow-sm">
-              <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-              <p>
-                No pudimos recuperar el inventario en vivo para esta variante específica. Es posible que Doble Vela ya no la tenga disponible.
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>

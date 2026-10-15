@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ProductsClient } from "./ProductsClient";
 import { Metadata } from "next";
+import { buildProductSearchWhere } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
 
@@ -15,12 +16,10 @@ interface Props {
 export default async function ProductsPage({ searchParams }: Props) {
   const { provider = "Doble Vela", q = "" } = await searchParams;
 
+  const whereClause = buildProductSearchWhere(q, provider);
+
   const products = await prisma.product.findMany({
-    where: {
-      provider: provider,
-      name: { contains: q },
-      active: true,
-    },
+    where: whereClause,
     include: {
       category: true,
     },

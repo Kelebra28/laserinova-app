@@ -172,6 +172,7 @@ export async function getQuoteEditDataService(quoteId: string) {
 
   const products = await prisma.product.findMany({
     where: { active: true },
+    include: { category: true },
     orderBy: { name: "asc" }
   });
 

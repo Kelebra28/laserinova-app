@@ -24,6 +24,7 @@ export default async function NewQuotePage({
 
   const products = await prisma.product.findMany({
     where: { active: true },
+    include: { category: true },
     orderBy: { name: "asc" },
   });
 

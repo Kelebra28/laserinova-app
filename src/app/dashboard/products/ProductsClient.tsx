@@ -177,7 +177,9 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
             {paginatedGroups.map((group) => {
               const mainProduct = group[0];
-              const totalStock = group.reduce((sum, p) => sum + p.stockQuantity, 0);
+              const totalStock = group.reduce((sum, p) => sum + (p.stockQuantity || 0), 0);
+              const isOutOfStock = totalStock === 0;
+              const isLowStock = totalStock > 0 && totalStock <= 50;
 
               return (
                 <Link 
@@ -186,7 +188,7 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
                   onClick={() => setNavigatingId(mainProduct.id)}
                   className={`group relative flex flex-col bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-red-500/50 hover:shadow-lg transition-all duration-500 ${
                     navigatingId === mainProduct.id ? "ring-2 ring-red-500 shadow-md" : ""
-                  }`}
+                  } ${isOutOfStock ? "opacity-90" : ""}`}
                 >
                   {/* Overlay de carga instantáneo al dar clic */}
                   {navigatingId === mainProduct.id && (
@@ -210,10 +212,22 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
                     <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                     
                     {/* Etiqueta de Stock Total */}
-                    <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm border border-zinc-200 shadow-sm px-2 py-1 rounded-md text-[10px] font-bold text-zinc-700 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      {formatNumber(totalStock)} en stock
-                    </div>
+                    {isOutOfStock ? (
+                      <div className="absolute top-3 right-3 bg-rose-50/95 backdrop-blur-sm border border-rose-200 shadow-xs px-2.5 py-1 rounded-md text-[10px] font-bold text-rose-700 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                        Agotado
+                      </div>
+                    ) : isLowStock ? (
+                      <div className="absolute top-3 right-3 bg-amber-50/95 backdrop-blur-sm border border-amber-200 shadow-xs px-2.5 py-1 rounded-md text-[10px] font-bold text-amber-800 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                        {formatNumber(totalStock)} en stock
+                      </div>
+                    ) : (
+                      <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm border border-zinc-200 shadow-xs px-2.5 py-1 rounded-md text-[10px] font-bold text-zinc-700 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        {formatNumber(totalStock)} en stock
+                      </div>
+                    )}
                   </div>
                   <div className="p-5 flex-1 flex flex-col justify-between">
                     <div className="space-y-2">

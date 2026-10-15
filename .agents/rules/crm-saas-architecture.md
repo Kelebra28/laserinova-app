@@ -58,10 +58,16 @@ ESTÁNDAR ARQUITECTÓNICO ABSOLUTO PARA NEXT.JS (APLICAR SIEMPRE SIN EXCEPCIONES
   * Únicamente cuando yo te escriba la frase exacta 'INICIAR PASE A PRODUCCIÓN', entenderás que el código y la base de datos local están probados y aprobados.
   * En ese momento, me darás los pasos y comandos exactos (ej. 'npx prisma migrate deploy' o 'npx prisma db push') advirtiéndome que debo cambiar mi archivo .env para apuntar a Hostinger temporalmente para aplicar los cambios de esquema.
 
-9. CENTRALIZACIÓN DE CONSTANTES Y DICCIONARIOS:
-- PROHIBIDO MAGIC STRINGS: Los diccionarios de mapeo (ej. `statusLabels`, `paymentStatusColors`), listas estáticas de opciones, y constantes de configuración nunca deben vivir directamente dentro de los componentes o páginas (`page.tsx`).
-- CARPETA DESIGNADA: Toda constante o mapeo de datos que pueda ser reutilizado debe centralizarse en un directorio dedicado, típicamente en `/src/lib/constants.ts` (o `/src/constants/`).
-- IMPORTACIÓN LIMPIA: Las páginas y componentes solo deben importar estos diccionarios, manteniendo la declaración de variables lo más limpia posible y asegurando una única fuente de verdad para toda la aplicación.
+9. CENTRALIZACIÓN Y MODULARIDAD DE CONSTANTES Y DICCIONARIOS (/src/constants/):
+- PROHIBIDO MAGIC STRINGS Y CONSTANTES EN LÍNEA: Los diccionarios de mapeo (ej. `statusLabels`, `paymentStatusColors`), listas estáticas de opciones, sinónimos de búsqueda, IDs de almacenes y constantes de configuración NUNCA deben declararse directamente dentro de componentes, páginas (`page.tsx`) ni servicios.
+- CARPETA CANÓNICA MODULAR: Toda constante debe organizarse en archivos temáticos dentro de `/src/constants/`:
+  * `search.constants.ts`: Sinónimos, palabras clave y mapeos de búsqueda.
+  * `colors.constants.ts`: Diccionarios de colores HEX y utilerías de color.
+  * `quotes.constants.ts`: Estados, etiquetas y colores de cotizaciones y pagos.
+  * `warehouses.constants.ts`: IDs y claves de almacenes (ej. CDMX [7, 9, 15, 20, 24]).
+  * `formatters.constants.ts`: Funciones estándar de moneda y formato numérico.
+- BARREL EXPORT OBLIGATORIO: `/src/constants/index.ts` debe re-exportar todos los archivos modulares para permitir importaciones limpias en una sola línea (ej. `import { COLOR_DICTIONARY, CDMX_WAREHOUSES } from "@/constants"`).
+- FUENTE ÚNICA DE VERDAD: Todo nuevo módulo o funcionalidad debe agregar sus constantes a esta carpeta antes de consumirlas en la UI o en el backend.
 
 10. DIRECTRICES ESTRICTAS DE SEGURIDAD Y BLINDAJE (AUDITORÍA & ZERO TRUST):
 - PREVENCIÓN DE MASS ASSIGNMENT: Prohibido desempaquetar `FormData` o payloads crudos directamente en Prisma (`...data`). Todo Server Action DEBE validar perimetralmente con esquemas Zod estrictos (`z.object({...})`), filtrando únicamente los campos explícitamente permitidos para la operación.
