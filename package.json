@@ -8,6 +8,9 @@
     "start": "next start",
     "lint": "eslint"
   },
+  "engines": {
+    "node": "20.x"
+  },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@pinecone-database/pinecone": "^9.0.0",
