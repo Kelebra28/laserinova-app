@@ -22,7 +22,8 @@ import {
   Banknote,
   Bot,
   MessageCircle,
-  BrainCircuit
+  BrainCircuit,
+  Database
 } from "lucide-react";
 import { useSession } from "next-auth/react";
  
@@ -46,6 +47,7 @@ const menuItems = [
   { name: "Etiquetas", href: "/dashboard/labels", icon: Printer, permKey: "labels" },
   { name: "Encuestas", href: "/dashboard/surveys", icon: Star, permKey: "surveys", adminOnly: true },
   { name: "Reportes", href: "/dashboard/reports", icon: PieChart, permKey: "reports" },
+  { name: "Datos & Analytics", href: "/dashboard/data-analytics", icon: Database, permKey: "reports" },
   { name: "Usuarios", href: "/dashboard/users", icon: Users, adminOnly: true },
   { name: "Configuración", href: "/dashboard/settings", icon: Settings, adminOnly: true },
 ];
@@ -58,7 +60,8 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { data: session, status } = useSession();
-  const isAdmin = (session?.user as any)?.role === "ADMIN";
+  const userRole = String((session?.user as any)?.role || "").toUpperCase();
+  const isAdmin = userRole === "ADMIN" || userRole === "SUPERADMIN";
 
   return (
     <>
@@ -71,11 +74,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       />
 
       {/* Sidebar Container */}
-      <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-black/95 backdrop-blur-xl border-r border-white/10 text-white flex flex-col transition-transform duration-300 ease-in-out md:sticky md:top-0 md:h-screen md:translate-x-0 md:flex
-        ${isOpen ? "translate-x-0" : "-translate-x-full"}
-      `}>
-        <div className="flex items-center justify-between p-4 border-b border-white/10">
+      <div 
+        className={`
+          fixed inset-y-0 left-0 z-50 w-64 bg-black/95 backdrop-blur-xl border-r border-white/10 text-white flex flex-col transition-transform duration-300 ease-in-out md:sticky md:top-0 md:translate-x-0 md:flex
+          ${isOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+        style={{ height: "100vh", maxHeight: "100vh", overflow: "hidden" }}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
           <Link href="/dashboard" className="block w-full transition-transform hover:scale-105 duration-300">
             <img
               src="/logo_sidebar.png"
@@ -88,7 +94,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto custom-scrollbar">
+        <nav 
+          className="flex-1 min-h-0 px-3 py-4 space-y-1.5 custom-scrollbar"
+          style={{ 
+            height: "calc(100vh - 80px)", 
+            maxHeight: "calc(100vh - 80px)", 
+            overflowY: "scroll", 
+            WebkitOverflowScrolling: "touch",
+            paddingBottom: "120px"
+          }}
+        >
           {status === "loading" ? null : menuItems.map((item) => {
             if (item.adminOnly && !isAdmin) return null;
             
@@ -119,12 +134,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 `}
               >
                 <item.icon
-                  className={`mr-3 h-5 w-5 transition-colors duration-300 ${
+                  className={`mr-3 h-5 w-5 shrink-0 transition-colors duration-300 ${
                     isActive ? "text-white" : "text-zinc-500 group-hover:text-red-400"
                   }`}
                   aria-hidden="true"
                 />
-                {item.name}
+                <span>{item.name}</span>
               </Link>
             );
           })}
