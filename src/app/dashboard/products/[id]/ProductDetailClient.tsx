@@ -25,6 +25,9 @@ export function ProductDetailClient({ initialProduct, variants }: ProductDetailC
       const colorName = v.color.replace(/^\d+\s*-\s*/, '').replace(/\s+/g, '').toLowerCase();
       return `https://doblevela.com/images/large/${v.model}_${colorName}_lrg.jpg`;
     }
+    if (v.image) {
+      return v.image;
+    }
     return null;
   }).filter(Boolean) as string[];
 
@@ -92,7 +95,7 @@ export function ProductDetailClient({ initialProduct, variants }: ProductDetailC
                   activeStock === 0 ? 'text-rose-600' : activeStock <= 50 ? 'text-amber-600' : 'text-emerald-600'
                 }`} />
                 <span className="text-sm font-medium uppercase tracking-wider">
-                  Stock Almacén CDMX
+                  {activeVariant.provider === "Promoopcion" ? "Stock Promo Opción" : "Stock Almacén CDMX"}
                 </span>
               </div>
               <p className={`text-3xl font-black ${
@@ -121,9 +124,13 @@ export function ProductDetailClient({ initialProduct, variants }: ProductDetailC
             <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl text-sm flex items-start gap-3 shadow-sm">
               <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold">Sin existencias en almacenes de CDMX</p>
+                <p className="font-bold">
+                  {activeVariant.provider === "Promoopcion" ? "Sin existencias en almacenes" : "Sin existencias en almacenes de CDMX"}
+                </p>
                 <p className="text-xs text-rose-600 mt-0.5">
-                  Esta variante o color se encuentra agotada actualmente en los almacenes de CDMX (Alm. 7, 9, 15, 20 y 24).
+                  {activeVariant.provider === "Promoopcion"
+                    ? "Esta variante no cuenta con inventario disponible en Promo Opción actualmente."
+                    : "Esta variante o color se encuentra agotada actualmente en los almacenes de CDMX (Alm. 7, 9, 15, 20 y 24)."}
                 </p>
               </div>
             </div>

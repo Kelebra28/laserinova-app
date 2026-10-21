@@ -18,22 +18,22 @@ export default async function ProductsPage({ searchParams }: Props) {
 
   const whereClause = buildProductSearchWhere(q, provider);
 
-  const products = await prisma.product.findMany({
-    where: whereClause,
-    include: {
-      category: true,
-    },
-    orderBy: { name: "asc" },
-  });
-
-  // Obtener conteo real global de categorías para este proveedor
-  const categoryCountsData = await prisma.product.groupBy({
-    by: ['categoryId'],
-    where: { provider: provider, active: true },
-    _count: { id: true }
-  });
-
-  const allCats = await prisma.productCategory.findMany();
+  // Consultas optimizadas en paralelo
+  const [products, categoryCountsData, allCats] = await Promise.all([
+    prisma.product.findMany({
+      where: whereClause,
+      include: {
+        category: true,
+      },
+      orderBy: { name: "asc" },
+    }),
+    prisma.product.groupBy({
+      by: ['categoryId'],
+      where: { provider: provider, active: true },
+      _count: { id: true },
+    }),
+    prisma.productCategory.findMany(),
+  ]);
 
   const globalCategories = allCats
     .map(cat => ({

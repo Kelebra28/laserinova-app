@@ -2,11 +2,17 @@
 
 import { useRouter, usePathname } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, ChevronLeft, ChevronRight, RefreshCw, Box } from "lucide-react";
 import Link from "next/link";
 import { getHexForColor, formatNumber, formatCurrency } from "@/lib/constants";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import Select from "@/components/ui/Select";
+import toast from "react-hot-toast";
+import {
+  syncPromoOpcionCatalogAction,
+  syncPromoOpcionStockAction,
+} from "@/server/actions/promoopcion.actions";
+
+import { PRODUCT_PROVIDERS } from "@/constants";
 
 interface ProductsClientProps {
   initialProducts: any[];
@@ -15,7 +21,6 @@ interface ProductsClientProps {
   globalCategories: string[];
 }
 
-const PROVIDERS = ["Doble Vela", "Promoopcion", "Impressline"];
 const ITEMS_PER_PAGE = 20;
 
 export function ProductsClient({ initialProducts, currentProvider, currentSearch, globalCategories }: ProductsClientProps) {
@@ -24,6 +29,8 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
   const [isPending, startTransition] = useTransition();
   const [searchTerm, setSearchTerm] = useState(currentSearch);
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncingStock, setIsSyncingStock] = useState(false);
   
   // Categorias y Paginación
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -64,6 +71,54 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
     });
   };
 
+  const handleSyncPromoOpcion = async () => {
+    setIsSyncing(true);
+    const toastId = toast.loading("Obteniendo catálogo y stock de Promo Opción...");
+    try {
+      const res = await syncPromoOpcionCatalogAction({ page: 1 });
+      if (res.success && res.data) {
+        toast.success(
+          `Sincronización exitosa: ${res.data.itemsProcessed} productos procesados con su stock (Página ${res.data.currentPage} de ${res.data.totalPages}).`,
+          { id: toastId, duration: 6000 }
+        );
+        router.refresh();
+      } else {
+        toast.error(res.error || "Error al sincronizar con Promo Opción.", {
+          id: toastId,
+          duration: 7000,
+        });
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error al conectar con el servidor", { id: toastId });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleSyncStock = async () => {
+    setIsSyncingStock(true);
+    const toastId = toast.loading("Consultando existencias de almacenes en Promo Opción...");
+    try {
+      const res = await syncPromoOpcionStockAction();
+      if (res.success && res.data) {
+        toast.success(
+          `Stock actualizado: ${res.data.updatedCount} productos actualizados (${res.data.totalProductsChecked} verificados).`,
+          { id: toastId, duration: 6000 }
+        );
+        router.refresh();
+      } else {
+        toast.error(res.error || "Error al actualizar existencias de Promo Opción.", {
+          id: toastId,
+          duration: 7000,
+        });
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error al conectar con el servidor", { id: toastId });
+    } finally {
+      setIsSyncingStock(false);
+    }
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentPage(1);
@@ -82,7 +137,7 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
         <div className="flex flex-col lg:flex-row gap-6 items-center justify-between bg-white p-2 pl-4 pr-2 rounded-2xl border border-zinc-200 shadow-sm">
           {/* Tabs / Providers */}
           <div className="flex items-center gap-1 overflow-x-auto w-full lg:w-auto pb-2 lg:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            {PROVIDERS.map((provider) => (
+            {PRODUCT_PROVIDERS.map((provider) => (
               <button
                 key={provider}
                 onClick={() => handleProviderChange(provider)}
@@ -97,24 +152,52 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
             ))}
           </div>
 
-          {/* Search */}
-          <form onSubmit={handleSearch} className="relative w-full lg:w-96 shrink-0 group">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-zinc-400 group-focus-within:text-red-500 transition-colors" />
-            </div>
-            <input
-              type="text"
-              placeholder="Buscar por código, modelo o nombre..."
-              className="w-full bg-zinc-50 border border-zinc-200 text-zinc-900 rounded-xl h-12 pl-12 pr-12 text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all placeholder:text-zinc-400"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            {isPending && (
-              <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
-                <Loader2 className="w-5 h-5 animate-spin text-red-500" />
-              </div>
+          {/* Search y Acciones de Proveedor */}
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
+            {currentProvider === "Promoopcion" && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleSyncStock}
+                  disabled={isSyncingStock || isSyncing}
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-bold rounded-xl transition-all disabled:opacity-50 shrink-0"
+                  title="Actualizar existencias en almacenes para productos de Promo Opción"
+                >
+                  <Box className={`w-3.5 h-3.5 ${isSyncingStock ? "animate-bounce text-red-600" : "text-zinc-600"}`} />
+                  <span>{isSyncingStock ? "Actualizando..." : "Actualizar Stock"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSyncPromoOpcion}
+                  disabled={isSyncing || isSyncingStock}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded-xl transition-all shadow-sm disabled:opacity-50 shrink-0"
+                  title="Sincroniza el catálogo de México y existencias desde Promo Opción"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-red-400" : ""}`} />
+                  <span>{isSyncing ? "Sincronizando..." : "Sincronizar Catálogo"}</span>
+                </button>
+              </>
             )}
-          </form>
+
+            <form onSubmit={handleSearch} className="relative w-full lg:w-96 shrink-0 group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-zinc-400 group-focus-within:text-red-500 transition-colors" />
+              </div>
+              <input
+                type="text"
+                placeholder="Buscar por código, modelo o nombre..."
+                className="w-full bg-zinc-50 border border-zinc-200 text-zinc-900 rounded-xl h-12 pl-12 pr-12 text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all placeholder:text-zinc-400"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              {isPending && (
+                <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
+                  <Loader2 className="w-5 h-5 animate-spin text-red-500" />
+                </div>
+              )}
+            </form>
+          </div>
         </div>
 
         {/* Filtros Híbridos: Top 5 Píldoras + Dropdown */}
@@ -163,14 +246,31 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
 
         {/* Grid de Productos */}
         {paginatedGroups.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-32 px-4 border border-dashed border-zinc-300 rounded-3xl bg-zinc-50/50">
-            <div className="w-24 h-24 mb-6 rounded-full bg-zinc-100 flex items-center justify-center border border-zinc-200 shadow-sm">
-              <Search className="w-10 h-10 text-zinc-400" />
+          <div className="flex flex-col items-center justify-center py-28 px-4 border border-dashed border-zinc-300 rounded-3xl bg-zinc-50/50 text-center">
+            <div className="w-20 h-20 mb-5 rounded-full bg-zinc-100 flex items-center justify-center border border-zinc-200 shadow-sm">
+              <Search className="w-9 h-9 text-zinc-400" />
             </div>
-            <h3 className="text-xl font-bold text-zinc-900 mb-2">Catálogo vacío</h3>
-            <p className="text-zinc-500 max-w-md text-center">
-              No encontramos productos. Intenta cambiar tu búsqueda o filtros.
+            <h3 className="text-xl font-bold text-zinc-900 mb-2">
+              {currentProvider === "Promoopcion"
+                ? "Catálogo de Promo Opción sin productos locales"
+                : "Catálogo vacío"}
+            </h3>
+            <p className="text-zinc-500 max-w-md mx-auto mb-6 text-sm">
+              {currentProvider === "Promoopcion"
+                ? "Aún no has sincronizado productos de Promo Opción. Presiona el botón para importar el catálogo de México desde su API GraphQL."
+                : "No encontramos productos. Intenta cambiar tu búsqueda o filtros."}
             </p>
+            {currentProvider === "Promoopcion" && (
+              <button
+                type="button"
+                onClick={handleSyncPromoOpcion}
+                disabled={isSyncing}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl shadow-md transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
+                <span>{isSyncing ? "Sincronizando..." : "Sincronizar Promo Opción Ahora"}</span>
+              </button>
+            )}
           </div>
         ) : (
         <div className="space-y-8">
