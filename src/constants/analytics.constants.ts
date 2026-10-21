@@ -786,7 +786,7 @@ export const TECH_STACK_SPEC: SystemArchitectureSpec = {
     provider: "Railway Cloud Platform (PaaS) / Node.js Container Hosting",
     serverType: "Railway Linux Container (Nixpacks / OCI Runtime)",
     environmentUrl: "https://app.laserinova.com",
-    runtime: "Node.js 20.x (LTS)",
+    runtime: "Node.js 24.x (Active LTS)",
     proxy: "Railway Edge Proxy con SSL/TLS automático y Custom Domain (app.laserinova.com)",
     supervisor: "Railway Deployment Orchestrator con Healthchecks y auto-restart en fallo",
     notes: "Todas las rutas que consultan base de datos obligan export const dynamic = 'force-dynamic' para garantizar renderizado dinámico en tiempo real y evitar bloqueos en el build."

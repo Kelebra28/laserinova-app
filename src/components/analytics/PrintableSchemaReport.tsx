@@ -188,7 +188,7 @@ export function PrintableSchemaReport({ tableCounts }: PrintableSchemaReportProp
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           <div className="border border-zinc-200 rounded-xl p-4 bg-zinc-50/50 space-y-2">
             <h4 className="font-bold text-zinc-900 uppercase text-[11px]">Servidor & Alojamiento:</h4>
-            <div className="text-zinc-700"><strong>Hosting:</strong> Railway Cloud Platform (PaaS) / Linux Container (Node 20.x LTS)</div>
+            <div className="text-zinc-700"><strong>Hosting:</strong> Railway Cloud Platform (PaaS) / Linux Container (Node 24.x Active LTS)</div>
             <div className="text-zinc-700"><strong>Dominio Producción:</strong> https://app.laserinova.com</div>
             <div className="text-zinc-700"><strong>Web Server:</strong> Railway Edge Proxy con SSL/TLS automático</div>
             <div className="text-zinc-700"><strong>Supervisor:</strong> Railway Deployment Orchestrator con auto-restart y healthchecks</div>
