@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { del } from '@vercel/blob';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
 
@@ -14,23 +15,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true });
     }
 
-    if (!url.startsWith('/uploads/')) {
-      return NextResponse.json({ error: 'URL inválida' }, { status: 400 });
+    // 1. Si es una URL de Vercel Blob
+    if (url.includes('blob.vercel-storage.com')) {
+      try {
+        await del(url);
+      } catch (blobErr) {
+        console.error('Error al eliminar de Vercel Blob:', blobErr);
+      }
+      return NextResponse.json({ success: true });
     }
 
-    const filename = url.replace('/uploads/', '');
-    // Prevención de directory traversal básica
-    if (filename.includes('..') || filename.includes('/')) {
-        return NextResponse.json({ error: 'URL inválida' }, { status: 400 });
-    }
-
-    const filepath = join(process.cwd(), 'public', 'uploads', filename);
-
-    try {
-      await unlink(filepath);
-    } catch (err) {
-      console.error('Error al eliminar archivo físicamente:', err);
-      // No lanzamos error para que la UI pueda removerla de todos modos
+    // 2. Soporte para URLs locales legacy (/uploads/...)
+    if (url.startsWith('/uploads/')) {
+      const filename = url.replace('/uploads/', '');
+      if (!filename.includes('..') && !filename.includes('/')) {
+        const filepath = join(process.cwd(), 'public', 'uploads', filename);
+        try {
+          await unlink(filepath);
+        } catch {
+          // Ignorar en entorno serverless
+        }
+      }
+      return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ success: true });
@@ -39,3 +45,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }
 }
+

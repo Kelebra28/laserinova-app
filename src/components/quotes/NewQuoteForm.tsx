@@ -63,7 +63,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
   const handleRemoveImage = async (index: number) => {
     const urlToRemove = images[index];
     setImages(prev => prev.filter((_, i) => i !== index));
-    if (urlToRemove && urlToRemove.startsWith('/uploads/')) {
+    if (urlToRemove && !urlToRemove.startsWith('data:')) {
       await deleteImage(urlToRemove);
     }
   };

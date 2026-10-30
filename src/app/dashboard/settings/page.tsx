@@ -14,26 +14,15 @@ import fs from "fs";
 import path from "path";
 
 async function getUploadsSizeMB() {
-  const uploadsPath = path.join(process.cwd(), "public", "uploads");
-  let totalSize = 0;
-  async function calculateSize(dirPath: string) {
-    try {
-      const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name);
-        if (entry.isDirectory()) {
-          await calculateSize(fullPath);
-        } else {
-          const stats = await fs.promises.stat(fullPath);
-          totalSize += stats.size;
-        }
-      }
-    } catch (e) {
-      // Ignorar si no existe
-    }
+  try {
+    const { list } = await import('@vercel/blob');
+    const { blobs } = await list();
+    const totalBytes = blobs.reduce((acc, blob) => acc + (blob.size || 0), 0);
+    return (totalBytes / (1024 * 1024)).toFixed(2);
+  } catch (e) {
+    // Si no está configurado Vercel Blob en local o hay error, fallback
+    return "0.00";
   }
-  await calculateSize(uploadsPath);
-  return (totalSize / (1024 * 1024)).toFixed(2);
 }
 
 async function getDbSizeMB() {

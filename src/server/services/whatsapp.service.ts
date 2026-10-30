@@ -87,18 +87,18 @@ export async function downloadAndCompressMedia(mediaId: string): Promise<string 
       extension = 'pdf';
     }
 
-    // 4. Guardar físicamente en Hostinger (public/uploads)
-    const uploadDir = join(process.cwd(), 'public', 'uploads', folder);
-    await mkdir(uploadDir, { recursive: true });
+    // 4. Guardar archivo en Vercel Blob
+    const { put } = await import('@vercel/blob');
+    const uniqueId = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const pathname = `uploads/whatsapp/${folder}/${uniqueId}.${extension}`;
 
-    const uniqueId = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const fileName = `${uniqueId}.${extension}`;
-    const filePath = join(uploadDir, fileName);
+    const blob = await put(pathname, finalBuffer, {
+      access: 'public',
+      contentType: mimeType || 'application/octet-stream',
+    });
 
-    await writeFile(filePath, finalBuffer);
-
-    // 5. Retornar solo el enlace público a la BD
-    return `/uploads/${folder}/${fileName}`;
+    // 5. Retornar el enlace público permanente
+    return blob.url;
 
   } catch (error) {
     console.error('Error procesando media:', error);
