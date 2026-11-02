@@ -1,5 +1,7 @@
 export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server';
+// La respuesta de la IA corre después de contestar a Meta (ver after() abajo); darle margen.
+export const maxDuration = 60;
+import { NextResponse, after } from 'next/server';
 import crypto from 'crypto';
 import { processIncomingMessage, processAIAgentResponse } from '@/server/services/whatsapp.service';
 import { notificationEmitter } from '@/lib/notification-emitter';
@@ -71,8 +73,14 @@ export async function POST(request: Request) {
             // IA: Responder si botMode está activado
             if (result.contact?.botMode && result.message?.type === 'TEXT') {
               // Llamar al servicio especializado de IA de WhatsApp
-              processAIAgentResponse(result.contact.id).catch(err => {
-                console.error("Error asíncrono en processAIAgentResponse:", err);
+              // En Vercel la función se congela al responder; after() la mantiene viva hasta terminar.
+              const contactId = result.contact.id;
+              after(async () => {
+                try {
+                  await processAIAgentResponse(contactId);
+                } catch (err) {
+                  console.error("Error asíncrono en processAIAgentResponse:", err);
+                }
               });
             }
           } else if (result.type === 'status') {

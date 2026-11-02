@@ -15,7 +15,8 @@ const nextConfig = {
     },
   },
   compiler: {
-    removeConsole: process.env.NODE_ENV === 'production',
+    // Conserva error/warn en producción: si no, los fallos (p. ej. del bot) no salen en los logs de Vercel.
+    removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
   },
   async headers() {
     return [
