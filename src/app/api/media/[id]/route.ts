@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { guardApi } from "@/lib/api-auth";
 
 // Importante: No usar force-dynamic si queremos que las imágenes se cacheen si es posible, 
 // pero como leen de DB, mejor force-dynamic. El límite de config es para no quejarse de pre-render
@@ -9,6 +10,9 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   try {
     const resolvedParams = await params;
     const messageId = resolvedParams.id;

@@ -141,8 +141,14 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
           {/* Bento Financial Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Monto Total</span>
-              <span className="text-2xl font-black text-gray-900">${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">
+                {quote.showTotal !== false ? "Monto Total" : "Modo Cotización"}
+              </span>
+              {quote.showTotal !== false ? (
+                <span className="text-2xl font-black text-gray-900">${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              ) : (
+                <span className="text-lg font-black text-amber-600 block mt-1">Opciones (+ IVA)</span>
+              )}
             </div>
             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Monto Cobrado</span>
@@ -210,20 +216,31 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
               </table>
             </div>
             <div className="bg-gray-50/50 p-6 border-t border-gray-100">
-              <div className="flex flex-col items-end space-y-2">
-                <div className="flex justify-between w-full max-w-[240px]">
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtotal</span>
-                  <span className="text-sm font-bold text-gray-900 font-mono">${quote.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              {quote.showTotal !== false ? (
+                <div className="flex flex-col items-end space-y-2">
+                  <div className="flex justify-between w-full max-w-[240px]">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtotal</span>
+                    <span className="text-sm font-bold text-gray-900 font-mono">${quote.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between w-full max-w-[240px]">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">IVA (16%)</span>
+                    <span className="text-sm font-bold text-gray-900 font-mono">${quote.tax.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between w-full max-w-[240px] pt-3 border-t border-gray-200 mt-2">
+                    <span className="text-sm font-black text-gray-900 uppercase tracking-tight">Total Final</span>
+                    <span className="text-xl font-black text-red-600 font-mono">${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between w-full max-w-[240px]">
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">IVA (16%)</span>
-                  <span className="text-sm font-bold text-gray-900 font-mono">${quote.tax.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              ) : (
+                <div className="flex flex-col items-end text-right">
+                  <span className="inline-block px-4 py-1.5 rounded-xl bg-amber-100 text-amber-900 text-xs font-black uppercase tracking-wider border border-amber-200">
+                    * Precios unitarios más IVA
+                  </span>
+                  <span className="text-[11px] font-medium text-gray-400 mt-1">
+                    Cotización por opciones / kits (sin total general sumado)
+                  </span>
                 </div>
-                <div className="flex justify-between w-full max-w-[240px] pt-3 border-t border-gray-200 mt-2">
-                  <span className="text-sm font-black text-gray-900 uppercase tracking-tight">Total Final</span>
-                  <span className="text-xl font-black text-red-600 font-mono">${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
 

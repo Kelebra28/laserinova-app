@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
+import { NO_TOTAL_DISCLAIMER, NO_TOTAL_SUBTITLE } from "@/constants";
 
 export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buffer> {
   const doc = new jsPDF();
@@ -176,16 +177,28 @@ export async function generateQuotePDF(quoteOrQuotes: any | any[]): Promise<Buff
     const totalsY = finalY + 10;
     doc.setFontSize(11);
 
-    doc.setFont("helvetica", "bold");
-    doc.text("Subtotal:", pageWidth - 45, totalsY, { align: "right" });
-    doc.text(fmt(quote.subtotal), pageWidth - 14, totalsY, { align: "right" });
+    if (quote.showTotal !== false) {
+      doc.setFont("helvetica", "bold");
+      doc.text("Subtotal:", pageWidth - 45, totalsY, { align: "right" });
+      doc.text(fmt(quote.subtotal), pageWidth - 14, totalsY, { align: "right" });
 
-    doc.text("IVA:", pageWidth - 45, totalsY + 8, { align: "right" });
-    doc.text(fmt(quote.tax), pageWidth - 14, totalsY + 8, { align: "right" });
+      doc.text("IVA:", pageWidth - 45, totalsY + 8, { align: "right" });
+      doc.text(fmt(quote.tax), pageWidth - 14, totalsY + 8, { align: "right" });
 
-    doc.setFontSize(13);
-    doc.text("Total:", pageWidth - 45, totalsY + 20, { align: "right" });
-    doc.text(fmt(quote.total), pageWidth - 14, totalsY + 20, { align: "right" });
+      doc.setFontSize(13);
+      doc.text("Total:", pageWidth - 45, totalsY + 20, { align: "right" });
+      doc.text(fmt(quote.total), pageWidth - 14, totalsY + 20, { align: "right" });
+    } else {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(220, 38, 38);
+      doc.text(quote.taxable ? NO_TOTAL_DISCLAIMER : "* Precios unitarios (Sin total acumulado)", pageWidth - 14, totalsY + 6, { align: "right" });
+      doc.setFontSize(8.5);
+      doc.setTextColor(120);
+      doc.setFont("helvetica", "normal");
+      doc.text(NO_TOTAL_SUBTITLE, pageWidth - 14, totalsY + 13, { align: "right" });
+      doc.setTextColor(0);
+    }
 
     // Footer / Consideraciones
     doc.setFont("helvetica", "normal");

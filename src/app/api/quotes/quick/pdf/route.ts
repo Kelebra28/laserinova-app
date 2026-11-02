@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateQuotePDF } from "@/lib/pdf";
+import { guardApi } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   try {
     const mockQuote = await req.json();
     

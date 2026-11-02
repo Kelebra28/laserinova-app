@@ -33,3 +33,7 @@ export const PAYMENT_STATUS_COLORS: Record<string, string> = {
   PAID: "bg-emerald-100 text-emerald-800 border-emerald-200",
   REFUNDED: "bg-red-100 text-red-800 border-red-200"
 };
+
+export const NO_TOTAL_DISCLAIMER = "* Precios unitarios más IVA";
+export const NO_TOTAL_SUBTITLE = "(Cotización por opciones / kits sin total general)";
+

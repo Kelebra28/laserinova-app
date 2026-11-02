@@ -439,6 +439,7 @@ export async function createQuoteService(userId: string, data: any) {
           visibleConsiderations: data.visibleConsiderations,
           status: "CALCULATED",
           taxable: data.taxable,
+          showTotal: data.showTotal !== undefined ? data.showTotal : true,
           subtotal: data.subtotal,
           tax: data.tax,
           total: data.total,
@@ -538,6 +539,7 @@ export async function updateQuoteDataService(userId: string, quoteId: string, da
       realCostTotal: data.realCostTotal,
       estimatedUtility: data.estimatedUtility,
       taxable: data.taxable,
+      showTotal: data.showTotal !== undefined ? data.showTotal : true,
       concepts: {
         deleteMany: {},
         create: data.conceptsData.map((c: any, index: number) => ({

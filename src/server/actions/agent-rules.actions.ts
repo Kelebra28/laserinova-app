@@ -1,8 +1,10 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
 
 export async function getAgentRules() {
+  await requireAuth();
   try {
     const rules = await prisma.agentRule.findMany({
       orderBy: [
@@ -29,6 +31,7 @@ async function generateEmbedding(text: string): Promise<number[]> {
 
 // Crear una nueva regla
 export async function createAgentRule(data: { namespace: string; title: string; content: string }) {
+  await requireAuth();
   try {
     // 1. Guardar en MySQL
     const newRule = await prisma.agentRule.create({
@@ -76,6 +79,7 @@ export async function createAgentRule(data: { namespace: string; title: string; 
 }
 // Actualizar una regla existente
 export async function updateAgentRule(id: string, data: { namespace: string; title: string; content: string }) {
+  await requireAuth();
   try {
     const existingRule = await prisma.agentRule.findUnique({ where: { id } });
     if (!existingRule) return { success: false, error: "Regla no encontrada" };
@@ -131,6 +135,7 @@ export async function updateAgentRule(id: string, data: { namespace: string; tit
 
 // Activar o desactivar (Borrado lógico) una regla
 export async function toggleAgentRule(id: string, active: boolean) {
+  await requireAuth();
   try {
     const rule = await prisma.agentRule.update({
       where: { id },

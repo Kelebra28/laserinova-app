@@ -1,10 +1,32 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { processIncomingMessage, processAIAgentResponse } from '@/server/services/whatsapp.service';
 import { notificationEmitter } from '@/lib/notification-emitter';
 import { prisma } from '@/lib/prisma';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+
+// Meta firma cada POST con HMAC-SHA256 del body crudo usando el App Secret.
+function isValidSignature(rawBody: string, header: string | null): boolean {
+  const secret = process.env.WHATSAPP_APP_SECRET;
+  if (!secret) {
+    // Sin secreto no se puede verificar: en producción se rechaza, en desarrollo se deja pasar.
+    if (process.env.NODE_ENV === 'production') {
+      console.error('WHATSAPP_APP_SECRET no configurado: webhook rechazado.');
+      return false;
+    }
+    console.warn('WHATSAPP_APP_SECRET no configurado: se omite la verificación de firma (solo desarrollo).');
+    return true;
+  }
+  if (!header || !header.startsWith('sha256=')) return false;
+
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  const received = header.slice('sha256='.length);
+  const a = Buffer.from(expected, 'hex');
+  const b = Buffer.from(received, 'hex');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -26,7 +48,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const rawBody = await request.text();
+    if (!isValidSignature(rawBody, request.headers.get('x-hub-signature-256'))) {
+      return new NextResponse('Forbidden', { status: 403 });
+    }
+    const body = JSON.parse(rawBody);
 
     if (body.object) {
       if (body.entry && body.entry[0].changes && body.entry[0].changes[0].value.messages) {

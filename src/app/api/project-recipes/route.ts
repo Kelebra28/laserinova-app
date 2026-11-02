@@ -1,8 +1,12 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { guardApi } from "@/lib/api-auth";
 
 export async function POST(request: Request) {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   try {
     const body = await request.json();
     const { name, machineName, rotaryDiameter, notes, steps } = body;

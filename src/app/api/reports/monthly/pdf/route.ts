@@ -2,8 +2,12 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateMonthlyReportPDF } from "@/lib/pdf";
+import { guardApi } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   const { searchParams } = new URL(req.url);
   const month = parseInt(searchParams.get("month") || "");
   const year = parseInt(searchParams.get("year") || "");

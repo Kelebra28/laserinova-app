@@ -45,3 +45,9 @@ next-env.d.ts
 # Ignorar archivos subidos por los usuarios en produccion
 public/uploads/
 storage/*.json
+
+# datos sensibles / locales
+/chatts/
+/storage/
+*.db
+ts_errors.txt

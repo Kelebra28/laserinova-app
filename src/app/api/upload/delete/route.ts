@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server';
 import { del } from '@vercel/blob';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
+import { guardApi } from "@/lib/api-auth";
 
 export async function POST(req: Request) {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   try {
     const { url } = await req.json();
 

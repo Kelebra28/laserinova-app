@@ -162,6 +162,7 @@ model Quote {
   status                String                 @default("DRAFT")
   paymentStatus         String                 @default("PENDING")
   taxable               Boolean                @default(true)
+  showTotal             Boolean                @default(true)
   subtotal              Float                  @default(0)
   tax                   Float                  @default(0)
   total                 Float                  @default(0)

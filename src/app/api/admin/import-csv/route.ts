@@ -3,11 +3,15 @@ import Papa from "papaparse";
 import { Pinecone } from "@pinecone-database/pinecone";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
+import { guardApi } from "@/lib/api-auth";
 
 // Forzar dinámico para que no falle en Hostinger
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  const denied = await guardApi("ADMIN");
+  if (denied) return denied;
+
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File;

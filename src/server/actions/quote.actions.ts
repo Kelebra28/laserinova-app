@@ -166,6 +166,7 @@ const createQuoteSchema = z.object({
   tax: z.number(),
   total: z.number(),
   taxable: z.boolean(),
+  showTotal: z.boolean().default(true),
   realCostTotal: z.number(),
   estimatedUtility: z.number(),
   conceptsDataStr: z.string(),
@@ -203,6 +204,7 @@ export async function createQuoteAction(formData: FormData) {
       tax: parseFloat((formData.get("tax") as string) || (formData.get("iva") as string)) || 0,
       total: parseFloat(formData.get("total") as string) || 0,
       taxable: formData.get("taxable") !== "false",
+      showTotal: formData.get("showTotal") !== "false",
       realCostTotal: parseFloat(formData.get("realCostTotal") as string) || 0,
       estimatedUtility: parseFloat(formData.get("estimatedUtility") as string) || 0,
       conceptsDataStr: formData.get("conceptsData") as string || "[]",
@@ -274,6 +276,7 @@ const updateQuoteSchema = z.object({
   realCostTotal: z.number(),
   estimatedUtility: z.number(),
   taxable: z.boolean(),
+  showTotal: z.boolean().default(true),
   conceptsData: z.array(z.any()),
 });
 
@@ -295,6 +298,7 @@ export async function updateQuoteAction(formData: FormData) {
       realCostTotal: parseFloat(formData.get("realCostTotal") as string) || 0,
       estimatedUtility: parseFloat(formData.get("estimatedUtility") as string) || 0,
       taxable: formData.get("taxable") === "true",
+      showTotal: formData.get("showTotal") !== "false",
       conceptsData: JSON.parse(formData.get("concepts") as string || "[]"),
     };
 
@@ -427,3 +431,78 @@ REGLA CRÍTICA: Recuerda que tienes prohibido desglosar costos en materiales y h
     return { success: false, error: error.message || "Error interno al enviar por WhatsApp" };
   }
 }
+
+export async function getQuickQuoteDataAction() {
+  try {
+    await requireAuth();
+    const [materials, products, costConfigs, clients] = await Promise.all([
+      prisma.material.findMany({
+        where: { active: true },
+        select: {
+          id: true,
+          name: true,
+          length: true,
+          width: true,
+          sheetPrice: true,
+          guardPercentage: true,
+          pricePerCm2: true,
+        },
+        orderBy: { name: "asc" }
+      }),
+      prisma.product.findMany({
+        where: { active: true },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          unitCost: true,
+          unitPrice: true,
+          image: true,
+        },
+        orderBy: { name: "asc" }
+      }),
+      prisma.costConfiguration.findMany(),
+      prisma.client.findMany({
+        where: { active: true },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          company: true,
+        },
+        orderBy: { name: "asc" }
+      })
+    ]);
+
+    const globalCosts: Record<string, number> = {};
+    costConfigs.forEach(c => {
+      globalCosts[c.key] = c.value;
+    });
+
+    return {
+      success: true,
+      data: {
+        materials,
+        products,
+        clients,
+        globalCosts: {
+          costo_minuto_mayoreo: globalCosts["costo_minuto_mayoreo"] || 8.5,
+          costo_minuto_menudeo: globalCosts["costo_minuto_menudeo"] || 10,
+          porcentaje_iva: globalCosts["porcentaje_iva"] || 16,
+          factor_guarda_default: globalCosts["factor_guarda_default"] || 1.2,
+          margen_default: globalCosts["margen_default"] || 50,
+          factor_produccion_default: globalCosts["factor_produccion_default"] || 3,
+          precio_tubo: globalCosts["precio_tubo"] || 250000,
+          vida_util_tubo: globalCosts["vida_util_tubo"] || 6000,
+          factor_miedo: globalCosts["factor_miedo"] || 2,
+          porcentaje_transporte_material: globalCosts["porcentaje_transporte_material"] || 20,
+          porcentaje_merma_corte: globalCosts["porcentaje_merma_corte"] || 20,
+        }
+      }
+    };
+  } catch (error: any) {
+    console.error("Error fetching quick quote data:", error);
+    return { success: false, error: error.message || "Error al cargar datos del cotizador rápido" };
+  }
+}
+

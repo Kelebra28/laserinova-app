@@ -38,6 +38,7 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
   const [project, setProject] = useState(quote.project || "");
   const [description, setDescription] = useState(quote.description || "");
   const [taxable, setTaxable] = useState(quote.taxable || false);
+  const [showTotal, setShowTotal] = useState(quote.showTotal !== undefined ? quote.showTotal : true);
   const [isWholesale, setIsWholesale] = useState(false); // Podríamos guardarlo en DB pero por ahora default false
   const [margin, setMargin] = useState(globalCosts.margen_default || 35);
   
@@ -391,6 +392,7 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
       <input type="hidden" name="realCostTotal" value={costoReal} />
       <input type="hidden" name="estimatedUtility" value={utilidad} />
       <input type="hidden" name="taxable" value={taxable ? "true" : "false"} />
+      <input type="hidden" name="showTotal" value={showTotal ? "true" : "false"} />
       <input type="hidden" name="concepts" value={JSON.stringify(concepts)} />
       <input type="hidden" name="images" value={JSON.stringify(images)} />
 
@@ -480,6 +482,19 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
               </div>
               <span className="text-[10px] font-black uppercase tracking-[0.1em]">
                 {taxable ? 'Con IVA (16%)' : 'Sin IVA / Efectivo'}
+              </span>
+            </div>
+
+            <div
+              onClick={() => setShowTotal(!showTotal)}
+              className={`flex items-center gap-3 px-5 py-3 rounded-2xl border-2 cursor-pointer transition-all select-none shadow-sm ${showTotal ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-amber-50 border-amber-300 text-amber-800'}`}
+              title="Activa o desactiva la suma del total general si estás cotizando múltiples opciones o kits"
+            >
+              <div className={`w-10 h-5 rounded-full transition-all relative ${showTotal ? 'bg-indigo-600' : 'bg-amber-500'}`}>
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${showTotal ? 'left-5.5' : 'left-0.5'}`} />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-[0.1em]">
+                {showTotal ? 'Sumar Total' : 'Modo Opciones (+ IVA)'}
               </span>
             </div>
 
@@ -887,28 +902,41 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
               </div>
             )}
             
-            <div className="space-y-4">
-                <div className="flex justify-between items-center text-sm group">
-                  <span className="text-gray-400 font-medium group-hover:text-gray-300 transition-colors">Subtotal:</span>
-                  <span className="font-mono font-bold text-gray-100">${subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-                
-                <div className="flex justify-between items-center text-sm group">
-                  <span className="text-gray-400 font-medium group-hover:text-gray-300 transition-colors">IVA ({globalCosts?.porcentaje_iva || 16}%):</span>
-                  <span className="font-mono font-bold text-gray-100">${iva.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-                
-                <div className="pt-4 mt-4 border-t border-gray-800">
-                  <div className="flex justify-between items-end">
-                    <span className="text-sm font-black text-gray-500 uppercase tracking-widest mb-1">Total a Pagar</span>
-                    <div className="text-right">
-                      <span className="text-4xl font-black text-red-500 block leading-none">
-                        ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                      <span className="text-[10px] text-gray-500 font-bold uppercase mt-1 block">Pesos Mexicanos (MXN)</span>
+              <div className="space-y-4">
+                {showTotal ? (
+                  <>
+                    <div className="flex justify-between items-center text-sm group">
+                      <span className="text-gray-400 font-medium group-hover:text-gray-300 transition-colors">Subtotal:</span>
+                      <span className="font-mono font-bold text-gray-100">${subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
+                    
+                    <div className="flex justify-between items-center text-sm group">
+                      <span className="text-gray-400 font-medium group-hover:text-gray-300 transition-colors">IVA ({globalCosts?.porcentaje_iva || 16}%):</span>
+                      <span className="font-mono font-bold text-gray-100">${iva.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    
+                    <div className="pt-4 mt-4 border-t border-gray-800">
+                      <div className="flex justify-between items-end">
+                        <span className="text-sm font-black text-gray-500 uppercase tracking-widest mb-1">Total a Pagar</span>
+                        <div className="text-right">
+                          <span className="text-4xl font-black text-red-500 block leading-none">
+                            ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-[10px] text-gray-500 font-bold uppercase mt-1 block">Pesos Mexicanos (MXN)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center space-y-1">
+                    <p className="text-amber-400 font-black text-sm uppercase tracking-wider">
+                      {taxable ? "* Precios unitarios más IVA" : "* Precios unitarios (Sin total acumulado)"}
+                    </p>
+                    <p className="text-gray-400 text-xs">
+                      Modo Opciones / Kits activo: No se muestra la suma total para no confundir al cliente.
+                    </p>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 

@@ -6,7 +6,10 @@ const SALT_LENGTH = 16;
 
 // Derive a 32-byte key from the secret
 function getKey(): Buffer {
-  const secret = process.env.ENCRYPTION_KEY || process.env.NEXTAUTH_SECRET || 'fallback-secret-for-development';
+  const secret = process.env.ENCRYPTION_KEY || process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    throw new Error('Falta ENCRYPTION_KEY (o NEXTAUTH_SECRET) para cifrar/descifrar.');
+  }
   return crypto.createHash('sha256').update(secret).digest();
 }
 

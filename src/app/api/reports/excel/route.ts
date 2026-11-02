@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import ExcelJS from 'exceljs';
+import { guardApi } from "@/lib/api-auth";
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   try {
     const { searchParams } = new URL(request.url);
     const month = parseInt(searchParams.get('month') || (new Date().getMonth() + 1).toString());

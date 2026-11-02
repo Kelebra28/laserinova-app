@@ -5,7 +5,8 @@ import { toast } from "react-hot-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Plus, FileText, LayoutGrid } from "lucide-react";
+import { Plus, FileText, LayoutGrid, Zap } from "lucide-react";
+import { QuickQuoteModal } from "@/components/quotes/QuickQuoteModal";
 import QuoteRow from "@/components/quotes/QuoteRow";
 import QuoteFilters from "@/components/quotes/QuoteFilters";
 import QuotePagination from "@/components/quotes/QuotePagination";
@@ -40,6 +41,7 @@ export default function QuotesClient() {
   const itemsPerPage = parseInt(searchParams.get("limit") || "10", 10);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [isQuickQuoteOpen, setIsQuickQuoteOpen] = useState(false);
 
   // Query para la lista principal (re-fetch cuando cambia la URL de filtros, pero trae todo)
   const { data: listData, isLoading: isLoadingList, error: listError } = useQuery({
@@ -114,12 +116,20 @@ export default function QuotesClient() {
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setIsQuickQuoteOpen(true)}
+            className="inline-flex items-center justify-center px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-orange-500/20 text-[10px] font-black uppercase tracking-widest rounded-xl text-white transition-all active:scale-95"
+          >
+            <Zap className="-ml-1 mr-1.5 h-4 w-4 fill-white" aria-hidden="true" />
+            ⚡ Cotizador Rápido
+          </button>
           <Link
             href="/dashboard/quotes/quick"
             prefetch={false}
-            className="inline-flex items-center justify-center px-5 py-2.5 border border-gray-200 shadow-sm text-[10px] font-black uppercase tracking-widest rounded-xl text-gray-600 bg-white hover:bg-gray-50 transition-all active:scale-95"
+            className="inline-flex items-center justify-center px-4 py-2.5 border border-gray-200 shadow-sm text-[10px] font-black uppercase tracking-widest rounded-xl text-gray-600 bg-white hover:bg-gray-50 transition-all active:scale-95"
           >
-            <FileText className="-ml-1 mr-2 h-4 w-4 text-gray-400" aria-hidden="true" />
+            <FileText className="-ml-1 mr-1.5 h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
             Cotización Libre
           </Link>
           <Link
@@ -127,7 +137,7 @@ export default function QuotesClient() {
             prefetch={false}
             className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-red-600/20 text-white bg-red-600 hover:bg-red-700 transition-all active:scale-95"
           >
-            <Plus className="-ml-1 mr-2 h-4 w-4" aria-hidden="true" />
+            <Plus className="-ml-1 mr-1.5 h-4 w-4" aria-hidden="true" />
             Nueva Cotización
           </Link>
         </div>
@@ -200,6 +210,11 @@ export default function QuotesClient() {
           limit={itemsPerPage}
         />
       </div>
+      {/* Cotizador Rápido Express Modal */}
+      <QuickQuoteModal
+        isOpen={isQuickQuoteOpen}
+        onClose={() => setIsQuickQuoteOpen(false)}
+      />
     </div>
   );
 }

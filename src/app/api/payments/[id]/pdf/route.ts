@@ -2,11 +2,15 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { generateChargeNotePDF } from "@/lib/pdf";
 import { prisma } from "@/lib/prisma";
+import { guardApi } from "@/lib/api-auth";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     let paymentReq: any;
