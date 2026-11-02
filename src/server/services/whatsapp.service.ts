@@ -18,7 +18,11 @@ export async function sendMessageToMeta(to: string, messageData: any) {
   }
 
   const url = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
-  
+
+  // Meta entrega los números de México como 521XXXXXXXXXX, pero la lista de destinatarios
+  // (y el formato oficial actual) usa 52XXXXXXXXXX. Sin esto responde #131030.
+  const normalizedTo = to.replace(/^521(\d{10})$/, '52$1');
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -27,7 +31,7 @@ export async function sendMessageToMeta(to: string, messageData: any) {
     },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
-      to: to,
+      to: normalizedTo,
       ...messageData
     }),
   });
