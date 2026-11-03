@@ -221,6 +221,19 @@ export async function processIncomingMessage(entry: any) {
 
   if (msg.type === 'text') {
     messageContent = msg.text.body;
+
+    // Si el cliente respondió citando un mensaje (reply de WhatsApp), Meta manda solo su id en context.id.
+    // Buscamos ese mensaje para que el bot sepa a qué producto o mensaje se refiere.
+    if (msg.context?.id) {
+      const quoted = await prisma.whatsAppMessage.findUnique({
+        where: { messageId: msg.context.id },
+        select: { content: true },
+      });
+      if (quoted?.content) {
+        const quotedText = quoted.content.replace(/\s*\n\s*/g, ' · ').slice(0, 200);
+        messageContent = `↪️ En respuesta a «${quotedText}»\n${messageContent}`;
+      }
+    }
   } else if (['image', 'document', 'audio', 'voice'].includes(msg.type)) {
     const mediaObj = msg[msg.type];
     type = msg.type.toUpperCase();
@@ -353,6 +366,18 @@ async function executeAIAgentResponse(contactId: string) {
       }
     };
 
+    const consultar_colores_producto: FunctionDeclaration = {
+      name: 'consultar_colores_producto',
+      description: 'Consulta los COLORES y la disponibilidad de un producto concreto del catálogo. Úsala cuando el cliente pregunte de qué colores hay un modelo, si lo tienes en otro color, o cuánto stock hay. NO manda fotos: te devuelve los datos para que se los digas tú por texto.',
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {
+          producto: { type: SchemaType.STRING, description: 'Nombre del producto tal como lo mencionó el cliente o aparece en la foto citada (ej. "VASO ELMAS", "Termo Space")' },
+        },
+        required: ['producto'],
+      }
+    };
+
     let clientContext = "";
     if (contact.clientId) {
       const recentQuotes = await prisma.quote.findMany({
@@ -372,14 +397,18 @@ async function executeAIAgentResponse(contactId: string) {
     
     // RAG: Inyectar reglas de negocio relevantes al último mensaje
     const lastUserMessage = recentMessages.slice().reverse().find(m => m.direction === 'INBOUND')?.content || "";
-    const ragContext = await getRelevantRules(lastUserMessage, genAI);
+    const rag = await getRelevantRules(lastUserMessage, genAI);
+    const ragContext = rag.context;
+    const toolsUsed: string[] = [];
+    // Visible en los logs de Vercel (console.warn no se elimina en producción): sirve para saber si una conducta viene de Pinecone.
+    console.warn(`[RAG] Mensaje: "${lastUserMessage.slice(0, 80)}" | Reglas inyectadas: ${ragContext?.trim() ? ragContext.slice(0, 600) : '(ninguna)'}`);
 
     const systemInstruction = getSecretarySystemPrompt(clientContext, ragContext, hasRequestedQuote);
 
     const model = genAI.getGenerativeModel({ 
       model: "gemini-3.5-flash",
       systemInstruction,
-      tools: [{ functionDeclarations: [notificar_solicitud_cotizacion, transferir_a_humano, buscar_productos_en_catalogo] }]
+      tools: [{ functionDeclarations: [notificar_solicitud_cotizacion, transferir_a_humano, buscar_productos_en_catalogo, consultar_colores_producto] }]
     });
 
 
@@ -456,6 +485,7 @@ async function executeAIAgentResponse(contactId: string) {
       const call = result.response.functionCalls()?.[0];
       
       if (call) {
+        toolsUsed.push(call.name);
         if (call.name === 'transferir_a_humano') {
           const args = call.args as any;
           await prisma.whatsAppContact.update({
@@ -532,19 +562,21 @@ async function executeAIAgentResponse(contactId: string) {
 
                 const caption = `🔥 ${cleanName || prod.name}\n💰 Precio: $${prod.unitPrice.toFixed(2)} MXN`;
                 
-                // Enviar a WhatsApp Real
+                // Enviar a WhatsApp Real y conservar el id de Meta (sirve para palomitas y para ubicar la cita si el cliente responde a esta foto)
+                let imageMessageId = `bot_img_${Date.now()}_${Math.random().toString(36).substring(7)}`;
                 if (!contact.name?.includes("Simulador")) {
-                   await sendMessageToMeta(contact.phone, {
+                   const imgRes = await sendMessageToMeta(contact.phone, {
                       type: 'image',
                       image: { link: imageUrl, caption }
                    }).catch(console.error);
+                   if (imgRes?.messages?.[0]?.id) imageMessageId = imgRes.messages[0].id;
                 }
 
                 // Guardar en la DB para que se vea en el UI
                 const sentImgMsg = await prisma.whatsAppMessage.create({
                   data: {
                     contactId: contact.id,
-                    messageId: `bot_img_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+                    messageId: imageMessageId,
                     direction: 'OUTBOUND',
                     type: 'IMAGE',
                     mediaUrl: imageUrl,
@@ -590,6 +622,59 @@ async function executeAIAgentResponse(contactId: string) {
             responseText = foundProducts.length > 0 ? "Ahí te envié algunas opciones con sus precios. ¿Te interesa alguna?" : "No encontré productos con ese término exacto, ¿tienes algún otro en mente?";
           }
 
+        } else if (call.name === 'consultar_colores_producto') {
+          const args = call.args as any;
+          const tokens = String(args.producto || '').split(/\s+/).filter((t: string) => t.length > 1);
+
+          const variants = tokens.length > 0
+            ? await prisma.product.findMany({
+                where: { active: true, AND: tokens.map((t: string) => ({ name: { contains: t } })) },
+                take: 40,
+                select: { name: true, color: true, stockQuantity: true, unitPrice: true },
+              })
+            : [];
+
+          // Un renglón por color, con stock sumado por si hay varias claves del mismo color.
+          const byColor = new Map<string, { color: string; stock: number; precio: number }>();
+          for (const v of variants) {
+            const color = (v.color || 'Sin color especificado').trim();
+            const cur = byColor.get(color.toLowerCase());
+            if (cur) cur.stock += v.stockQuantity;
+            else byColor.set(color.toLowerCase(), { color, stock: v.stockQuantity, precio: v.unitPrice });
+          }
+
+          if (result.response.candidates && result.response.candidates[0].content) {
+            contents.push(result.response.candidates[0].content);
+          }
+          contents.push({
+            role: 'user',
+            parts: [{
+              functionResponse: {
+                name: 'consultar_colores_producto',
+                response: variants.length > 0
+                  ? {
+                      producto_consultado: args.producto,
+                      colores: Array.from(byColor.values()).map(c => ({
+                        color: c.color,
+                        disponible: c.stock > 0 ? `Sí (${c.stock} pzas en stock)` : 'Sin stock por ahora, se puede consultar con proveedor',
+                        precio_unitario_mxn: c.precio,
+                      })),
+                      instruccion: 'Dile al cliente los colores disponibles de forma breve y pregúntale cuál prefiere. No vuelvas a mandar fotos.',
+                    }
+                  : { mensaje: 'No encontré ese producto en el catálogo. Pídele al cliente que lo describa de otra forma.' },
+              },
+            }],
+          });
+
+          try {
+            const followUp = await model.generateContent({ contents });
+            responseText = followUp.response.text();
+          } catch (e) {
+            console.error('Error redactando respuesta de colores:', e);
+            responseText = variants.length > 0
+              ? `De ese modelo tenemos: ${Array.from(byColor.values()).map(c => c.color).join(', ')}. ¿Cuál te gusta más?`
+              : 'No encontré ese producto en el catálogo, ¿me lo describes de otra forma?';
+          }
         } else if (call.name === 'notificar_solicitud_cotizacion') {
           const args = call.args as any;
 
@@ -680,7 +765,9 @@ async function executeAIAgentResponse(contactId: string) {
         direction: 'OUTBOUND',
         type: 'TEXT',
         content: responseText,
-        status: 'SENT'
+        status: 'SENT',
+        // Qué influyó en esta respuesta (se muestra en el chat del CRM para depurar al bot)
+        aiTrace: JSON.stringify({ rules: rag.sources, tools: toolsUsed }),
       }
     });
 

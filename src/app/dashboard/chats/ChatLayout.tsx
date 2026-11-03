@@ -891,6 +891,25 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                           </span>
                         )}
                       </div>
+                      {msg.aiTrace && (() => {
+                        try {
+                          const t = JSON.parse(msg.aiTrace) as { rules?: string[]; tools?: string[] };
+                          const rules = t.rules ?? [];
+                          const tools = t.tools ?? [];
+                          return (
+                            <details className="mt-1 text-[11px] text-[#8696a0] border-t border-white/10 pt-1">
+                              <summary className="cursor-pointer select-none text-right">
+                                🧠 {rules.length ? `${rules.length} regla(s) RAG` : 'Sin reglas RAG (prompt)'}{tools.length ? ` · ${tools.join(', ')}` : ''}
+                              </summary>
+                              <ul className="mt-1 space-y-1 text-left">
+                                {rules.map((r, i) => <li key={i}>• {r}</li>)}
+                                {tools.map((n, i) => <li key={`t${i}`}>🔧 Herramienta: {n}</li>)}
+                                {!rules.length && !tools.length && <li>Respondió solo con el prompt base.</li>}
+                              </ul>
+                            </details>
+                          );
+                        } catch { return null; }
+                      })()}
                       {/* Reaction Badge */}
                       {msg.reaction && (
                         <div className={cn("absolute -bottom-3 bg-[#2a3942] rounded-full px-1.5 py-0.5 text-xs shadow-sm ring-1 ring-[#111b21] z-10", alignRight ? "right-4" : "left-4")}>

@@ -610,6 +610,7 @@ model WhatsAppMessage {
   mimeType   String?
   status     String   @default("SENT") // SENT, DELIVERED, READ, FAILED
   timestamp  DateTime @default(now())
+  aiTrace    String?  @db.LongText // JSON {rules, tools}: qué reglas/herramientas usó el bot para esta respuesta
   contact    WhatsAppContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   @@index([contactId])

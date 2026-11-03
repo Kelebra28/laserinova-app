@@ -30,8 +30,15 @@ const KNOWLEDGE_BASE = [
 ];
 
 // RAG Híbrido: Pinecone (Vectorial) con fallback a Palabras Clave
-export async function getRelevantRules(userMessage: string, genAI?: GoogleGenerativeAI): Promise<string> {
-  if (!userMessage || userMessage.trim().length === 0) return "";
+export interface RagResult {
+  context: string;
+  // Etiquetas legibles de cada regla inyectada (para mostrarlas en el chat del CRM)
+  sources: string[];
+}
+
+export async function getRelevantRules(userMessage: string, genAI?: GoogleGenerativeAI): Promise<RagResult> {
+  const empty: RagResult = { context: "", sources: [] };
+  if (!userMessage || userMessage.trim().length === 0) return empty;
   
   // Si tenemos Pinecone configurado, hacemos búsqueda vectorial real
   if (process.env.PINECONE_API_KEY && process.env.PINECONE_INDEX && genAI) {
@@ -65,13 +72,14 @@ export async function getRelevantRules(userMessage: string, genAI?: GoogleGenera
         .slice(0, 4);
 
       if (allMatches.length > 0) {
-        const relevantChunks = allMatches
-          .filter(match => match.score && match.score > 0.6) // Filtro de relevancia
-          .map(match => `[${match.metadata?.namespace}] ${match.metadata?.content as string}`)
-          .filter(Boolean);
+        const relevant = allMatches.filter(match => match.score && match.score > 0.6 && match.metadata?.content); // Filtro de relevancia
+        const relevantChunks = relevant.map(match => `[${match.metadata?.namespace}] ${match.metadata?.content as string}`);
 
         if (relevantChunks.length > 0) {
-          return relevantChunks.join('\n\n');
+          return {
+            context: relevantChunks.join('\n\n'),
+            sources: relevant.map(match => `Pinecone/${match.metadata?.namespace} (${(match.score as number).toFixed(2)}): ${(match.metadata?.content as string).slice(0, 90)}`),
+          };
         }
       }
     } catch (error) {
@@ -88,17 +96,21 @@ export async function getRelevantRules(userMessage: string, genAI?: GoogleGenera
       const keywords = chunk.keywords.split(',').map(k => k.trim().toLowerCase());
       const isRelevant = keywords.some(keyword => query.includes(keyword));
       if (isRelevant) {
-        relevantChunks.push(chunk.content);
+        relevantChunks.push(chunk);
       }
     }
     
     if (relevantChunks.length > 0) {
-      return relevantChunks.slice(0, 2).join('\n\n');
+      const top = relevantChunks.slice(0, 2);
+      return {
+        context: top.map(c => c.content).join('\n\n'),
+        sources: top.map(c => `Palabras clave/${c.id}: ${c.content.slice(0, 90)}`),
+      };
     }
-    return "";
+    return empty;
   } catch (error) {
     console.error("Error en RAG de Reglas Fallback:", error);
-    return "";
+    return empty;
   }
 }
 
