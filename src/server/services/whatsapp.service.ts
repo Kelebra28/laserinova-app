@@ -244,6 +244,9 @@ export async function processIncomingMessage(entry: any) {
     
     if (msg.type === 'document') {
       messageContent = mediaObj.filename || 'Documento adjunto';
+    } else if (mediaObj.caption) {
+      // Texto que el cliente escribe junto a la foto: sin esto el bot no sabe qué pregunta.
+      messageContent = mediaObj.caption;
     }
   }
 
@@ -305,10 +308,13 @@ async function executeAIAgentResponse(contactId: string) {
     const contents: any[] = [];
     recentMessages.forEach(msg => {
       const role = msg.direction === 'INBOUND' ? 'user' : 'model';
+      // Fotos/audios sin texto llegan con content vacío; Gemini rechaza partes de texto vacías.
+      const text = msg.content || (msg.type === 'IMAGE' ? '[El cliente envió una imagen]' : msg.type === 'AUDIO' ? '[El cliente envió un audio]' : '');
+      if (!text) return;
       if (contents.length > 0 && contents[contents.length - 1].role === role) {
-        contents[contents.length - 1].parts[0].text += `\n${msg.content}`;
+        contents[contents.length - 1].parts[0].text += `\n${text}`;
       } else {
-        contents.push({ role, parts: [{ text: msg.content }] });
+        contents.push({ role, parts: [{ text }] });
       }
     });
 
@@ -427,6 +433,14 @@ async function executeAIAgentResponse(contactId: string) {
           if (match) {
             mimeType = match[1];
             base64Data = match[2];
+          }
+        } else if (lastClientMessage.mediaUrl.startsWith('http')) {
+          // Archivo en Vercel Blob: descargarlo para pasárselo a Gemini
+          const mediaRes = await fetch(lastClientMessage.mediaUrl);
+          if (mediaRes.ok) {
+            base64Data = Buffer.from(await mediaRes.arrayBuffer()).toString('base64');
+          } else {
+            console.error(`No se pudo descargar el media del bot (${mediaRes.status}): ${lastClientMessage.mediaUrl}`);
           }
         } else {
           // Fallback: archivo en disco (legacy)
