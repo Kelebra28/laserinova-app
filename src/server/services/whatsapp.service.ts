@@ -45,6 +45,58 @@ export async function sendMessageToMeta(to: string, messageData: any) {
   return data;
 }
 
+/** Enlace que abre la conversación dentro del CRM (la PWA instalada lo captura en Android). */
+function conversationLink(contactId: string) {
+  const base = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://app.laserinova.com').replace(/\/$/, '');
+  return `${base}/dashboard/chats?c=${contactId}`;
+}
+
+/** Resumen corto de la conversación para el aviso al administrador; si falla devuelve null. */
+async function quickConversationSummary(contactId: string): Promise<string | null> {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return null;
+
+    const messages = await prisma.whatsAppMessage.findMany({
+      where: { contactId, type: 'TEXT' },
+      orderBy: { timestamp: 'desc' },
+      take: 25,
+    });
+    const transcript = messages
+      .reverse()
+      .map(m => `${m.direction === 'INBOUND' ? 'Cliente' : 'Bot'}: ${m.content}`)
+      .join('\n');
+    if (!transcript.trim()) return null;
+
+    const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: 'gemini-3.5-flash' });
+    const result = await model.generateContent(
+      `Resume en máximo 4 líneas cortas, en español y sin Markdown, esta conversación de un cliente con el bot de Laser Inova (corte y grabado láser, impresión). Indica qué quiere el cliente y qué falta por resolver.\n\n${transcript}`
+    );
+    return result.response.text().trim();
+  } catch (e) {
+    console.warn('No se pudo generar el resumen para el aviso:', e);
+    return null;
+  }
+}
+
+/**
+ * Avisa por WhatsApp al administrador (alertas de cotización y transferencias a humano).
+ * El número va en ADMIN_ALERT_PHONE (ej. 525512345678). Ojo: Meta solo entrega texto libre si el
+ * administrador escribió al número del bot en las últimas 24 h; fuera de esa ventana falla y solo se registra.
+ */
+async function notifyAdmin(text: string) {
+  const adminPhone = process.env.ADMIN_ALERT_PHONE;
+  if (!adminPhone) {
+    console.warn("ADMIN_ALERT_PHONE no configurado: no se envió el aviso al administrador.");
+    return;
+  }
+  try {
+    await sendMessageToMeta(adminPhone, { type: 'text', text: { body: text } });
+  } catch (e) {
+    console.warn("No se pudo avisar al administrador (¿fuera de la ventana de 24 h o token vencido?):", e);
+  }
+}
+
 export async function downloadAndCompressMedia(mediaId: string): Promise<string | null> {
   if (!WHATSAPP_TOKEN) return null;
 
@@ -58,16 +110,22 @@ export async function downloadAndCompressMedia(mediaId: string): Promise<string 
     });
     const urlData = await urlResponse.json();
     
-    if (!urlData.url) throw new Error('No se pudo obtener la URL del media');
+    if (!urlData.url) {
+      throw new Error(`No se pudo obtener la URL del media (Meta respondió ${urlResponse.status}): ${JSON.stringify(urlData.error || urlData)}`);
+    }
 
     // 2. Descargar el archivo
     const mediaResponse = await fetch(urlData.url, {
       headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
     });
     
+    if (!mediaResponse.ok) {
+      throw new Error(`No se pudo descargar el media de Meta (HTTP ${mediaResponse.status})`);
+    }
+
     const arrayBuffer = await mediaResponse.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer as ArrayBuffer);
-    
+
     let mimeType = urlData.mime_type;
     let folder = 'docs';
     let extension = 'bin';
@@ -410,7 +468,21 @@ async function executeAIAgentResponse(contactId: string) {
             changes: { botMode: false }
           });
 
-          responseText = `Entiendo, transferiré esta conversación a uno de nuestros asesores para que te atienda personalmente. (Motivo: ${args.motivo})`;
+          if (!contact.name?.includes("Simulador")) {
+            const summary = await quickConversationSummary(contact.id);
+            await notifyAdmin(
+              [
+                `🔔 ${contact.name || 'Un cliente'} necesita atención humana`,
+                `Tel: +${contact.phone}`,
+                `Motivo: ${args.motivo}`,
+                summary ? `\nResumen:\n${summary}` : '',
+                `\nAbrir chat: ${conversationLink(contact.id)}`,
+              ].filter(Boolean).join('\n')
+            );
+          }
+
+          // El motivo es interno (va solo en el aviso al administrador), no se le muestra al cliente.
+          responseText = `Claro, ya avisé a uno de nuestros asesores para que te atienda personalmente. En un momento te escribe por este mismo medio.`;
         } else if (call.name === 'buscar_productos_en_catalogo') {
           const args = call.args as any;
           const searchKeyword = args.termino_busqueda || "termo";
@@ -559,17 +631,10 @@ async function executeAIAgentResponse(contactId: string) {
           }
 
           // 3. Alertar al admin (si falla, no rompas el flujo de la IA)
-          try {
-            if (!contact.name?.includes("Simulador")) {
-              await sendMessageToMeta('52XXXXXXXXXX', {
-                type: 'text',
-                text: { body: chalanResult.adminAlertMsg },
-              });
-            } else {
-              console.log("[SIMULADOR] Alerta de cotización al admin simulada:", chalanResult.adminAlertMsg);
-            }
-          } catch (e) {
-            console.warn("No se pudo enviar la alerta al admin (quizás token vencido):", e);
+          if (!contact.name?.includes("Simulador")) {
+            await notifyAdmin(`${chalanResult.adminAlertMsg}\n\nAbrir chat: ${conversationLink(contact.id)}`);
+          } else {
+            console.log("[SIMULADOR] Alerta de cotización al admin simulada:", chalanResult.adminAlertMsg);
           }
           
           responseText = `¡Excelente! Ya capturé todos los detalles y se los pasé al taller. En un momento un asesor revisará la información y te enviará la cotización por este medio.`;

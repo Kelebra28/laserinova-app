@@ -57,8 +57,11 @@ export async function POST(request: Request) {
     const body = JSON.parse(rawBody);
 
     if (body.object) {
-      if (body.entry && body.entry[0].changes && body.entry[0].changes[0].value.messages) {
-        // Procesar mensaje entrante
+      // Meta manda mensajes entrantes (value.messages) y también estados de entrega/lectura (value.statuses).
+      // Antes solo se procesaban los primeros, por eso las palomitas se quedaban en "enviado".
+      const value = body.entry?.[0]?.changes?.[0]?.value;
+      if (value && (value.messages || value.statuses)) {
+        // Procesar mensaje entrante o actualización de estado
         const result = await processIncomingMessage(body.entry[0]);
         
         if (result) {

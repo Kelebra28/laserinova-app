@@ -4,8 +4,13 @@ import ChatLayout from './ChatLayout';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ChatsPage() {
+export default async function ChatsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ c?: string }>;
+}) {
   await requireAuth();
+  const { c: initialContactId } = await searchParams;
 
   // Obtener contactos con su último mensaje
   const contacts = await prisma.whatsAppContact.findMany({
@@ -26,7 +31,7 @@ export default async function ChatsPage() {
 
   return (
     <div className="h-full w-full bg-[#111b21]">
-      <ChatLayout initialContacts={contacts} />
+      <ChatLayout initialContacts={contacts} initialContactId={initialContactId} />
     </div>
   );
 }

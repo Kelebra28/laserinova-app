@@ -18,7 +18,7 @@ function cn(...classes: (string | undefined | null | false)[]) {
   return classes.filter(Boolean).join(' ');
 }
 
-export default function ChatLayout({ initialContacts }: { initialContacts: Contact[] }) {
+export default function ChatLayout({ initialContacts, initialContactId }: { initialContacts: Contact[]; initialContactId?: string }) {
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
@@ -130,6 +130,14 @@ export default function ChatLayout({ initialContacts }: { initialContacts: Conta
     }
     setLoadingMessages(false);
   };
+
+  // Enlace directo (/dashboard/chats?c=<id>): abrir esa conversación al entrar.
+  useEffect(() => {
+    if (!initialContactId) return;
+    const target = initialContacts.find((c: Contact) => c.id === initialContactId);
+    if (target) loadMessages(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialContactId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
