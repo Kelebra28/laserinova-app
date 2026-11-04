@@ -37,7 +37,7 @@ export async function simulateIncomingMessageAction(contactId: string, content: 
     if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
       pusherMessage.mediaUrl = 'FETCH_REQUIRED';
     }
-    notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
+    await notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
 
     // Procesar con IA (debemos hacer await para que Vercel/Next.js no mate el proceso antes de que Gemini responda)
     await processAIAgentResponse(contact.id).catch(console.error);
@@ -123,7 +123,7 @@ export async function sendManualMessageAction(contactId: string, content: string
     if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
       pusherMessage.mediaUrl = 'FETCH_REQUIRED';
     }
-    notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
+    await notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
     
     return { success: true, message: savedMessage };
   }
@@ -140,7 +140,7 @@ export async function toggleBotModeAction(contactId: string, botMode: boolean) {
   });
 
   // Emit event to update UI across all browsers
-  notificationEmitter.emit('whatsapp_contact_update', {
+  await notificationEmitter.emit('whatsapp_contact_update', {
     contactId,
     changes: { botMode }
   });
@@ -254,7 +254,7 @@ export async function sendMediaMessageAction(formData: FormData) {
     if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
       pusherMessage.mediaUrl = 'FETCH_REQUIRED';
     }
-    notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
+    await notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
 
     // 4. Si es simulador (cliente envía), procesar con IA
     if (isSimulator) {
@@ -353,3 +353,16 @@ export async function clearConversationMessagesAction(contactId: string) {
 }
 
 
+
+/** Lista de contactos con su último mensaje, para resincronizar el chat al volver a la app. */
+export async function getContactsAction() {
+  const contacts = await prisma.whatsAppContact.findMany({
+    include: { messages: { orderBy: { timestamp: 'desc' }, take: 1 } },
+  });
+  contacts.sort((a, b) => {
+    const aTime = a.messages[0]?.timestamp?.getTime() ?? a.updatedAt.getTime();
+    const bTime = b.messages[0]?.timestamp?.getTime() ?? b.updatedAt.getTime();
+    return bTime - aTime;
+  });
+  return { success: true, data: contacts };
+}

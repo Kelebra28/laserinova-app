@@ -38,6 +38,7 @@
     "react-hot-toast": "^2.6.0",
     "recharts": "^3.9.0",
     "sharp": "^0.34.5",
+    "web-push": "^3.6.7",
     "zod": "^4.5.4"
   },
   "devDependencies": {
@@ -50,6 +51,7 @@
     "@types/pdfmake": "^0.3.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "prisma": "^6.4.1",

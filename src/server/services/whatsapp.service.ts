@@ -7,6 +7,7 @@ import { notificationEmitter } from '@/lib/notification-emitter';
 import { getSecretarySystemPrompt } from '@/lib/agents/secretary/prompt';
 import { getRelevantRules } from '@/lib/agents/secretary/knowledge-base';
 import { executeChalanEstimate } from '@/lib/agents/chalan';
+import { sendPushToAdmins } from '@/lib/push';
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -80,21 +81,45 @@ async function quickConversationSummary(contactId: string): Promise<string | nul
 }
 
 /**
- * Avisa por WhatsApp al administrador (alertas de cotización y transferencias a humano).
- * El número va en ADMIN_ALERT_PHONE (ej. 525512345678). Ojo: Meta solo entrega texto libre si el
- * administrador escribió al número del bot en las últimas 24 h; fuera de esa ventana falla y solo se registra.
+ * Avisa al administrador por push (PWA) y por WhatsApp (alertas de cotización y transferencias a humano).
+ * Los números van en ADMIN_ALERT_PHONE separados por coma (ej. 52XXXXXXXXXX,52XXXXXXXXXX). Meta solo entrega texto libre si el administrador
+ * escribió al número del bot en las últimas 24 h; fuera de esa ventana se usa la plantilla aprobada
+ * WHATSAPP_ADMIN_TEMPLATE (una sola variable en el cuerpo, ej. "Aviso Laser Inova: {{1}}").
  */
-async function notifyAdmin(text: string) {
-  const adminPhone = process.env.ADMIN_ALERT_PHONE;
-  if (!adminPhone) {
-    console.warn("ADMIN_ALERT_PHONE no configurado: no se envió el aviso al administrador.");
+async function notifyAdmin(text: string, url?: string) {
+  const [title, ...rest] = text.split('\n').filter(Boolean);
+  await sendPushToAdmins({ title: title.slice(0, 80), body: rest.join(' · ').slice(0, 180), url, tag: 'admin-alert' });
+
+  const phones = (process.env.ADMIN_ALERT_PHONE || '').split(',').map(p => p.trim()).filter(Boolean);
+  if (phones.length === 0) {
+    console.warn("ADMIN_ALERT_PHONE no configurado: no se envió el aviso por WhatsApp al administrador.");
     return;
   }
-  try {
-    await sendMessageToMeta(adminPhone, { type: 'text', text: { body: text } });
-  } catch (e) {
-    console.warn("No se pudo avisar al administrador (¿fuera de la ventana de 24 h o token vencido?):", e);
-  }
+  const template = process.env.WHATSAPP_ADMIN_TEMPLATE;
+  // Las variables de plantilla no admiten saltos de línea ni más de 3 espacios seguidos.
+  const flat = text.replace(/\s*\n+\s*/g, ' | ').replace(/ {2,}/g, ' ').slice(0, 900);
+
+  await Promise.all(phones.map(async (adminPhone) => {
+    try {
+      await sendMessageToMeta(adminPhone, { type: 'text', text: { body: text } });
+      return;
+    } catch (e) {
+      console.warn(`Texto libre a ${adminPhone} falló (¿fuera de la ventana de 24 h?):`, e);
+    }
+    if (!template) return;
+    try {
+      await sendMessageToMeta(adminPhone, {
+        type: 'template',
+        template: {
+          name: template,
+          language: { code: process.env.WHATSAPP_ADMIN_TEMPLATE_LANG || 'es_MX' },
+          components: [{ type: 'body', parameters: [{ type: 'text', text: flat }] }],
+        },
+      });
+    } catch (e) {
+      console.warn(`Tampoco se pudo enviar la plantilla a ${adminPhone}:`, e);
+    }
+  }));
 }
 
 export async function downloadAndCompressMedia(mediaId: string): Promise<string | null> {
@@ -263,6 +288,19 @@ export async function processIncomingMessage(entry: any) {
       timestamp: new Date(parseInt(msg.timestamp) * 1000)
     }
   });
+
+  // Push a los admins: quién escribe y qué dice (el simulador no avisa).
+  if (!contact.name?.includes('Simulador')) {
+    const label = { IMAGE: '📷 Foto', AUDIO: '🎤 Audio', DOCUMENT: '📄 Documento' }[type as string];
+    const preview = messageContent.replace(/\s*\n\s*/g, ' ').slice(0, 160);
+    const body = label ? (preview ? `${label}: ${preview}` : label) : preview || 'Nuevo mensaje';
+    await sendPushToAdmins({
+      title: `💬 ${contact.name || `+${contact.phone}`}`,
+      body,
+      url: conversationLink(contact.id),
+      tag: `chat-${contact.id}`,
+    });
+  }
 
   return { type: 'message', message: savedMessage, contact };
 }
@@ -507,7 +545,7 @@ async function executeAIAgentResponse(contactId: string) {
             data: { botMode: false }
           });
           
-          notificationEmitter.emit('whatsapp_contact_update', {
+          await notificationEmitter.emit('whatsapp_contact_update', {
             contactId: contact.id,
             changes: { botMode: false }
           });
@@ -521,7 +559,8 @@ async function executeAIAgentResponse(contactId: string) {
                 `Motivo: ${args.motivo}`,
                 summary ? `\nResumen:\n${summary}` : '',
                 `\nAbrir chat: ${conversationLink(contact.id)}`,
-              ].filter(Boolean).join('\n')
+              ].filter(Boolean).join('\n'),
+              conversationLink(contact.id)
             );
           }
 
@@ -598,7 +637,7 @@ async function executeAIAgentResponse(contactId: string) {
                     status: 'DELIVERED',
                   }
                 });
-                notificationEmitter.emit('whatsapp_message', { message: sentImgMsg, contact });
+                await notificationEmitter.emit('whatsapp_message', { message: sentImgMsg, contact });
              }
           }
 
@@ -724,14 +763,14 @@ async function executeAIAgentResponse(contactId: string) {
               },
             });
             // Emitir evento para el UI
-            notificationEmitter.emit('whatsapp_message', { message: internalMessage, contact });
+            await notificationEmitter.emit('whatsapp_message', { message: internalMessage, contact });
           } catch (e) {
             console.error("Error guardando mensaje interno de El Chalán:", e);
           }
 
           // 3. Alertar al admin (si falla, no rompas el flujo de la IA)
           if (!contact.name?.includes("Simulador")) {
-            await notifyAdmin(`${chalanResult.adminAlertMsg}\n\nAbrir chat: ${conversationLink(contact.id)}`);
+            await notifyAdmin(`${chalanResult.adminAlertMsg}\n\nAbrir chat: ${conversationLink(contact.id)}`, conversationLink(contact.id));
           } else {
             console.log("[SIMULADOR] Alerta de cotización al admin simulada:", chalanResult.adminAlertMsg);
           }
@@ -789,7 +828,7 @@ async function executeAIAgentResponse(contactId: string) {
     if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
       pusherMessage.mediaUrl = 'FETCH_REQUIRED';
     }
-    notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
+    await notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
     
   } catch (error) {
     console.error("Error en processAIAgentResponse:", error);

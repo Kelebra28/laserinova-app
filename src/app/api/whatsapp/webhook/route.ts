@@ -71,7 +71,7 @@ export async function POST(request: Request) {
             if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
               pusherMessage.mediaUrl = 'FETCH_REQUIRED';
             }
-            notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact: result.contact });
+            await notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact: result.contact });
             
             // IA: Responder si botMode está activado
             if (result.contact?.botMode && ['TEXT', 'IMAGE', 'AUDIO'].includes(result.message?.type)) {
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
               });
             }
           } else if (result.type === 'status') {
-            notificationEmitter.emit('whatsapp_status_update', result.data);
+            await notificationEmitter.emit('whatsapp_status_update', result.data);
           }
         }
       }

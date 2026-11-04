@@ -5,6 +5,7 @@ import { LogOut, Menu, ShieldCheck, User as UserIcon, RefreshCw, ChevronLeft } f
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/Button";
 import { useRouter, usePathname } from "next/navigation";
+import { PushToggle } from "@/components/layout/PushToggle";
 
 interface TopbarProps {
   onMenuClick?: () => void;
@@ -40,6 +41,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
 
       {/* Right: user info + logout */}
       <div className="flex items-center gap-3">
+        {isAdmin && <PushToggle />}
         {/* User identity pill */}
         <div className="flex items-center gap-2.5 px-3 py-1.5 bg-zinc-50/80 dark:bg-zinc-900/50 backdrop-blur-sm rounded-2xl border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm transition-all hover:shadow-md">
           <UserAvatar name={name} size="sm" />

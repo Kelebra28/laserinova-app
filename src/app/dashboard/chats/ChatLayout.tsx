@@ -4,7 +4,8 @@ import Link from 'next/link';
 
 import { useState, useEffect, useRef } from 'react';
 import { useWhatsAppEvents } from '@/hooks/useWhatsAppEvents';
-import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simulateIncomingMessageAction, createDummyContactAction, sendMediaMessageAction, generateSummaryAction, deleteConversationAction } from '@/server/actions/whatsapp.actions';
+import { getPusherClient } from '@/lib/pusher';
+import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simulateIncomingMessageAction, createDummyContactAction, sendMediaMessageAction, generateSummaryAction, deleteConversationAction, getContactsAction } from '@/server/actions/whatsapp.actions';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
@@ -130,6 +131,37 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
     }
     setLoadingMessages(false);
   };
+
+  // Resincroniza al volver a la app o al reconectar Pusher: en la PWA el websocket se duerme en segundo plano
+  // y los mensajes que llegaron mientras tanto no se verían hasta recargar.
+  const activeContactIdRef = useRef<string | null>(null);
+  activeContactIdRef.current = activeContact?.id ?? null;
+  useEffect(() => {
+    const resync = async () => {
+      try {
+        const res = await getContactsAction();
+        if (res.success) setContacts(res.data);
+        const activeId = activeContactIdRef.current;
+        if (activeId) {
+          const msgs = await getMessagesAction(activeId);
+          if (msgs.success) setMessages(msgs.data);
+        }
+      } catch {}
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') resync(); };
+    const pusher = getPusherClient();
+    const onState = (s: { previous: string; current: string }) => {
+      if (s.current === 'connected' && s.previous !== 'connected') resync();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', resync);
+    pusher.connection.bind('state_change', onState);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', resync);
+      pusher.connection.unbind('state_change', onState);
+    };
+  }, []);
 
   // Enlace directo (/dashboard/chats?c=<id>): abrir esa conversación al entrar.
   useEffect(() => {
