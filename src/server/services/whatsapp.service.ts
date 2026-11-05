@@ -799,7 +799,7 @@ async function executeAIAgentResponse(contactId: string) {
 
           // 3. Alertar al admin (si falla, no rompas el flujo de la IA)
           if (!contact.name?.includes("Simulador")) {
-            await notifyAdmin(`${chalanResult.adminAlertMsg}\n\nAbrir chat: ${conversationLink(contact.id)}`, conversationLink(contact.id));
+            await notifyAdmin(`${chalanResult.adminAlertMsg}\n\nAbrir chat: ${conversationLink(contact.id)}`, conversationPath(contact.id));
           } else {
             console.log("[SIMULADOR] Alerta de cotización al admin simulada:", chalanResult.adminAlertMsg);
           }
