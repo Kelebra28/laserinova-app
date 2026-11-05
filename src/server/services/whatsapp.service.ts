@@ -272,6 +272,7 @@ export async function processIncomingMessage(entry: any) {
   let mediaUrl = null;
   let mimeType = null;
   let type = 'TEXT';
+  let skipBot = false;
 
   if (msg.type === 'text') {
     messageContent = msg.text.body;
@@ -288,6 +289,24 @@ export async function processIncomingMessage(entry: any) {
         messageContent = `↪️ En respuesta a «${quotedText}»\n${messageContent}`;
       }
     }
+  } else if (msg.type === 'reaction') {
+    // Reacción a un mensaje: se muestra en el chat pero no requiere respuesta del bot.
+    skipBot = true;
+    type = 'REACTION';
+    const emoji = msg.reaction?.emoji;
+    if (!emoji) return null; // reacción retirada
+    const target = msg.reaction?.message_id
+      ? await prisma.whatsAppMessage.findUnique({ where: { messageId: msg.reaction.message_id }, select: { content: true, type: true } })
+      : null;
+    const targetText = target?.content?.replace(/\s*\n\s*/g, ' ').slice(0, 60);
+    messageContent = targetText ? `${emoji} reaccionó a «${targetText}»` : `${emoji} reaccionó a un mensaje`;
+  } else if (msg.type === 'sticker') {
+    // El sticker llega como imagen webp: se guarda como imagen y no se le responde.
+    skipBot = true;
+    type = 'IMAGE';
+    mediaUrl = await downloadAndCompressMedia(msg.sticker.id);
+    mimeType = msg.sticker.mime_type || 'image/webp';
+    messageContent = '🎭 Sticker';
   } else if (['image', 'document', 'audio', 'voice'].includes(msg.type)) {
     const mediaObj = msg[msg.type];
     type = msg.type.toUpperCase();
@@ -302,6 +321,16 @@ export async function processIncomingMessage(entry: any) {
       // Texto que el cliente escribe junto a la foto: sin esto el bot no sabe qué pregunta.
       messageContent = mediaObj.caption;
     }
+  }
+
+  // Tipos que no manejamos (video, ubicación, contacto, botones...): se deja un texto descriptivo para que el bot no reciba un mensaje vacío.
+  if (!messageContent && type === 'TEXT') {
+    if (msg.type === 'video') messageContent = '[El cliente envió un video]';
+    else if (msg.type === 'location') messageContent = `[El cliente compartió una ubicación${msg.location?.name ? `: ${msg.location.name}` : ''}]`;
+    else if (msg.type === 'contacts') messageContent = '[El cliente compartió un contacto]';
+    else if (msg.type === 'interactive') messageContent = msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || '[El cliente respondió un botón]';
+    else if (msg.type === 'button') messageContent = msg.button?.text || '[El cliente respondió un botón]';
+    else messageContent = `[El cliente envió un mensaje de tipo "${msg.type}" que no se puede mostrar]`;
   }
 
   const savedMessage = await prisma.whatsAppMessage.create({
@@ -320,7 +349,7 @@ export async function processIncomingMessage(entry: any) {
 
   // Push a los admins: quién escribe y qué dice (el simulador no avisa).
   if (!contact.name?.includes('Simulador')) {
-    const label = { IMAGE: '📷 Foto', AUDIO: '🎤 Audio', DOCUMENT: '📄 Documento' }[type as string];
+    const label = { IMAGE: skipBot ? '' : '📷 Foto', AUDIO: '🎤 Audio', DOCUMENT: '📄 Documento' }[type as string];
     const preview = messageContent.replace(/\s*\n\s*/g, ' ').slice(0, 160);
     const body = label ? (preview ? `${label}: ${preview}` : label) : preview || 'Nuevo mensaje';
     await sendPushToAdmins({
@@ -331,7 +360,7 @@ export async function processIncomingMessage(entry: any) {
     });
   }
 
-  return { type: 'message', message: savedMessage, contact };
+  return { type: 'message', message: savedMessage, contact, skipBot };
 }
 
 const aiProcessingTimers = new Map<string, NodeJS.Timeout>();
