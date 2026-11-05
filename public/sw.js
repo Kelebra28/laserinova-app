@@ -10,6 +10,7 @@ self.addEventListener('push', (event) => {
       icon: '/logo_sidebar.png',
       badge: '/logo_sidebar.png',
       tag: data.tag,
+      renotify: !!data.tag, // con la misma etiqueta, vuelve a sonar/avisar en vez de reemplazar en silencio
       data: { url: data.url || '/dashboard' },
     })
   );

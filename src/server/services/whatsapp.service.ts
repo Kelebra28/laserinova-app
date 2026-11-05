@@ -481,11 +481,12 @@ async function executeAIAgentResponse(contactId: string) {
 
     const consultar_colores_producto: FunctionDeclaration = {
       name: 'consultar_colores_producto',
-      description: 'Consulta los COLORES y la disponibilidad de un producto concreto del catálogo. Úsala cuando el cliente pregunte de qué colores hay un modelo, si lo tienes en otro color, o cuánto stock hay. NO manda fotos: te devuelve los datos para que se los digas tú por texto.',
+      description: 'Consulta los COLORES y la disponibilidad de un producto concreto del catálogo, y puede mandar la FOTO de un color específico. Úsala cuando el cliente pregunte de qué colores hay un modelo, si lo tienes en otro color, cuánto stock hay, o cuando pida VER un color en particular (ej. "enséñame el marmoleado"): en ese caso pasa también color_foto y la foto de ese color se le manda automáticamente por WhatsApp.',
       parameters: {
         type: SchemaType.OBJECT,
         properties: {
           producto: { type: SchemaType.STRING, description: 'Nombre del producto tal como lo mencionó el cliente o aparece en la foto citada (ej. "VASO ELMAS", "Termo Space")' },
+          color_foto: { type: SchemaType.STRING, description: 'Opcional. Color del que el cliente quiere ver la foto (ej. "marmoleado", "rosa", "azul marino"). Si lo pasas, se envía la foto de ese color.' },
         },
         required: ['producto'],
       }
@@ -752,9 +753,42 @@ async function executeAIAgentResponse(contactId: string) {
             ? await prisma.product.findMany({
                 where: { active: true, AND: tokens.map((t: string) => ({ name: { contains: t } })) },
                 take: 40,
-                select: { name: true, color: true, stockQuantity: true, unitPrice: true },
+                select: { name: true, color: true, stockQuantity: true, unitPrice: true, model: true, provider: true, image: true },
               })
             : [];
+
+          // Foto del color pedido (misma regla que la ficha del producto en el CRM: Doble Vela tiene una foto por color).
+          let fotoColorEnviada: string | null = null;
+          const normalize = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, '');
+          const stripCode = (t: string) => t.replace(/^\d+\s*-\s*/, '');
+          if (args.color_foto && variants.length > 0) {
+            const wanted = normalize(stripCode(String(args.color_foto)));
+            const match = variants.find(v => v.color && normalize(stripCode(v.color)).includes(wanted));
+            if (match) {
+              const colorLabel = stripCode(match.color!);
+              const photoUrl = match.provider === 'Doble Vela' && match.model
+                ? `https://doblevela.com/images/large/${match.model}_${normalize(colorLabel)}_lrg.jpg`
+                : match.image;
+              if (photoUrl) {
+                const baseName = match.name.replace(new RegExp(match.color!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').trim();
+                const caption = `🔥 ${baseName || match.name} · ${colorLabel}\n💰 Precio: $${match.unitPrice.toFixed(2)} MXN`;
+                let photoMessageId = `bot_img_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+                try {
+                  if (!contact.name?.includes("Simulador")) {
+                    const imgRes = await sendMessageToMeta(contact.phone, { type: 'image', image: { link: photoUrl, caption } });
+                    if (imgRes?.messages?.[0]?.id) photoMessageId = imgRes.messages[0].id;
+                  }
+                  const sentPhoto = await prisma.whatsAppMessage.create({
+                    data: { contactId: contact.id, messageId: photoMessageId, direction: 'OUTBOUND', type: 'IMAGE', mediaUrl: photoUrl, content: caption, status: 'DELIVERED' },
+                  });
+                  await notificationEmitter.emit('whatsapp_message', { message: sentPhoto, contact });
+                  fotoColorEnviada = colorLabel;
+                } catch (e) {
+                  console.error('No se pudo enviar la foto del color:', e);
+                }
+              }
+            }
+          }
 
           // Un renglón por color, con stock sumado por si hay varias claves del mismo color.
           const byColor = new Map<string, { color: string; stock: number; precio: number }>();
@@ -781,7 +815,10 @@ async function executeAIAgentResponse(contactId: string) {
                         disponible: c.stock > 0 ? `Sí (${c.stock} pzas en stock)` : 'Sin stock por ahora, se puede consultar con proveedor',
                         precio_unitario_mxn: c.precio,
                       })),
-                      instruccion: 'Dile al cliente los colores disponibles de forma breve y pregúntale cuál prefiere. No vuelvas a mandar fotos.',
+                      foto_enviada: fotoColorEnviada ? `Sí, ya se le mandó por WhatsApp la foto del color ${fotoColorEnviada}.` : 'No se mandó foto.',
+                      instruccion: fotoColorEnviada
+                        ? 'Dile en una frase corta que ahí va la foto de ese color y pregúntale cuántas piezas necesita. No listes todos los colores.'
+                        : 'Dile al cliente los colores disponibles de forma breve y pregúntale cuál prefiere. Si pidió ver un color y no se mandó foto, dile que se la compartes en un momento.',
                     }
                   : { mensaje: 'No encontré ese producto en el catálogo. Pídele al cliente que lo describa de otra forma.' },
               },

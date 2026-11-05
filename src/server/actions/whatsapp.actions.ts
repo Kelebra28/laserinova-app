@@ -67,6 +67,7 @@ export async function getMessagesAction(contactId: string) {
       mimeType: true,
       mediaUrl: true,
       reaction: true,
+      aiTrace: true,
     }
   });
 
