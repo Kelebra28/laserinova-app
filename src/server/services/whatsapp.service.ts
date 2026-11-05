@@ -374,24 +374,59 @@ export async function processIncomingMessage(entry: any) {
   return { type: 'message', message: savedMessage, contact, skipBot };
 }
 
-const aiProcessingTimers = new Map<string, NodeJS.Timeout>();
+// Mensajes del cliente que disparan al bot (los stickers se guardan como IMAGE pero no lo disparan).
+const BOT_TRIGGER_TYPES = ['TEXT', 'IMAGE', 'AUDIO'];
 
-export async function processAIAgentResponse(contactId: string) {
-  // Clear any existing timer for this contact
-  if (aiProcessingTimers.has(contactId)) {
-    clearTimeout(aiProcessingTimers.get(contactId)!);
-  }
+async function latestBotTriggerMessage(contactId: string) {
+  return prisma.whatsAppMessage.findFirst({
+    where: {
+      contactId,
+      direction: 'INBOUND',
+      type: { in: BOT_TRIGGER_TYPES },
+      NOT: { content: '🎭 Sticker' },
+    },
+    orderBy: { timestamp: 'desc' },
+    select: { id: true, timestamp: true },
+  });
+}
 
+/**
+ * Agrupa mensajes seguidos del cliente. En serverless no hay timers persistentes, así que:
+ * cada llamada espera `debounceMs` y luego revisa en la BD si llegó un mensaje más nuevo
+ * (entonces esa otra llamada se encarga) o si alguien ya contestó (humano o bot).
+ * Devuelve true si esta llamada debe seguir y responder.
+ */
+async function shouldRespondAfterDebounce(contactId: string, debounceMs: number): Promise<boolean> {
+  const mine = await latestBotTriggerMessage(contactId);
+  if (!mine) return true;
+
+  await new Promise((resolve) => setTimeout(resolve, debounceMs));
+
+  const latest = await latestBotTriggerMessage(contactId);
+  if (latest && latest.id !== mine.id) return false; // llegó otro mensaje: responde la llamada de ese
+
+  const answered = await prisma.whatsAppMessage.findFirst({
+    where: { contactId, direction: 'OUTBOUND', timestamp: { gt: mine.timestamp } },
+    select: { id: true },
+  });
+  return !answered;
+}
+
+export async function processAIAgentResponse(contactId: string, opts?: { debounceMs?: number }) {
   // Fetch contact to know if it's a simulator or real case
   const contact = await prisma.whatsAppContact.findUnique({
     where: { id: contactId }
   });
-  
+
   if (!contact) return;
 
-  // En Vercel (Serverless), los "setTimeout" no funcionan porque el servidor se congela
-  // en cuanto se devuelve la respuesta HTTP. 
-  // Por lo tanto, debemos ejecutar la IA INMEDIATAMENTE y usar await.
+  // En Vercel (Serverless) un setTimeout compartido entre invocaciones no sirve (cada mensaje
+  // puede caer en otra instancia). El agrupado se hace consultando la BD tras una pausa corta.
+  if (opts?.debounceMs && opts.debounceMs > 0) {
+    const go = await shouldRespondAfterDebounce(contactId, opts.debounceMs).catch(() => true);
+    if (!go) return;
+  }
+
   return await executeAIAgentResponse(contactId).catch(console.error);
 }
 
@@ -466,6 +501,16 @@ async function executeAIAgentResponse(contactId: string) {
       }
     };
 
+    const avisar_duda_al_equipo: FunctionDeclaration = {
+      name: 'avisar_duda_al_equipo',
+      description: 'Avisa al equipo humano de una duda del cliente que NO puedes responder con los datos del negocio, las reglas ni las herramientas (ej. un material raro, una pregunta técnica puntual, algo que no sabes). El bot sigue activo en el chat. Úsala SOLO en ese caso; no para cotizaciones ni cuando el cliente pide hablar con una persona (para eso está transferir_a_humano).',
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: { duda: { type: SchemaType.STRING, description: 'La pregunta o duda del cliente, completa y con el contexto necesario para que el equipo pueda contestarla' } },
+        required: ['duda'],
+      }
+    };
+
     const buscar_productos_en_catalogo: FunctionDeclaration = {
       name: 'buscar_productos_en_catalogo',
       description: 'Busca productos reales en la base de datos (catálogo) para ofrecerle opciones al cliente. Úsalo cuando el cliente pregunte qué tipos de termos, tazas, libretas u otros artículos promocionales tienes.',
@@ -522,7 +567,7 @@ async function executeAIAgentResponse(contactId: string) {
     const model = genAI.getGenerativeModel({ 
       model: "gemini-3.5-flash",
       systemInstruction,
-      tools: [{ functionDeclarations: [notificar_solicitud_cotizacion, transferir_a_humano, buscar_productos_en_catalogo, consultar_colores_producto] }]
+      tools: [{ functionDeclarations: [notificar_solicitud_cotizacion, transferir_a_humano, avisar_duda_al_equipo, buscar_productos_en_catalogo, consultar_colores_producto] }]
     });
 
 
@@ -833,6 +878,46 @@ async function executeAIAgentResponse(contactId: string) {
             responseText = variants.length > 0
               ? `De ese modelo tenemos: ${Array.from(byColor.values()).map(c => c.color).join(', ')}. ¿Cuál te gusta más?`
               : 'No encontré ese producto en el catálogo, ¿me lo describes de otra forma?';
+          }
+        } else if (call.name === 'avisar_duda_al_equipo') {
+          const args = call.args as any;
+
+          if (!contact.name?.includes("Simulador")) {
+            const summary = await quickConversationSummary(contact.id);
+            await notifyAdmin(
+              [
+                `❓ ${contact.name || 'Un cliente'} tiene una duda que el bot no pudo resolver`,
+                `Tel: +${contact.phone}`,
+                `Duda: ${args.duda}`,
+                summary ? `\nResumen:\n${summary}` : '',
+                `\nResponder en el chat: ${conversationLink(contact.id)}`,
+              ].filter(Boolean).join('\n'),
+              conversationPath(contact.id)
+            ).catch((e) => console.error('Error avisando duda al equipo:', e));
+          }
+
+          if (result.response.candidates && result.response.candidates[0].content) {
+            contents.push(result.response.candidates[0].content);
+          }
+          contents.push({
+            role: 'user',
+            parts: [{
+              functionResponse: {
+                name: 'avisar_duda_al_equipo',
+                response: {
+                  aviso_enviado: true,
+                  instruccion: 'Dile al cliente en una frase corta que lo confirmas con el equipo y le avisas por este mismo chat. No menciones herramientas ni notificaciones.',
+                },
+              },
+            }],
+          });
+
+          try {
+            const followUp = await model.generateContent({ contents });
+            responseText = followUp.response.text();
+          } catch (e) {
+            console.error('Error redactando respuesta de duda al equipo:', e);
+            responseText = 'Déjame confirmarlo con el equipo y te aviso por aquí.';
           }
         } else if (call.name === 'notificar_solicitud_cotizacion') {
           const args = call.args as any;

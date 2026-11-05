@@ -80,7 +80,8 @@ export async function POST(request: Request) {
               const contactId = result.contact.id;
               after(async () => {
                 try {
-                  await processAIAgentResponse(contactId);
+                  // Espera 4s por si el cliente manda varios mensajes seguidos y responde una sola vez.
+                  await processAIAgentResponse(contactId, { debounceMs: 4000 });
                 } catch (err) {
                   console.error("Error asíncrono en processAIAgentResponse:", err);
                 }
