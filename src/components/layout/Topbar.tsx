@@ -9,9 +9,11 @@ import { PushToggle } from "@/components/layout/PushToggle";
 
 interface TopbarProps {
   onMenuClick?: () => void;
+  /** Fondo oscuro fijo (pantalla de chats). */
+  dark?: boolean;
 }
 
-export function Topbar({ onMenuClick }: TopbarProps) {
+export function Topbar({ onMenuClick, dark }: TopbarProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
@@ -25,7 +27,11 @@ export function Topbar({ onMenuClick }: TopbarProps) {
   const isDeepView = pathname ? pathname.split("/").filter(Boolean).length > 2 : false;
 
   return (
-    <header className="sticky top-0 z-30 bg-white/70 dark:bg-black/40 backdrop-blur-md border-b border-zinc-200/50 dark:border-zinc-800/50 h-14 flex items-center justify-between px-4 sm:px-6 shrink-0 transition-colors duration-200">
+    <header className={`sticky top-0 z-30 backdrop-blur-md border-b h-14 flex items-center justify-between px-4 sm:px-6 shrink-0 transition-colors duration-200 ${
+      dark
+        ? "bg-[#111b21]/95 border-[#222d34] text-zinc-100"
+        : "bg-white/70 dark:bg-black/40 border-zinc-200/50 dark:border-zinc-800/50"
+    }`}>
       {/* Left: hamburger (mobile) */}
       <div className="flex items-center gap-1 sm:gap-3">
         <Button
@@ -43,13 +49,13 @@ export function Topbar({ onMenuClick }: TopbarProps) {
       <div className="flex items-center gap-3">
         {isAdmin && <PushToggle />}
         {/* User identity pill */}
-        <div className="flex items-center gap-2.5 px-3 py-1.5 bg-zinc-50/80 dark:bg-zinc-900/50 backdrop-blur-sm rounded-2xl border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm transition-all hover:shadow-md">
+        <div className={`flex items-center gap-2.5 pl-1.5 pr-3 py-1 backdrop-blur-sm rounded-full border transition-all ${dark ? "bg-[#202c33] border-[#2a3942]" : "bg-zinc-50/80 dark:bg-zinc-900/50 border-zinc-200/50 dark:border-zinc-800/50 shadow-sm hover:shadow-md"}`}>
           <UserAvatar name={name} size="sm" />
 
           {/* Name + role */}
           <div className="hidden sm:block">
-            <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 leading-none">{name}</p>
-            <p className={`text-[9px] font-black uppercase tracking-wider mt-0.5 flex items-center gap-0.5 ${
+            <p className={`text-xs font-semibold leading-none ${dark ? "text-zinc-100" : "text-zinc-800 dark:text-zinc-200"}`}>{name}</p>
+            <p className={`text-[9px] font-bold uppercase tracking-wider mt-1 flex items-center gap-0.5 ${
               isAdmin ? "text-indigo-600 dark:text-indigo-400" : "text-blue-600 dark:text-blue-400"
             }`}>
               {isAdmin

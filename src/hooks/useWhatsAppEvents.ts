@@ -7,19 +7,22 @@ type UseWhatsAppEventsProps = {
   onNewMessage?: (message: any) => void;
   onStatusUpdate?: (statusData: any) => void;
   onContactUpdate?: (contactData: any) => void;
+  onReaction?: (data: { id: string; contactId: string; reaction: string | null }) => void;
 };
 
-export function useWhatsAppEvents({ onNewMessage, onStatusUpdate, onContactUpdate }: UseWhatsAppEventsProps = {}) {
+export function useWhatsAppEvents({ onNewMessage, onStatusUpdate, onContactUpdate, onReaction }: UseWhatsAppEventsProps = {}) {
   const onNewMessageRef = useRef(onNewMessage);
   const onStatusUpdateRef = useRef(onStatusUpdate);
   const onContactUpdateRef = useRef(onContactUpdate);
+  const onReactionRef = useRef(onReaction);
 
   // Mantiene las referencias actualizadas
   useEffect(() => {
     onNewMessageRef.current = onNewMessage;
     onStatusUpdateRef.current = onStatusUpdate;
     onContactUpdateRef.current = onContactUpdate;
-  }, [onNewMessage, onStatusUpdate, onContactUpdate]);
+    onReactionRef.current = onReaction;
+  }, [onNewMessage, onStatusUpdate, onContactUpdate, onReaction]);
 
   useEffect(() => {
     const pusher = getPusherClient();
@@ -58,6 +61,10 @@ export function useWhatsAppEvents({ onNewMessage, onStatusUpdate, onContactUpdat
       if (onContactUpdateRef.current) {
         onContactUpdateRef.current(data);
       }
+    });
+
+    channel.bind('whatsapp_reaction', (data: any) => {
+      if (onReactionRef.current) onReactionRef.current(data);
     });
 
     // Cleanup: desuscribirse al desmontar el componente

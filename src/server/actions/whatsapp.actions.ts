@@ -66,11 +66,27 @@ export async function getMessagesAction(contactId: string) {
       timestamp: true,
       mimeType: true,
       mediaUrl: true,
+      reaction: true,
     }
   });
 
+  // Reacciones antiguas que se guardaron como mensaje aparte («👍 reaccionó a «…»»): se pegan al mensaje original
+  // y se ocultan, para que se vean como en WhatsApp.
+  const legacy = messages.filter(m => m.type === 'REACTION');
+  for (const r of legacy) {
+    const match = (r.content || '').match(/^(\S+) reaccionó a «([\s\S]*?)»?$/);
+    if (!match) continue;
+    const snippet = match[2].trim();
+    const target = [...messages].reverse().find(m =>
+      m.type !== 'REACTION' && m.timestamp < r.timestamp && !!m.content &&
+      m.content.replace(/\s*\n\s*/g, ' ').startsWith(snippet)
+    );
+    if (target && !target.reaction) target.reaction = match[1];
+  }
+  const visible = messages.filter(m => m.type !== 'REACTION');
+
   // Strip Base64 data to avoid massive JSON payloads, but keep external HTTP URLs
-  const cleanedData = messages.map(msg => ({
+  const cleanedData = visible.map(msg => ({
     ...msg,
     mediaUrl: msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : (msg.mediaUrl ? 'FETCH_REQUIRED' : null)
   }));

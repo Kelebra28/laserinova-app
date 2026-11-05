@@ -95,7 +95,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
 
         <nav 
-          className="flex-1 min-h-0 px-3 py-4 space-y-1.5 custom-scrollbar"
+          className="flex-1 min-h-0 px-3 py-4 space-y-0.5 custom-scrollbar"
           style={{ 
             height: "calc(100vh - 80px)", 
             maxHeight: "calc(100vh - 80px)", 
@@ -126,16 +126,17 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 prefetch={false}
                 onClick={() => onClose?.()}
                 className={`
-                  group flex items-center px-3 py-3 text-xs font-bold rounded-xl transition-all duration-300 uppercase tracking-widest
+                  group relative flex items-center px-3 py-2.5 text-[13px] font-medium rounded-xl transition-colors duration-200
                   ${isActive 
-                    ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-[0_0_15px_rgba(220,38,38,0.4)] border border-red-500/50 scale-[1.02]" 
-                    : "text-zinc-400 hover:bg-white/5 hover:text-zinc-100 hover:scale-[1.02]"
+                    ? "bg-red-600/15 text-white ring-1 ring-red-500/30" 
+                    : "text-zinc-400 hover:bg-white/5 hover:text-zinc-100"
                   }
                 `}
               >
+                {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-red-500" />}
                 <item.icon
-                  className={`mr-3 h-5 w-5 shrink-0 transition-colors duration-300 ${
-                    isActive ? "text-white" : "text-zinc-500 group-hover:text-red-400"
+                  className={`mr-3 h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${
+                    isActive ? "text-red-400" : "text-zinc-500 group-hover:text-zinc-300"
                   }`}
                   aria-hidden="true"
                 />

@@ -73,3 +73,6 @@ input[type=number] {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(239, 68, 68, 0.9);
 }
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

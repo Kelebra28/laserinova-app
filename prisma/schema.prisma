@@ -608,6 +608,7 @@ model WhatsAppMessage {
   content    String?  @db.LongText
   mediaUrl   String?  @db.LongText // Base64 encoding requires more than 64kb
   mimeType   String?
+  reaction   String?  @db.VarChar(32) // Emoji con el que el cliente reaccionó a este mensaje
   status     String   @default("SENT") // SENT, DELIVERED, READ, FAILED
   timestamp  DateTime @default(now())
   aiTrace    String?  @db.LongText // JSON {rules, tools}: qué reglas/herramientas usó el bot para esta respuesta

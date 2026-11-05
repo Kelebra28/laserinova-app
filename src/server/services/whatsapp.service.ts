@@ -290,16 +290,27 @@ export async function processIncomingMessage(entry: any) {
       }
     }
   } else if (msg.type === 'reaction') {
-    // Reacción a un mensaje: se muestra en el chat pero no requiere respuesta del bot.
-    skipBot = true;
-    type = 'REACTION';
-    const emoji = msg.reaction?.emoji;
-    if (!emoji) return null; // reacción retirada
-    const target = msg.reaction?.message_id
-      ? await prisma.whatsAppMessage.findUnique({ where: { messageId: msg.reaction.message_id }, select: { content: true, type: true } })
+    // Como en WhatsApp: la reacción se pega al mensaje original (no es un mensaje nuevo ni se le responde).
+    const targetId = msg.reaction?.message_id;
+    const emoji: string | null = msg.reaction?.emoji || null; // vacío = el cliente quitó la reacción
+    const target = targetId
+      ? await prisma.whatsAppMessage.findUnique({ where: { messageId: targetId }, select: { id: true, content: true } })
       : null;
-    const targetText = target?.content?.replace(/\s*\n\s*/g, ' ').slice(0, 60);
-    messageContent = targetText ? `${emoji} reaccionó a «${targetText}»` : `${emoji} reaccionó a un mensaje`;
+    if (!target) return null;
+
+    await prisma.whatsAppMessage.update({ where: { id: target.id }, data: { reaction: emoji } });
+    await notificationEmitter.emit('whatsapp_reaction', { id: target.id, contactId: contact.id, reaction: emoji });
+
+    if (emoji && !contact.name?.includes('Simulador')) {
+      const preview = target.content?.replace(/\s*\n\s*/g, ' ').slice(0, 80);
+      await sendPushToAdmins({
+        title: `${emoji} ${contact.name || `+${contact.phone}`}`,
+        body: preview ? `Reaccionó a «${preview}»` : 'Reaccionó a un mensaje',
+        url: conversationPath(contact.id),
+        tag: `chat-${contact.id}`,
+      });
+    }
+    return null;
   } else if (msg.type === 'sticker') {
     // El sticker llega como imagen webp: se guarda como imagen y no se le responde.
     skipBot = true;

@@ -9,7 +9,7 @@ import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simula
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
-import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw } from 'lucide-react';
+import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 type Contact = any;
@@ -19,12 +19,64 @@ function cn(...classes: (string | undefined | null | false)[]) {
   return classes.filter(Boolean).join(' ');
 }
 
+const AVATAR_GRADIENTS = [
+  'from-emerald-500 to-teal-600', 'from-sky-500 to-blue-600', 'from-violet-500 to-purple-600',
+  'from-amber-500 to-orange-600', 'from-pink-500 to-rose-600', 'from-cyan-500 to-teal-600', 'from-lime-500 to-green-600',
+];
+
+function avatarGradient(seed: string) {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+}
+
+function Avatar({ contact, size }: { contact: any; size: number }) {
+  const style = { width: size, height: size };
+  if (contact.profilePictureUrl) {
+    return <img src={contact.profilePictureUrl} alt="Avatar" style={style} className="rounded-full object-cover shrink-0" />;
+  }
+  const label = contact.name ? Array.from(contact.name as string).find(ch => /[\p{L}\p{N}]/u.test(ch)) : null;
+  return (
+    <div style={style} className={cn("rounded-full bg-gradient-to-br flex items-center justify-center text-white font-semibold shrink-0", avatarGradient(contact.name || contact.phone || ''))}>
+      {label ? <span style={{ fontSize: size * 0.42 }}>{label.toUpperCase()}</span> : <UserIcon size={size * 0.5} className="text-white/90" />}
+    </div>
+  );
+}
+
+function listTime(d: Date) {
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return 'Ayer';
+  return d.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function dayLabel(d: Date) {
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return 'Hoy';
+  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return 'Ayer';
+  return d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' as const } : {}) });
+}
+
+function previewOf(m: any): string {
+  if (!m) return 'Sin mensajes recientes';
+  if (m.direction === 'INTERNAL') return '📝 Nota interna';
+  switch (m.type) {
+    case 'IMAGE': return m.content === '🎭 Sticker' ? '🎭 Sticker' : '📷 Foto';
+    case 'AUDIO': return '🎤 Audio';
+    case 'DOCUMENT': return '📄 Documento';
+    default: return (m.content || '').replace(/\s*\n\s*/g, ' ');
+  }
+}
+
 export default function ChatLayout({ initialContacts, initialContactId }: { initialContacts: Contact[]; initialContactId?: string }) {
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [messages, setMessages] = useState<Message[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [listFilter, setListFilter] = useState<'all' | 'unread' | 'bot' | 'human'>('all');
   const [inputText, setInputText] = useState('');
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [simulatorMode, setSimulatorMode] = useState(false);
@@ -84,6 +136,9 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
         // Sonido de notificación
         try { new Audio('/notification.mp3').play().catch(() => {}); } catch {}
       }
+    },
+    onReaction: ({ id, reaction }) => {
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, reaction } : m));
     },
     onStatusUpdate: (statusData) => {
       // Update message status in the active chat if applicable
@@ -590,234 +645,268 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
     }
   }
 
+  const visibleContacts = contacts.filter(c => {
+    const q = searchQuery.toLowerCase();
+    const matches = !q || (c.name && c.name.toLowerCase().includes(q)) || (c.phone && c.phone.includes(searchQuery));
+    if (!matches) return false;
+    if (listFilter === 'unread') return (unreadCounts[c.id] || 0) > 0;
+    if (listFilter === 'bot') return !!c.botMode;
+    if (listFilter === 'human') return !c.botMode;
+    return true;
+  });
+
   return (
-    <div className="flex h-full bg-[#111b21] text-[#e9edef] divide-x divide-[#313d45] border-x border-[#313d45]">
-      {/* Sidebar */}
-      <div className={cn("flex flex-col bg-[#111b21] overflow-hidden", activeContact ? "hidden md:flex md:w-1/3" : "w-full md:w-1/3")}>
-        <div className="p-3 bg-[#111b21] flex gap-2 border-b border-[#313d45]">
-          <Input 
-            placeholder="Buscar contacto..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-[#202c33] border-none !text-white focus-visible:ring-[#00a884] placeholder:text-[#8696a0] flex-1 rounded-lg" 
-          />
-          <Button type="button" onClick={() => window.location.reload()} variant="outline" size="icon" title="Recargar App" className="shrink-0 bg-transparent border-none hover:bg-[#202c33] text-[#8696a0] rounded-full">
-            <RefreshCw size={20} />
-          </Button>
-          <Button type="button" onClick={createDummyContact} variant="outline" size="icon" title="Crear contacto de prueba" className="shrink-0 bg-transparent border-none hover:bg-[#202c33] text-[#8696a0] rounded-full">
-            <Plus size={20} />
-          </Button>
+    <div className="flex h-full bg-[#0b141a] text-[#e9edef] border-x border-[#222d34]">
+      {/* ───────── Lista de chats ───────── */}
+      <aside className={cn("flex flex-col bg-[#111b21] overflow-hidden border-r border-[#222d34]", activeContact ? "hidden md:flex md:w-[290px] xl:w-[380px] md:shrink-0" : "w-full md:w-[290px] xl:w-[380px] md:shrink-0")}>
+        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+          <h1 className="text-xl font-semibold tracking-tight text-[#e9edef]">Chats</h1>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => window.location.reload()} title="Recargar App" className="p-2 rounded-full text-[#8696a0] hover:text-[#e9edef] hover:bg-[#202c33] transition-colors">
+              <RefreshCw size={18} />
+            </button>
+            <button type="button" onClick={createDummyContact} title="Crear contacto de prueba" className="p-2 rounded-full text-[#8696a0] hover:text-[#e9edef] hover:bg-[#202c33] transition-colors">
+              <Plus size={20} />
+            </button>
+          </div>
         </div>
+
+        <div className="px-3 pb-2">
+          <div className="flex items-center gap-2 bg-[#202c33] rounded-xl px-3 h-10 focus-within:ring-1 focus-within:ring-[#00a884]/60 transition-shadow">
+            <Search size={16} className="text-[#8696a0] shrink-0" />
+            <input
+              placeholder="Buscar por nombre o teléfono"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 bg-transparent border-none outline-none text-sm !text-[#e9edef] placeholder:text-[#8696a0]"
+            />
+            {searchQuery && (
+              <button type="button" onClick={() => setSearchQuery('')} className="text-[#8696a0] hover:text-[#e9edef]">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto no-scrollbar">
+          {([['all', 'Todos'], ['unread', 'No leídos'], ['bot', 'Bot'], ['human', 'Humano']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setListFilter(key)}
+              className={cn(
+                "shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors",
+                listFilter === key ? "bg-[#00a884]/20 text-[#35d6b5]" : "bg-[#202c33] text-[#8696a0] hover:text-[#e9edef]"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex-1 overflow-y-auto">
           {contacts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-[#8696a0] p-8 text-center space-y-4">
-              <p>No hay chats recientes</p>
-              <Button type="button" onClick={createDummyContact} className="w-full bg-[#202c33] hover:bg-[#2a3942] text-[#e9edef] border-none">
+              <MessageCircle size={40} className="opacity-40" />
+              <p className="text-sm">No hay chats recientes</p>
+              <Button type="button" onClick={createDummyContact} className="bg-[#202c33] hover:bg-[#2a3942] text-[#e9edef] border-none">
                 <Plus size={16} className="mr-2" />
                 Crear chat de prueba
               </Button>
             </div>
+          ) : visibleContacts.length === 0 ? (
+            <div className="p-8 text-center text-sm text-[#8696a0]">Ningún chat coincide con tu búsqueda.</div>
           ) : (
-            contacts
-              .filter(c => 
-                (c.name && c.name.toLowerCase().includes(searchQuery.toLowerCase())) || 
-                (c.phone && c.phone.includes(searchQuery))
-              )
-              .map(contact => (
-              <div 
-                key={contact.id} 
-                onClick={() => loadMessages(contact)}
-                className={cn(
-                  "p-3 mx-2 my-1 rounded-xl cursor-pointer transition-colors flex gap-3 items-center group",
-                  activeContact?.id === contact.id ? "bg-[#2a3942]" : "hover:bg-[#202c33]"
-                )}
-              >
-                {/* Avatar */}
-                {contact.profilePictureUrl ? (
-                  <img src={contact.profilePictureUrl} alt="Avatar" className="w-12 h-12 rounded-full object-cover shrink-0" />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-[#6a7175] flex items-center justify-center text-white font-medium text-lg shrink-0">
-                    {contact.name ? contact.name.substring(0, 1).toUpperCase() : <UserIcon size={24} className="text-[#cfd4d6]" />}
-                  </div>
-                )}
-
-                {/* Contenido (Nombre + Mensaje) */}
-                <div className="flex flex-col flex-1 min-w-0">
-                  {/* Fila superior: Nombre y Fecha */}
-                  <div className="flex justify-between items-center mb-0.5">
-                    <span className="font-normal text-[#e9edef] truncate text-base">{contact.name || contact.phone}</span>
-                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                      {contact.messages?.[0] && (
-                        <span className="text-[11px] text-[#8696a0]">
-                          {new Date(contact.messages[0].timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                        </span>
+            visibleContacts.map(contact => {
+              const last = contact.messages?.[0];
+              const unread = unreadCounts[contact.id] || 0;
+              const isActive = activeContact?.id === contact.id;
+              return (
+                <div
+                  key={contact.id}
+                  onClick={() => loadMessages(contact)}
+                  className={cn(
+                    "relative px-3 py-2.5 mx-2 my-0.5 rounded-xl cursor-pointer transition-colors flex gap-3 items-center group",
+                    isActive ? "bg-[#2a3942]" : "hover:bg-[#1a262d]"
+                  )}
+                >
+                  <div className="relative shrink-0">
+                    <Avatar contact={contact} size={48} />
+                    <span
+                      title={contact.botMode ? 'Bot activo' : 'Atención humana'}
+                      className={cn(
+                        "absolute -bottom-0.5 -right-0.5 w-[18px] h-[18px] rounded-full flex items-center justify-center ring-2",
+                        isActive ? "ring-[#2a3942]" : "ring-[#111b21] group-hover:ring-[#1a262d]",
+                        contact.botMode ? "bg-[#00a884] text-[#06211b]" : "bg-[#3b4a54] text-[#cfd8dc]"
                       )}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setContactToDelete(contact);
-                        }}
-                        title="Eliminar conversación"
-                        className="opacity-0 group-hover:opacity-100 p-1 text-[#8696a0] hover:text-red-400 hover:bg-[#313d45] rounded-md transition-all"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Fila inferior: Mensaje e Iconos (Bot/Unread) */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-[13px] text-[#8696a0] truncate mr-2">
-                      {contact.messages?.[0]?.type === 'TEXT' ? contact.messages[0].content : 
-                       contact.messages?.[0]?.type === 'IMAGE' ? '📷 Foto' : 
-                       contact.messages?.[0]?.type === 'AUDIO' ? '🎵 Audio' : 
-                       contact.messages?.[0]?.type === 'DOCUMENT' ? '📄 Documento' : 
-                       'Sin mensajes recientes'}
+                    >
+                      {contact.botMode ? <Bot size={11} /> : <UserIcon size={11} />}
                     </span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {contact.botMode ? (
-                        <Bot size={14} className="text-[#00a884]" />
-                      ) : (
-                        <UserIcon size={14} className="text-[#8696a0]" />
-                      )}
-                      {unreadCounts[contact.id] > 0 && (
-                        <span className="bg-[#00a884] text-[#111b21] text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                          {unreadCounts[contact.id]}
-                        </span>
-                      )}
+                  </div>
+
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className={cn("truncate text-[15px]", unread > 0 ? "font-semibold text-white" : "font-medium text-[#e9edef]")}>
+                        {contact.name || contact.phone}
+                      </span>
+                      <span className={cn("text-[11px] shrink-0", unread > 0 ? "text-[#00a884] font-medium" : "text-[#8696a0]")}>
+                        {last ? listTime(new Date(last.timestamp)) : ''}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center gap-2 mt-0.5">
+                      <span className={cn("text-[13px] truncate flex items-center gap-1", unread > 0 ? "text-[#c7d0d5]" : "text-[#8696a0]", last?.direction === 'INTERNAL' && "italic")}>
+                        {last?.direction === 'OUTBOUND' && (
+                          <CheckCheck size={14} className={cn("shrink-0", last.status === 'READ' ? "text-[#53bdeb]" : "text-[#8696a0]")} />
+                        )}
+                        <span className="truncate">{previewOf(last)}</span>
+                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {unread > 0 && (
+                          <span className="bg-[#00a884] text-[#06211b] text-[11px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
+                            {unread}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setContactToDelete(contact); }}
+                          title="Eliminar conversación"
+                          className="hidden group-hover:flex p-1 text-[#8696a0] hover:text-red-400 hover:bg-[#313d45] rounded-md transition-colors"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
-      </div>
+      </aside>
 
-      {/* Main Chat Area */}
+      {/* ───────── Conversación ───────── */}
       {activeContact ? (
-        <div className={cn("flex flex-col bg-[#0b141a] relative", !activeContact ? "hidden md:flex md:w-2/3" : "w-full md:w-2/3")}>
-          {/* Fondo de patrón clásico de WhatsApp */}
-          <div className="absolute inset-0 opacity-[0.06] pointer-events-none bg-[url('https://static.whatsapp.net/rsrc.php/v3/yl/r/r2jEqjVLEmC.png')] bg-repeat z-0 invert" />
-          
+        <section className="flex flex-col bg-[#0b141a] relative flex-1 min-w-0">
+          <div className="absolute inset-0 pointer-events-none z-0 opacity-100 [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.04)_1px,transparent_0)] [background-size:22px_22px]" />
+
           {simulatorMode && (
-            <div className="bg-yellow-500/10 backdrop-blur-sm text-yellow-500 border-b border-yellow-500/20 text-xs font-bold py-1.5 px-4 text-center shadow-sm shrink-0 z-20">
-              MODO SIMULADOR ACTIVO: Estás escribiendo como si fueras el cliente. No se enviarán mensajes reales.
+            <div className="bg-amber-500/10 text-amber-400 border-b border-amber-500/20 text-xs font-medium py-1.5 px-4 text-center shrink-0 z-20">
+              Modo simulador: escribes como si fueras el cliente. No se envían mensajes reales.
             </div>
           )}
-          {/* Header */}
-          <div className="h-16 bg-[#202c33] px-3 md:px-6 flex items-center justify-between shrink-0 z-30">
+
+          {/* Cabecera */}
+          <header className="h-16 bg-[#111b21]/95 backdrop-blur border-b border-[#222d34] px-3 md:px-5 flex items-center justify-between shrink-0 z-30">
             <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0 pr-2">
-              <button 
+              <button
                 type="button"
                 onClick={() => setActiveContact(null)}
-                className="md:hidden p-2 -ml-2 text-[#8696a0] hover:text-[#e9edef] rounded-full hover:bg-[#2a3942]"
+                className="md:hidden p-2 -ml-2 text-[#8696a0] hover:text-[#e9edef] rounded-full hover:bg-[#202c33]"
+                aria-label="Volver a la lista"
               >
                 <ChevronLeft size={24} />
               </button>
-              {activeContact.profilePictureUrl ? (
-                <img src={activeContact.profilePictureUrl} alt="Avatar" className="w-10 h-10 rounded-full object-cover shrink-0" />
-              ) : (
-                <div className="w-10 h-10 shrink-0 rounded-full bg-[#6a7175] flex items-center justify-center text-white font-medium text-lg">
-                  {activeContact.name ? activeContact.name.substring(0, 1).toUpperCase() : <UserIcon size={20} className="text-[#cfd4d6]" />}
-                </div>
-              )}
+              <Avatar contact={activeContact} size={40} />
               <div className="flex flex-col min-w-0">
-                <span className="font-medium text-lg text-[#e9edef] leading-tight truncate">{activeContact.name || activeContact.phone}</span>
-                <span className="text-xs text-[#8696a0] truncate">{activeContact.phone}</span>
+                <span className="font-semibold text-[16px] text-[#e9edef] leading-tight truncate">{activeContact.name || activeContact.phone}</span>
+                <span className="text-xs text-[#8696a0] truncate flex items-center gap-1.5">
+                  <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", activeContact.botMode ? "bg-[#00a884]" : "bg-amber-400")} />
+                  {activeContact.botMode ? 'Bot activo' : 'Atención humana'} · +{activeContact.phone}
+                </span>
               </div>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
+
+            <div className="flex items-center gap-2 shrink-0">
               {pendingQuoteUrl && (
                 <Link href={pendingQuoteUrl}>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="sm"
-                    className="rounded-xl px-4 bg-amber-500 hover:bg-amber-400 text-amber-950 font-black tracking-wide shadow-[0_0_15px_rgba(245,158,11,0.4)] flex items-center gap-2 transition-all active:scale-95"
+                    className="rounded-full px-3.5 bg-amber-500 hover:bg-amber-400 text-amber-950 font-semibold text-xs flex items-center gap-1.5 transition-all active:scale-95"
                     title="Cotización Lista para Generar"
                   >
-                    📝 <span className="hidden md:inline">Generar Cotización</span>
+                    📝 <span className="hidden xl:inline">Generar cotización</span>
                   </Button>
                 </Link>
               )}
-              
-              {/* Contenedor del Simulador con estilo Píldora */}
-              <div className="hidden md:flex items-center gap-3 bg-[#111b21] px-4 py-1.5 rounded-xl border border-[#313d45] shadow-inner">
-                <span className="text-xs font-bold text-[#8696a0] uppercase tracking-wider">Simulador</span>
+
+              <div title="Modo simulador" className="hidden md:flex items-center gap-2 bg-[#202c33] 2xl:pl-3 pl-2 pr-2 py-1 rounded-full">
+                <span className="text-[11px] font-medium text-[#8696a0] hidden 2xl:inline">Simulador</span>
                 <button
                   type="button"
                   onClick={() => setSimulatorMode(!simulatorMode)}
-                  className={cn(
-                    "w-11 h-6 rounded-full relative transition-colors duration-300 shadow-inner",
-                    simulatorMode ? "bg-amber-500" : "bg-[#313d45]"
-                  )}
+                  aria-label="Activar modo simulador"
+                  className={cn("w-9 h-5 rounded-full relative transition-colors duration-300", simulatorMode ? "bg-amber-500" : "bg-[#3b4a54]")}
                 >
-                  <div className={cn(
-                    "w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-300 shadow-md",
-                    simulatorMode ? "translate-x-6" : "translate-x-1"
-                  )} />
+                  <div className={cn("w-3.5 h-3.5 bg-white rounded-full absolute top-[3px] transition-transform duration-300 shadow", simulatorMode ? "translate-x-[18px]" : "translate-x-[3px]")} />
                 </button>
               </div>
 
-              {/* Botón de Bot Activo / Modo Humano */}
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="sm"
                 onClick={toggleBotMode}
                 className={cn(
-                  "rounded-xl px-4 font-black uppercase tracking-wider text-xs transition-all active:scale-95 shadow-sm border",
-                  activeContact.botMode 
-                    ? "bg-[#00a884] hover:bg-[#00c298] text-teal-950 border-[#00a884] shadow-[0_0_15px_rgba(0,168,132,0.3)]" 
-                    : "bg-[#111b21] hover:bg-[#202c33] text-[#8696a0] border-[#313d45]"
+                  "rounded-full px-3.5 font-semibold text-xs transition-all active:scale-95",
+                  activeContact.botMode
+                    ? "bg-[#00a884] hover:bg-[#00c298] text-[#06211b]"
+                    : "bg-[#202c33] hover:bg-[#2a3942] text-[#c7d0d5]"
                 )}
+                title={activeContact.botMode ? 'Pasar a atención humana' : 'Reactivar el bot'}
               >
-                {activeContact.botMode 
-                  ? <><Bot size={16} className="md:mr-2"/><span className="hidden md:inline">Bot Activo</span></> 
-                  : <><UserIcon size={16} className="md:mr-2"/><span className="hidden md:inline">Modo Humano</span></>}
+                {activeContact.botMode
+                  ? <><Bot size={15} className="xl:mr-1.5" /><span className="hidden xl:inline">Bot activo</span></>
+                  : <><UserIcon size={15} className="xl:mr-1.5" /><span className="hidden xl:inline">Modo humano</span></>}
               </Button>
 
-              {/* Botón Resumen IA */}
-              <Button 
-                variant="ghost" 
-                size="icon"
+              <button
+                type="button"
                 onClick={handleGenerateSummary}
-                className="rounded-xl w-9 h-9 bg-[#111b21] border border-[#313d45] hover:border-purple-500/50 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 transition-all shadow-sm active:scale-95"
+                className="w-9 h-9 rounded-full flex items-center justify-center text-purple-300 hover:bg-purple-500/15 transition-colors active:scale-95"
                 title="Resumir con IA"
               >
                 <Sparkles size={18} />
-              </Button>
+              </button>
 
-              {/* Botón Eliminar Conversación */}
-              <Button 
-                variant="ghost" 
-                size="icon"
+              <button
+                type="button"
                 data-testid="delete-chat-header-btn"
                 onClick={() => setContactToDelete(activeContact)}
-                className="rounded-xl w-9 h-9 bg-[#111b21] border border-[#313d45] hover:border-red-500/50 text-[#8696a0] hover:text-red-400 hover:bg-red-500/10 transition-all shadow-sm active:scale-95"
+                className="w-9 h-9 rounded-full flex items-center justify-center text-[#8696a0] hover:text-red-400 hover:bg-red-500/10 transition-colors active:scale-95"
                 title="Eliminar conversación completa"
               >
                 <Trash2 size={18} />
-              </Button>
+              </button>
             </div>
-          </div>
+          </header>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4 z-10 relative">
+          {/* Mensajes */}
+          <div className="flex-1 overflow-y-auto px-3 md:px-[6%] py-4 z-10 relative">
             {loadingMessages ? (
-              <div className="text-center text-[#8696a0] my-8">Cargando mensajes...</div>
+              <div className="flex items-center justify-center gap-2 text-[#8696a0] my-8 text-sm">
+                <Loader2 size={16} className="animate-spin" /> Cargando mensajes...
+              </div>
             ) : (
-              messages.map(msg => {
+              messages.map((msg, idx) => {
+                const prev = messages[idx - 1];
+                const date = new Date(msg.timestamp);
+                const showDay = !prev || new Date(prev.timestamp).toDateString() !== date.toDateString();
+                const dayChip = showDay && (
+                  <div className="flex justify-center my-3">
+                    <span className="bg-[#182229] text-[#8696a0] text-xs font-medium px-3 py-1 rounded-lg shadow-sm capitalize">{dayLabel(date)}</span>
+                  </div>
+                );
+
                 const isInternal = msg.direction === 'INTERNAL';
                 const isSimulatorChat = simulatorMode;
                 const alignRight = isInternal ? false : isSimulatorChat ? (msg.direction === 'INBOUND') : (msg.direction === 'OUTBOUND');
-                
+
                 if (isInternal) {
                   const parts = msg.content?.split('|||') || [];
                   const displayContent = parts[0];
                   let buttonLink = null;
                   let buttonText = "";
-                  
+
                   if (parts[1]) {
                     if (parts[1].startsWith('QUOTE:')) {
                       const quoteId = parts[1].replace('QUOTE:', '');
@@ -845,107 +934,149 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                   }
 
                   return (
-                    <div key={msg.id} className="flex justify-center w-full my-2">
-                      <div className="bg-[#ffeb3b]/10 border border-[#ffeb3b]/30 text-[#ffeb3b] px-4 py-2 rounded-lg text-sm max-w-[85%] text-center shadow-sm">
-                        <div className="font-bold mb-1 flex items-center justify-center gap-2">
-                          <Bot size={14} /> Nota Interna (Sistema)
+                    <div key={msg.id}>
+                      {dayChip}
+                      <div className="flex justify-center w-full my-2">
+                        <div className="bg-amber-400/[0.07] border border-amber-400/20 text-amber-100/90 px-4 py-2.5 rounded-xl text-[13px] max-w-[90%] md:max-w-[75%] shadow-sm">
+                          <div className="font-semibold mb-1 flex items-center gap-1.5 text-amber-300 text-xs uppercase tracking-wide">
+                            <Bot size={13} /> Nota interna · Sistema
+                          </div>
+                          <p className="whitespace-pre-wrap text-left break-words">{displayContent}</p>
+                          {buttonLink && buttonText !== "Generar Cotización" && (
+                            <Link
+                              href={buttonLink}
+                              className="mt-2 inline-flex items-center gap-1.5 bg-amber-400/15 hover:bg-amber-400/25 text-amber-200 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                            >
+                              <FileText size={14} /> {buttonText}
+                            </Link>
+                          )}
                         </div>
-                        <p className="whitespace-pre-wrap text-left break-words mb-2">{displayContent}</p>
-                        {buttonLink && buttonText !== "Generar Cotización" && (
-                          <Link 
-                            href={buttonLink}
-                            className="mt-2 inline-flex items-center gap-1 bg-[#ffeb3b]/20 hover:bg-[#ffeb3b]/30 text-[#ffeb3b] px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
-                          >
-                            <FileText size={14} /> {buttonText}
-                          </Link>
-                        )}
                       </div>
                     </div>
                   );
                 }
 
-                return (
-                  <div key={msg.id} className={cn("flex group items-center", alignRight ? "justify-end" : "justify-start")}>
-                    
-                    {/* Hover actions (Reply/React) */}
-                    <div className={cn("hidden group-hover:flex items-center gap-1 mx-2", alignRight ? "order-1" : "order-2")}>
-                      <button type="button" onClick={() => setReactionMenuFor(reactionMenuFor === msg.id ? null : msg.id)} className="p-1.5 rounded-full bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#2a3942] transition-colors relative shadow-sm border border-[#313d45]">
-                        <Smile size={16} />
-                        {reactionMenuFor === msg.id && (
-                          <div className="absolute bottom-full mb-2 -translate-x-1/2 left-1/2 bg-[#2a3942] p-2 rounded-full shadow-lg border border-[#313d45] flex gap-2 z-50">
-                            {['👍','❤️','😂','😮','😢','🙏'].map(emoji => (
-                              <div key={emoji} onClick={(e) => { e.stopPropagation(); setMessages(prev => prev.map(m => m.id === msg.id ? {...m, reaction: emoji} : m)); setReactionMenuFor(null); }} className="hover:scale-125 cursor-pointer transition-transform text-lg px-1">{emoji}</div>
-                            ))}
-                          </div>
-                        )}
-                      </button>
-                      <button type="button" onClick={() => setReplyingTo(msg)} className="p-1.5 rounded-full bg-[#202c33] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#2a3942] transition-colors shadow-sm border border-[#313d45]">
-                        <Reply size={16} />
-                      </button>
-                    </div>
+                // Las reacciones se muestran pegadas al mensaje, nunca como aviso aparte
+                if (msg.type === 'REACTION') return null;
 
-                    <div 
-                      className={cn(
-                        "max-w-[70%] px-3 py-2 relative shadow-sm text-[15px]",
-                        alignRight 
-                          ? "bg-[#005c4b] text-[#e9edef] rounded-lg rounded-tr-none order-2" 
-                          : "bg-[#202c33] text-[#e9edef] rounded-lg rounded-tl-none border border-transparent order-1"
-                      )}
-                    >
-                      {msg.type === 'AUDIO' && (
-                        <div className="mb-2">
-                          <audio controls src={msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `/api/media/${msg.id}`} className="w-full h-10 filter invert opacity-90" />
-                        </div>
-                      )}
-                      {msg.type === 'IMAGE' ? (
-                        <div className="flex flex-col gap-1">
-                          <img src={msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `/api/media/${msg.id}`} alt="Adjunto" className="rounded-xl max-w-full max-h-60 object-contain shadow-md" />
-                          {msg.content && msg.content !== '📷 Imagen adjunta' && <span className="text-sm mt-1 whitespace-pre-wrap">{msg.content}</span>}
-                        </div>
-                      ) : msg.type === 'DOCUMENT' ? (
-                        <div className="flex flex-col gap-1 bg-black/20 p-2 rounded-lg">
-                          <a href={msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `/api/media/${msg.id}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:underline">
-                            <FileText size={16} />
-                            <span className="text-sm truncate max-w-[200px]">{msg.content || 'Documento adjunto'}</span>
-                          </a>
+                const sameAsPrev = !!prev && !showDay && prev.direction === msg.direction && prev.direction !== 'INTERNAL' && prev.type !== 'REACTION'
+                  && date.getTime() - new Date(prev.timestamp).getTime() < 5 * 60 * 1000;
+                const isSticker = msg.type === 'IMAGE' && msg.content === '🎭 Sticker';
+                const quoted = typeof msg.content === 'string' && msg.type === 'TEXT' ? msg.content.match(/^↪️ En respuesta a «([\s\S]*?)»\n([\s\S]*)$/) : null;
+                const bodyText = quoted ? quoted[2] : msg.content;
+                const mediaSrc = msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `/api/media/${msg.id}`;
+                const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const ticks = alignRight && (
+                  <span className={cn("inline-flex", msg.status === 'READ' ? "text-[#53bdeb]" : "text-white/50")}>
+                    {msg.status === 'SENT' ? <Check size={15} /> : <CheckCheck size={15} />}
+                  </span>
+                );
+
+                return (
+                  <div key={msg.id}>
+                    {dayChip}
+                    <div className={cn("flex group items-center", alignRight ? "justify-end" : "justify-start", sameAsPrev ? "mt-0.5" : "mt-2")}>
+
+                      {/* Acciones al pasar el mouse (reaccionar / responder) */}
+                      <div className={cn("hidden group-hover:flex items-center gap-1 mx-2", alignRight ? "order-1" : "order-2")}>
+                        <button type="button" onClick={() => setReactionMenuFor(reactionMenuFor === msg.id ? null : msg.id)} className="p-1.5 rounded-full bg-[#1f2c34] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#2a3942] transition-colors relative shadow-sm border border-[#2a3942]">
+                          <Smile size={15} />
+                          {reactionMenuFor === msg.id && (
+                            <div className="absolute bottom-full mb-2 -translate-x-1/2 left-1/2 bg-[#233138] p-2 rounded-full shadow-xl border border-[#2a3942] flex gap-2 z-50">
+                              {['👍','❤️','😂','😮','😢','🙏'].map(emoji => (
+                                <div key={emoji} onClick={(e) => { e.stopPropagation(); setMessages(prev => prev.map(m => m.id === msg.id ? {...m, reaction: emoji} : m)); setReactionMenuFor(null); }} className="hover:scale-125 cursor-pointer transition-transform text-lg px-1">{emoji}</div>
+                              ))}
+                            </div>
+                          )}
+                        </button>
+                        <button type="button" onClick={() => setReplyingTo(msg)} className="p-1.5 rounded-full bg-[#1f2c34] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#2a3942] transition-colors shadow-sm border border-[#2a3942]">
+                          <Reply size={15} />
+                        </button>
+                      </div>
+
+                      {isSticker ? (
+                        <div className={cn("relative", alignRight ? "order-2" : "order-1", msg.reaction && "mb-3")}>
+                          <img src={mediaSrc} alt="Sticker" className="max-w-[160px] max-h-[160px] object-contain drop-shadow-lg" />
+                          <span className="absolute bottom-1 right-1 text-[10px] text-white/80 bg-black/45 rounded-full px-1.5 py-0.5 flex items-center gap-1">{time}{ticks}</span>
+                          {msg.reaction && (
+                            <div className={cn("absolute -bottom-3 bg-[#233138] rounded-full px-1.5 py-0.5 text-sm shadow ring-2 ring-[#0b141a] z-10", alignRight ? "right-3" : "left-3")}>{msg.reaction}</div>
+                          )}
                         </div>
                       ) : (
-                        <p className="break-words whitespace-pre-wrap">{msg.content}</p>
-                      )}
-                      
-                      <div className={cn("flex items-center justify-end gap-1 mt-1", alignRight ? "text-[#8696a0]" : "text-[#8696a0]")}>
-                        <span className="text-[11px]">
-                          {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                        </span>
-                        {alignRight && (
-                          <span className={cn("text-sm", msg.status === 'READ' ? "text-[#53bdeb]" : "text-[#8696a0]")}>
-                            {msg.status === 'SENT' ? <Check size={16}/> : <CheckCheck size={16}/>}
-                          </span>
-                        )}
-                      </div>
-                      {msg.aiTrace && (() => {
-                        try {
-                          const t = JSON.parse(msg.aiTrace) as { rules?: string[]; tools?: string[] };
-                          const rules = t.rules ?? [];
-                          const tools = t.tools ?? [];
-                          return (
-                            <details className="mt-1 text-[11px] text-[#8696a0] border-t border-white/10 pt-1">
-                              <summary className="cursor-pointer select-none text-right">
-                                🧠 {rules.length ? `${rules.length} regla(s) RAG` : 'Sin reglas RAG (prompt)'}{tools.length ? ` · ${tools.join(', ')}` : ''}
-                              </summary>
-                              <ul className="mt-1 space-y-1 text-left">
-                                {rules.map((r, i) => <li key={i}>• {r}</li>)}
-                                {tools.map((n, i) => <li key={`t${i}`}>🔧 Herramienta: {n}</li>)}
-                                {!rules.length && !tools.length && <li>Respondió solo con el prompt base.</li>}
-                              </ul>
-                            </details>
-                          );
-                        } catch { return null; }
-                      })()}
-                      {/* Reaction Badge */}
-                      {msg.reaction && (
-                        <div className={cn("absolute -bottom-3 bg-[#2a3942] rounded-full px-1.5 py-0.5 text-xs shadow-sm ring-1 ring-[#111b21] z-10", alignRight ? "right-4" : "left-4")}>
-                          {msg.reaction}
+                        <div
+                          className={cn(
+                            "relative max-w-[85%] md:max-w-[68%] px-2.5 pt-1.5 pb-1 text-[14.5px] leading-[1.4] shadow-[0_1px_1px_rgba(0,0,0,0.3)] rounded-2xl",
+                            msg.type === 'IMAGE' && "p-1.5",
+                            alignRight
+                              ? cn("bg-[#005c4b] text-[#e9edef] order-2", !sameAsPrev && "rounded-tr-md")
+                              : cn("bg-[#1f2c34] text-[#e9edef] order-1", !sameAsPrev && "rounded-tl-md"),
+                            msg.reaction && "mb-3"
+                          )}
+                        >
+                          {quoted && (
+                            <div className={cn("mb-1.5 rounded-lg border-l-4 px-2.5 py-1.5 text-[13px]", alignRight ? "bg-black/20 border-[#35d6b5]" : "bg-black/20 border-[#00a884]")}>
+                              <div className="text-[11px] font-semibold text-[#35d6b5] mb-0.5">Respuesta a</div>
+                              <div className="text-[#c7d0d5] line-clamp-2">{quoted[1]}</div>
+                            </div>
+                          )}
+
+                          {msg.type === 'AUDIO' && (
+                            <div className="mb-1 min-w-[230px]">
+                              <audio controls src={mediaSrc} className="w-full h-10 filter invert opacity-90" />
+                            </div>
+                          )}
+
+                          {msg.type === 'IMAGE' ? (
+                            <div className="flex flex-col gap-1.5 relative w-[min(300px,72vw)]">
+                              <a href={mediaSrc} target="_blank" rel="noreferrer" className="block rounded-xl overflow-hidden bg-black/25">
+                                <img src={mediaSrc} alt="Adjunto" className="w-full max-h-80 object-contain" />
+                              </a>
+                              {msg.content && msg.content !== '📷 Imagen adjunta' && <span className="text-[14px] leading-snug whitespace-pre-wrap break-words px-0.5">{msg.content}</span>}
+                            </div>
+                          ) : msg.type === 'DOCUMENT' ? (
+                            <a href={mediaSrc} target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-black/20 hover:bg-black/30 transition-colors p-2.5 rounded-xl min-w-[220px]">
+                              <div className="w-10 h-10 rounded-lg bg-red-500/20 text-red-300 flex items-center justify-center shrink-0">
+                                <FileText size={20} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium truncate max-w-[220px]">{msg.content || 'Documento adjunto'}</div>
+                                <div className="text-[11px] text-white/50">{msg.mimeType === 'application/pdf' ? 'PDF · ' : ''}Toca para abrir</div>
+                              </div>
+                            </a>
+                          ) : (
+                            bodyText ? <p className="break-words whitespace-pre-wrap">{bodyText}<span className={cn("inline-block", alignRight ? "w-[6.2rem]" : "w-[4.6rem]")} /></p> : null
+                          )}
+
+                          <div className={cn("flex items-center justify-end gap-1 text-[11px] text-white/50 select-none", (msg.type === 'TEXT' && bodyText) ? "absolute right-2.5 bottom-1" : "mt-0.5")}>
+                            <span>{time}</span>
+                            {ticks}
+                          </div>
+
+                          {msg.aiTrace && (() => {
+                            try {
+                              const t = JSON.parse(msg.aiTrace) as { rules?: string[]; tools?: string[] };
+                              const rules = t.rules ?? [];
+                              const tools = t.tools ?? [];
+                              return (
+                                <details className="mt-1.5 text-[11px] text-[#8696a0] border-t border-white/10 pt-1">
+                                  <summary className="cursor-pointer select-none hover:text-[#c7d0d5]">
+                                    🧠 {rules.length ? `${rules.length} regla(s) RAG` : 'Sin reglas RAG (prompt)'}{tools.length ? ` · ${tools.join(', ')}` : ''}
+                                  </summary>
+                                  <ul className="mt-1 space-y-1 text-left">
+                                    {rules.map((r, i) => <li key={i}>• {r}</li>)}
+                                    {tools.map((n, i) => <li key={`t${i}`}>🔧 Herramienta: {n}</li>)}
+                                    {!rules.length && !tools.length && <li>Respondió solo con el prompt base.</li>}
+                                  </ul>
+                                </details>
+                              );
+                            } catch { return null; }
+                          })()}
+
+                          {msg.reaction && (
+                            <div className={cn("absolute -bottom-3.5 bg-[#233138] rounded-full px-1.5 py-0.5 text-sm shadow ring-2 ring-[#0b141a] z-10", alignRight ? "right-3" : "left-3")}>
+                              {msg.reaction}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -956,52 +1087,47 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Area */}
-          <div className="bg-[#202c33] px-4 py-3 flex flex-col z-20">
-            
-            {/* Context Banners (Reply & Staged File) */}
+          {/* Barra de escribir */}
+          <div className="bg-[#111b21] border-t border-[#222d34] px-3 md:px-4 py-2.5 flex flex-col z-20">
+
             {(replyingTo || stagedFiles.length > 0) && (
               <div className="flex flex-col gap-2 mb-2">
                 {replyingTo && (
-                  <div className="flex items-center justify-between bg-[#2a3942] p-3 rounded-lg border-l-4 border-[#00a884] shadow-sm relative mx-2">
+                  <div className="flex items-center justify-between bg-[#1f2c34] p-2.5 rounded-xl border-l-4 border-[#00a884] relative">
                     <div className="flex flex-col overflow-hidden">
-                      <span className="text-xs font-semibold text-[#00a884]">Respondiendo a</span>
-                      <span className="text-sm text-[#e9edef] truncate">{replyingTo.content || (replyingTo.type === 'IMAGE' ? 'Imagen' : 'Adjunto')}</span>
+                      <span className="text-xs font-semibold text-[#35d6b5]">Respondiendo a</span>
+                      <span className="text-sm text-[#c7d0d5] truncate">{replyingTo.content || (replyingTo.type === 'IMAGE' ? 'Imagen' : 'Adjunto')}</span>
                     </div>
                     <button type="button" onClick={() => setReplyingTo(null)} className="text-[#8696a0] hover:text-[#e9edef] p-1">
                       <X size={16} />
                     </button>
                   </div>
                 )}
-                
+
                 {stagedFiles.length > 0 && (
-                  <div className="flex flex-col bg-[#2a3942] rounded-lg shadow-sm mx-2 overflow-hidden border border-[#313d45]">
-                    <div className="flex justify-between items-center bg-[#202c33] px-2 py-1 border-b border-[#313d45]">
-                      <span className="text-xs text-[#8696a0]">Vista previa adjuntos ({stagedFiles.length})</span>
+                  <div className="flex flex-col bg-[#1f2c34] rounded-xl overflow-hidden border border-[#2a3942]">
+                    <div className="flex justify-between items-center px-3 py-1.5 border-b border-[#2a3942]">
+                      <span className="text-xs text-[#8696a0]">Vista previa de adjuntos ({stagedFiles.length})</span>
                       <button type="button" onClick={() => setStagedFiles([])} className="text-[#8696a0] hover:text-[#e9edef] p-1">
-                        <X size={18} />
+                        <X size={16} />
                       </button>
                     </div>
                     <div className="flex overflow-x-auto p-2 gap-2 custom-scrollbar">
                       {stagedFiles.map((file, idx) => (
                         <div key={idx} className="relative group shrink-0">
                           {file.type.startsWith('image/') ? (
-                            <div className="w-24 h-24 bg-[#111b21] rounded-md overflow-hidden relative border border-[#313d45]">
-                              <img 
-                                src={URL.createObjectURL(file)} 
-                                alt="Preview" 
-                                className="w-full h-full object-cover"
-                              />
+                            <div className="w-24 h-24 bg-[#111b21] rounded-lg overflow-hidden relative border border-[#2a3942]">
+                              <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
                             </div>
                           ) : (
-                            <div className="w-24 h-24 bg-[#202c33] rounded-md flex flex-col items-center justify-center p-2 border border-[#313d45]">
+                            <div className="w-24 h-24 bg-[#111b21] rounded-lg flex flex-col items-center justify-center p-2 border border-[#2a3942]">
                               <FileText size={24} className="text-[#8696a0] mb-1"/>
                               <span className="text-[10px] font-medium text-[#e9edef] truncate w-full text-center">{file.name}</span>
                             </div>
                           )}
-                          <button 
-                            type="button" 
-                            onClick={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))} 
+                          <button
+                            type="button"
+                            onClick={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))}
                             className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                           >
                             <X size={12} />
@@ -1015,28 +1141,28 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
             )}
 
             <form onSubmit={handleSendMessage} className="flex gap-2 items-end transition-all">
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                onChange={handleFileUpload} 
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={handleFileUpload}
                 accept="image/*,.pdf,.doc,.docx,.dxf"
                 multiple
               />
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="icon" 
-                className="shrink-0 text-[#8696a0] hover:text-[#e9edef] rounded-full hover:bg-[#2a3942] mb-1"
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-[#8696a0] hover:text-[#e9edef] rounded-full hover:bg-[#202c33] mb-0.5"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
+                title="Adjuntar archivo"
               >
                 <Plus size={24} />
               </Button>
-              
-              {/* If we have a recorded audio, show a preview of it instead of textarea */}
+
               {recordedAudio ? (
-                <div className="flex-1 flex items-center justify-between bg-[#2a3942] rounded-lg px-4 py-2">
+                <div className="flex-1 flex items-center justify-between bg-[#202c33] rounded-2xl px-4 py-2.5">
                   <div className="flex items-center gap-2">
                     <Mic className="text-red-500 animate-pulse" size={18} />
                     <span className="text-[#e9edef] text-sm">Audio grabado</span>
@@ -1050,10 +1176,10 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                   <button type="button" onClick={cancelRecording} className="text-[#8696a0] hover:text-red-400 p-2 shrink-0">
                     <Trash2 size={20} />
                   </button>
-                  <div className="flex-1 flex items-center bg-[#202c33] rounded-full px-4 py-2 border border-[#313d45]">
+                  <div className="flex-1 flex items-center bg-[#202c33] rounded-full px-4 py-2">
                     <div className="flex items-center gap-2 shrink-0">
                       <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></div>
-                      <span className="text-[#8696a0] font-mono text-sm tracking-wide">{formatDuration(recordingDuration)}</span>
+                      <span className="text-[#c7d0d5] font-mono text-sm tracking-wide">{formatDuration(recordingDuration)}</span>
                     </div>
                     <div className="flex-1 px-4 h-8 flex items-center">
                       <canvas ref={canvasRef} style={{ width: '100%', height: '32px' }} className="rounded-md" />
@@ -1094,40 +1220,37 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                     }
                   }}
                   rows={1}
-                  placeholder={isUploading ? "Enviando..." : (simulatorMode ? "Escribe un mensaje como cliente..." : "Añade un comentario...")}
-                  className="flex-1 bg-[#2a3942] border-none focus:outline-none !text-white placeholder-[#8696a0] px-4 py-2.5 max-h-[120px] resize-none overflow-y-auto rounded-lg shadow-sm"
+                  placeholder={isUploading ? "Enviando..." : (simulatorMode ? "Escribe un mensaje como cliente..." : "Escribe un mensaje")}
+                  className="flex-1 bg-[#202c33] border-none focus:outline-none focus:ring-1 focus:ring-[#00a884]/50 !text-white placeholder-[#8696a0] px-4 py-2.5 max-h-[120px] resize-none overflow-y-auto rounded-2xl text-[15px]"
                   disabled={isUploading}
                 />
               )}
 
-              {/* Action Buttons: Send or Mic */}
               {inputText.trim() || stagedFiles.length > 0 || recordedAudio ? (
-                <Button type="submit" size="icon" className="shrink-0 rounded-full bg-[#00a884] hover:bg-[#008f6f] text-[#111b21] w-10 h-10 mb-1 ml-1 shadow-sm" disabled={isUploading}>
+                <Button type="submit" size="icon" className="shrink-0 rounded-full bg-[#00a884] hover:bg-[#00c298] text-[#06211b] w-10 h-10 mb-0.5 shadow-sm transition-transform active:scale-95" disabled={isUploading} title="Enviar">
                   <Send size={18} className="transition-transform translate-x-0.5 -translate-y-0.5" />
                 </Button>
               ) : isRecording ? (
-                <Button type="button" onClick={stopRecording} size="icon" className="shrink-0 rounded-full bg-red-500 hover:bg-red-600 text-white w-10 h-10 mb-1 ml-1 shadow-sm">
+                <Button type="button" onClick={stopRecording} size="icon" className="shrink-0 rounded-full bg-red-500 hover:bg-red-600 text-white w-10 h-10 mb-0.5 shadow-sm">
                   <Square size={16} fill="currentColor" />
                 </Button>
               ) : (
-                <Button type="button" onClick={startRecording} size="icon" className="shrink-0 rounded-full bg-[#00a884] hover:bg-[#008f6f] text-[#111b21] w-10 h-10 mb-1 ml-1 shadow-sm">
+                <Button type="button" onClick={startRecording} size="icon" className="shrink-0 rounded-full bg-[#00a884] hover:bg-[#00c298] text-[#06211b] w-10 h-10 mb-0.5 shadow-sm transition-transform active:scale-95" title="Grabar audio">
                   <Mic size={20} />
                 </Button>
               )}
             </form>
           </div>
-        </div>
+        </section>
       ) : (
-        <div className="hidden md:flex w-2/3 items-center justify-center bg-[#202c33] border-l border-[#313d45] relative overflow-hidden">
+        <div className="hidden md:flex flex-1 items-center justify-center bg-[#0b141a] relative overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.04)_1px,transparent_0)] [background-size:22px_22px]" />
           <div className="text-center max-w-md p-8 relative z-10 flex flex-col items-center">
-            <div className="w-64 h-64 mx-auto mb-8 relative">
-              <div className="absolute inset-0 bg-[#00a884]/10 rounded-full animate-pulse" />
-              <div className="absolute inset-4 bg-[#111b21] rounded-full shadow-sm flex items-center justify-center">
-                <Bot size={80} className="text-[#00a884]" />
-              </div>
+            <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-[#00a884]/25 to-[#00a884]/5 border border-[#00a884]/20 flex items-center justify-center mb-6">
+              <MessageCircle size={44} className="text-[#35d6b5]" />
             </div>
-            <h2 className="text-3xl font-light text-[#e9edef] mb-4 tracking-tight">WhatsApp CRM</h2>
-            <p className="text-[#8696a0] leading-relaxed text-sm">Selecciona un chat en la barra lateral para ver los mensajes y responder a los prospectos de Laser Inova de forma rápida y sencilla.</p>
+            <h2 className="text-2xl font-semibold text-[#e9edef] mb-2 tracking-tight">Chats de WhatsApp</h2>
+            <p className="text-[#8696a0] leading-relaxed text-sm">Selecciona una conversación de la lista para ver los mensajes y atender a los prospectos de Laser Inova.</p>
           </div>
         </div>
       )}
