@@ -17,13 +17,14 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/dashboard';
+  // Solo ruta + query: así abre siempre en el mismo origen donde está instalada la PWA, sin importar el dominio configurado en el servidor.
+  let url = (event.notification.data && event.notification.data.url) || '/dashboard';
+  try { const u = new URL(url, self.location.origin); url = u.pathname + u.search; } catch (e) { url = '/dashboard'; }
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const c of list) {
         if ('focus' in c) {
-          c.navigate(url).catch(() => {});
-          return c.focus();
+          return c.navigate(url).then((w) => (w || c).focus()).catch(() => c.focus());
         }
       }
       return self.clients.openWindow(url);

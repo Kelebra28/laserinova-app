@@ -26,7 +26,9 @@ import { prisma } from "@/lib/prisma";
 import { generateQuotePDF } from "@/lib/pdf";
 import fs from "fs";
 import path from "path";
-import { processAIAgentResponse } from "../services/whatsapp.service";
+import { processAIAgentResponse, sendDocumentToMeta } from "../services/whatsapp.service";
+import { notificationEmitter } from "@/lib/notification-emitter";
+import { after } from "next/server";
 
 async function requireAuth(allowedRoles?: string[]) {
   const session = await getServerSession(authOptions);
@@ -387,19 +389,37 @@ export async function sendQuoteViaWhatsAppAction(quoteId: string) {
     const publicUrl = `data:application/pdf;base64,${base64}`;
     const filename = `Cotizacion_${quote.folio}_${Date.now()}.pdf`;
 
-    // 2. Insertar mensaje tipo DOCUMENT que simula el envío del PDF
-    await prisma.whatsAppMessage.create({
+    // 2. Mandar el PDF de verdad por WhatsApp (el simulador no sale a Meta) y guardarlo en el chat
+    let metaMessageId = `local_pdf_${Date.now()}`;
+    if (!contact.name?.includes('Simulador')) {
+      try {
+        const sentId = await sendDocumentToMeta(contact.phone, pdfBuffer as Buffer, filename, `Cotización ${quote.folio}`);
+        if (sentId) metaMessageId = sentId;
+      } catch (e: any) {
+        console.error('Error enviando PDF de cotización por WhatsApp:', e);
+        const msg = String(e?.message || '');
+        const outside24h = /131047|re-engage|24 hours/i.test(msg);
+        throw new Error(
+          outside24h
+            ? 'Han pasado más de 24 h desde el último mensaje del cliente: WhatsApp no deja enviar el PDF hasta que él escriba (o se use una plantilla).'
+            : `WhatsApp rechazó el envío: ${msg}`
+        );
+      }
+    }
+
+    const docMsg = await prisma.whatsAppMessage.create({
       data: {
         contactId: contact.id,
-        messageId: `local_pdf_${Date.now()}`,
+        messageId: metaMessageId,
         direction: 'OUTBOUND',
         type: 'DOCUMENT',
         content: `Cotización ${quote.folio}`,
         mediaUrl: publicUrl,
         mimeType: 'application/pdf',
-        status: 'DELIVERED'
+        status: 'SENT'
       }
     });
+    await notificationEmitter.emit('whatsapp_message', { message: { ...docMsg, mediaUrl: 'FETCH_REQUIRED' }, contact });
 
     // 3. Insertar instrucción INTERNAL para la IA
     const internalPrompt = `[INSTRUCCIÓN INTERNA DEL SISTEMA]: Acabo de enviarle al cliente la Cotización Aprobada ${quote.folio} en formato PDF. El total es de $${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN. 
@@ -419,10 +439,10 @@ REGLA CRÍTICA: Recuerda que tienes prohibido desglosar costos en materiales y h
 
     // 4. Detonar la respuesta de la IA
     if (contact.botMode) {
-      // Usar setTimeout para no bloquear el request de la UI
-      setTimeout(() => {
-        processAIAgentResponse(contact.id).catch(err => console.error("Error AI in WhatsApp Action:", err));
-      }, 100);
+      // after() mantiene viva la función en Vercel hasta que el bot termine de contestar.
+      after(async () => {
+        try { await processAIAgentResponse(contact.id); } catch (err) { console.error("Error AI in WhatsApp Action:", err); }
+      });
     }
 
     return { success: true };

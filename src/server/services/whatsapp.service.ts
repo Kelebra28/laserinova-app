@@ -46,6 +46,35 @@ export async function sendMessageToMeta(to: string, messageData: any) {
   return data;
 }
 
+/** Sube un documento (ej. PDF de cotización) a Meta y lo manda al número; devuelve el id del mensaje. */
+export async function sendDocumentToMeta(to: string, buffer: Buffer, filename: string, caption?: string, mimeType = 'application/pdf') {
+  if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) throw new Error('Faltan variables de entorno para WhatsApp API');
+
+  const form = new FormData();
+  form.append('file', new Blob([new Uint8Array(buffer)], { type: mimeType }), filename);
+  form.append('type', mimeType);
+  form.append('messaging_product', 'whatsapp');
+
+  const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/media`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+    body: form,
+  });
+  const upload = await uploadRes.json();
+  if (!uploadRes.ok) throw new Error(upload.error?.message || 'Error subiendo el PDF a Meta');
+
+  const sent = await sendMessageToMeta(to, {
+    type: 'document',
+    document: { id: upload.id, filename, ...(caption ? { caption } : {}) },
+  });
+  return (sent?.messages?.[0]?.id as string | undefined) ?? null;
+}
+
+/** Ruta relativa del chat (para push: abre en el mismo origen de la PWA instalada). */
+function conversationPath(contactId: string) {
+  return `/dashboard/chats?c=${contactId}`;
+}
+
 /** Enlace que abre la conversación dentro del CRM (la PWA instalada lo captura en Android). */
 function conversationLink(contactId: string) {
   const base = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://app.laserinova.com').replace(/\/$/, '');
@@ -297,7 +326,7 @@ export async function processIncomingMessage(entry: any) {
     await sendPushToAdmins({
       title: `💬 ${contact.name || `+${contact.phone}`}`,
       body,
-      url: conversationLink(contact.id),
+      url: conversationPath(contact.id),
       tag: `chat-${contact.id}`,
     });
   }
@@ -560,7 +589,7 @@ async function executeAIAgentResponse(contactId: string) {
                 summary ? `\nResumen:\n${summary}` : '',
                 `\nAbrir chat: ${conversationLink(contact.id)}`,
               ].filter(Boolean).join('\n'),
-              conversationLink(contact.id)
+              conversationPath(contact.id)
             );
           }
 

@@ -407,16 +407,33 @@ export async function createQuoteService(userId: string, data: any) {
   let finalClientId = data.clientId || null;
   let finalProspectName = data.clientId ? null : (data.prospectName || null);
 
-  if (data.saveAsClient && data.prospectName && !data.clientId) {
-    const newClient = await prisma.client.create({
-      data: { 
-        name: data.prospectName,
-        email: data.prospectEmail || null,
-        phone: data.prospectPhone || null
-      }
+  // Si la cotización viene de un chat de WhatsApp, el cliente se guarda siempre: así el correo y el teléfono no se pierden.
+  const contact = data.contactId
+    ? await prisma.whatsAppContact.findUnique({ where: { id: data.contactId } })
+    : null;
+  const email = data.prospectEmail?.trim() || null;
+
+  if ((data.saveAsClient || contact) && data.prospectName && !data.clientId) {
+    const phone = data.prospectPhone || contact?.phone || null;
+    const existing = await prisma.client.findFirst({
+      where: {
+        active: true,
+        OR: [...(email ? [{ email }] : []), ...(phone ? [{ phone }] : [])],
+      },
     });
-    finalClientId = newClient.id;
+    const client = existing
+      ? (email && !existing.email ? await prisma.client.update({ where: { id: existing.id }, data: { email } }) : existing)
+      : await prisma.client.create({ data: { name: data.prospectName, email, phone } });
+    finalClientId = client.id;
     finalProspectName = null;
+  } else if (data.clientId && email) {
+    // Cliente existente sin correo: se completa con el que dio en el chat.
+    await prisma.client.updateMany({ where: { id: data.clientId, email: null }, data: { email } });
+  }
+
+  // Liga el chat con el cliente para que el correo/teléfono salgan en ambos lados.
+  if (contact && finalClientId && !contact.clientId) {
+    await prisma.whatsAppContact.update({ where: { id: contact.id }, data: { clientId: finalClientId } });
   }
 
   let quote: any;
