@@ -493,7 +493,7 @@ async function executeAIAgentResponse(contactId: string) {
 
     const transferir_a_humano: FunctionDeclaration = {
       name: 'transferir_a_humano',
-      description: 'Transfiere a un humano si el cliente se enoja, pide a un humano, o hace preguntas técnicas muy complejas.',
+      description: 'Avisa al equipo humano para que contacte al cliente si se enoja, pide hablar con una persona, o hace preguntas técnicas muy complejas. El bot sigue activo en el chat y sigue contestando.',
       parameters: {
         type: SchemaType.OBJECT,
         properties: { motivo: { type: SchemaType.STRING, description: 'Motivo de la transferencia' } },
@@ -655,16 +655,8 @@ async function executeAIAgentResponse(contactId: string) {
         toolsUsed.push(call.name);
         if (call.name === 'transferir_a_humano') {
           const args = call.args as any;
-          await prisma.whatsAppContact.update({
-            where: { id: contact.id },
-            data: { botMode: false }
-          });
-          
-          await notificationEmitter.emit('whatsapp_contact_update', {
-            contactId: contact.id,
-            changes: { botMode: false }
-          });
-
+          // El bot NO se apaga: solo se avisa al equipo y el bot sigue contestando en el chat.
+          // Si alguien del equipo escribe manualmente en el chat, ahí sí se pausa (sendManualMessageAction).
           if (!contact.name?.includes("Simulador")) {
             const summary = await quickConversationSummary(contact.id);
             await notifyAdmin(
@@ -680,7 +672,7 @@ async function executeAIAgentResponse(contactId: string) {
           }
 
           // El motivo es interno (va solo en el aviso al administrador), no se le muestra al cliente.
-          responseText = `Claro, ya avisé a uno de nuestros asesores para que te atienda personalmente. En un momento te escribe por este mismo medio.`;
+          responseText = `Claro, ya avisé a uno de nuestros asesores para que te contacte. Mientras tanto, cualquier duda me la puedes escribir por aquí.`;
         } else if (call.name === 'buscar_productos_en_catalogo') {
           const args = call.args as any;
           const searchKeyword = args.termino_busqueda || "termo";

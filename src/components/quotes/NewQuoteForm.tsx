@@ -168,7 +168,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
              },
              partWidth: Number(initialData.w) || 0,
              partHeight: Number(initialData.h) || 0,
-             timeMin: 0,
+             timeMin: Number(initialData.t) || 0,
              clientProvidesMaterial: false,
              isWholesale: isWholesale,
            }, { ...globalCosts, margen_default: Number(margin) || 35 });
@@ -190,7 +190,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
             clientProvidesMaterial: false,
             partWidth: initialData.w || "",
             partHeight: initialData.h || "",
-            timeMin: "",
+            timeMin: initialData.t ? String(initialData.t) : "",
             manualUnitPrice: mUnitPrice,
             manualUnitCost: mUnitCost,
             materialCost: calculated ? calculated.materialCost : 0,

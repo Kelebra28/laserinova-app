@@ -423,7 +423,7 @@ export async function sendQuoteViaWhatsAppAction(quoteId: string) {
 
     // 3. Insertar instrucción INTERNAL para la IA
     const internalPrompt = `[INSTRUCCIÓN INTERNA DEL SISTEMA]: Acabo de enviarle al cliente la Cotización Aprobada ${quote.folio} en formato PDF. El total es de $${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN. 
-Por favor, escríbele un mensaje corto y amigable avisándole que ya tiene la cotización oficial arriba, y pregúntale qué le parece.
+Por favor, escríbele un mensaje corto y amigable avisándole que ya tiene la cotización oficial arriba y que cualquier duda me la escriba por aquí. No le preguntes qué le parece.
 REGLA CRÍTICA: Recuerda que tienes prohibido desglosar costos en materiales y horas. Solo menciona el precio final que acabo de darte.`;
 
     const internalMsg = await prisma.whatsAppMessage.create({
