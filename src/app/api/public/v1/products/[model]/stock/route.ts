@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { colorLabel, guardPublicApi, modelForSlug, publicCategorySlugs, showStock } from "@/lib/public-api";
 import { getLiveCdmxStock } from "@/server/services/doblevela.service";
 
-const noStore = { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=240" };
+const noStore = { "Cache-Control": "private, no-store" };
 
 /**
  * Existencia de UN producto, en vivo cuando se puede (solo Doble Vela, método GetExistencia de un modelo, que su

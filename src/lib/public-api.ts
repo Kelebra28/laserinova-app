@@ -63,7 +63,7 @@ function hit(ip: string): boolean {
   return cur.n <= 120;
 }
 
-export const cacheHeaders = { "Cache-Control": "public, s-maxage=600, stale-while-revalidate=3600" };
+export const cacheHeaders = { "Cache-Control": "private, no-store" };
 
 /** Campos de BD que se leen. Nada de unitCost, provider ni notes. stockQuantity solo se publica con PUBLIC_STORE_SHOW_STOCK. */
 export const productSelect = {
