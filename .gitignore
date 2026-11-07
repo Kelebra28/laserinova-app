@@ -51,3 +51,11 @@ storage/*.json
 /storage/
 *.db
 ts_errors.txt
+
+# fotos del catálogo copiadas del proveedor (se suben a img.laserinova.com, no a git)
+/scratch/catalog-img/
+
+# pruebas locales sueltas (no son parte del CRM)
+/scratch/list_cats.ts
+/scratch/test_formulas.ts
+/scratch/test_public_dto.ts
