@@ -12,6 +12,7 @@ import { STATUS_META, PRIORITY_META, MONTHS, DAYS_OF_WEEK, toDateStr, MAX_DAILY_
 import { calcHealthScore, calcWeekMetrics, calcDayCapacity, generateRecommendations, CAPACITY_STYLE, urgencyScore } from "./CalendarEngine";
 import { HealthBar, RecommendationsBar, TodayView, TaskPanel } from "./CalendarPanels";
 import { TaskModal } from "./TaskModal";
+import { isDatePast } from "@/lib/dates";
 
 interface Props {
   initialTasks: CalTask[];
@@ -51,7 +52,7 @@ export function TaskCalendar({ initialTasks, users, tags, currentUserId, current
     const now = new Date();
     return tasks.filter(t => {
       if (activeFilter === "mine")    return t.assignees.some(a => a.user.id === currentUserId);
-      if (activeFilter === "overdue") return t.dueDate && t.status !== "DONE" && new Date(t.dueDate) < now;
+      if (activeFilter === "overdue") return t.dueDate && t.status !== "DONE" && isDatePast(t.dueDate);
       if (activeFilter === "blocked") return t.status === "BLOCKED";
       if (activeFilter === "high")    return t.priority === "HIGH";
       if (activeFilter === "done")    return t.status === "DONE";
@@ -245,7 +246,7 @@ export function TaskCalendar({ initialTasks, users, tags, currentUserId, current
               const isToday   = dateStr === todayStr;
               const isDragOver = dragOverDay === dateStr;
               const isWeekend  = new Date(dateStr).getDay() === 0 || new Date(dateStr).getDay() === 6;
-              const hasOverdue = dayTasks.some(t => t.status !== "DONE" && new Date(t.dueDate!) < today);
+              const hasOverdue = dayTasks.some(t => t.status !== "DONE" && isDatePast(t.dueDate!));
               const hasBlocked = dayTasks.some(t => t.status === "BLOCKED");
               const isHighlighted = dateStr === highlightedDay;
 
@@ -280,7 +281,7 @@ export function TaskCalendar({ initialTasks, users, tags, currentUserId, current
                   {/* Task chips */}
                   {dayTasks.slice(0, 3).map(task => {
                     const sm = STATUS_META[task.status];
-                    const isOver = task.status !== "DONE" && new Date(task.dueDate!) < today;
+                    const isOver = task.status !== "DONE" && isDatePast(task.dueDate!);
                     return (
                       <div
                         key={task.id}
@@ -334,7 +335,7 @@ export function TaskCalendar({ initialTasks, users, tags, currentUserId, current
                         <div className="flex flex-col gap-1 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
                           {dayTasks.map(task => {
                             const sm = STATUS_META[task.status];
-                            const isOver = task.status !== "DONE" && new Date(task.dueDate!) < today;
+                            const isOver = task.status !== "DONE" && isDatePast(task.dueDate!);
                             return (
                               <div
                                 key={task.id}

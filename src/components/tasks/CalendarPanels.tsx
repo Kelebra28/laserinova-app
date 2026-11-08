@@ -5,6 +5,7 @@ import type { CalTask, TaskTag, TaskUser, HealthResult, Recommendation } from ".
 import { STATUS_META, PRIORITY_META, avatarInitials } from "./CalendarTypes";
 import type { WeekMetrics } from "./CalendarEngine";
 import { urgencyScore, CAPACITY_STYLE } from "./CalendarEngine";
+import { isDatePast, formatDueDate } from "@/lib/dates";
 
 // ─── Health Bar ───────────────────────────────────────────────────────────────
 
@@ -105,7 +106,7 @@ export function RecommendationsBar({ recs, onRecClick }: { recs: Recommendation[
 export function TodayView({ tasks, todayStr }: { tasks: CalTask[]; todayStr: string }) {
   const now = new Date();
   const todayTasks = tasks.filter(t => t.dueDate?.slice(0,10) === todayStr && t.status !== "DONE");
-  const overdue    = tasks.filter(t => t.dueDate && t.status !== "DONE" && new Date(t.dueDate) < now && t.dueDate.slice(0,10) !== todayStr);
+  const overdue    = tasks.filter(t => t.dueDate && t.status !== "DONE" && isDatePast(t.dueDate));
   const blocked    = tasks.filter(t => t.status === "BLOCKED");
   const sorted     = [...todayTasks].sort((a,b) => urgencyScore(b,now) - urgencyScore(a,now));
   const topTask    = sorted[0];
@@ -192,7 +193,7 @@ export function TaskPanel({ task, onClose }: { task: CalTask; onClose: () => voi
   const sm = STATUS_META[task.status];
   const pm = PRIORITY_META[task.priority];
   const now = new Date();
-  const overdue = task.dueDate && task.status !== "DONE" && new Date(task.dueDate) < now;
+  const overdue = task.dueDate && task.status !== "DONE" && isDatePast(task.dueDate);
   const doneSubtasks = task.subtasks.filter(s => s.done).length;
 
   return (
@@ -216,7 +217,7 @@ export function TaskPanel({ task, onClose }: { task: CalTask; onClose: () => voi
           <div className={`flex items-center gap-1.5 font-bold ${overdue ? "text-rose-600" : "text-gray-600"}`}>
             <Clock className="w-3.5 h-3.5 shrink-0" />
             {overdue && "⚠ "}
-            {new Date(task.dueDate).toLocaleDateString("es-MX",{day:"2-digit",month:"long",year:"numeric"})}
+            {formatDueDate(task.dueDate,{day:"2-digit",month:"long",year:"numeric"})}
           </div>
         )}
 

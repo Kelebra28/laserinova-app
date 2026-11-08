@@ -4,7 +4,6 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 import Select from "@/components/ui/Select";
 import SearchInput from "@/components/ui/SearchInput";
-import { GlobalLoader } from "@/components/ui/GlobalLoader";
 
 interface Client {
   id: string;
@@ -23,7 +22,7 @@ export default function QuoteFilters({ clients, defaultMonth, searchTerm, onSear
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const handleParamChange = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -89,11 +88,6 @@ export default function QuoteFilters({ clients, defaultMonth, searchTerm, onSear
 
   return (
     <>
-      {isPending && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-white/50 backdrop-blur-sm transition-all">
-          <GlobalLoader label="Actualizando tabla" subLabel="Espera un momento..." minHeight="min-h-0" />
-        </div>
-      )}
       <div className="flex flex-col lg:flex-row gap-4 w-full">
         <div className="flex-grow lg:max-w-md">
           {onSearchChange ? (
@@ -114,21 +108,18 @@ export default function QuoteFilters({ clients, defaultMonth, searchTerm, onSear
             value={currentMonth}
             onChange={(v) => handleParamChange("month", v)}
             placeholder="Mes"
-            disabled={isPending}
           />
           <Select
             options={clientOptions}
             value={currentClient}
             onChange={(v) => handleParamChange("clientId", v)}
             placeholder="Cliente"
-            disabled={isPending}
           />
           <Select
             options={statusOptions}
             value={currentStatus}
             onChange={(v) => handleParamChange("status", v)}
             placeholder="Estatus"
-            disabled={isPending}
           />
         </div>
       </div>

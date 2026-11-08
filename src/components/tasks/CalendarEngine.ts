@@ -1,5 +1,6 @@
 import type { CalTask, HealthResult, DayCapacity, CapacityLevel, Recommendation } from "./CalendarTypes";
 import { toDateStr, MAX_DAILY_HOURS } from "./CalendarTypes";
+import { isDatePast } from "@/lib/dates";
 
 // ─── Health Score ──────────────────────────────────────────────────────────────
 
@@ -14,7 +15,7 @@ export function calcHealthScore(tasks: CalTask[]): HealthResult {
     return d >= weekStart && d <= weekEnd;
   });
 
-  const overdue       = tasks.filter(t => t.dueDate && t.status !== "DONE" && new Date(t.dueDate) < now).length;
+  const overdue       = tasks.filter(t => t.dueDate && t.status !== "DONE" && isDatePast(t.dueDate)).length;
   const blocked       = tasks.filter(t => t.status === "BLOCKED").length;
   const noResponsable = tasks.filter(t => t.assignees.length === 0 && t.status !== "DONE").length;
   const highPending   = tasks.filter(t => t.priority === "HIGH" && !["DONE"].includes(t.status)).length;
@@ -106,7 +107,7 @@ export function generateRecommendations(tasks: CalTask[]): Recommendation[] {
   const todayStr = toDateStr(now);
   const recs: Recommendation[] = [];
 
-  const overdue = tasks.filter(t => t.dueDate && t.status !== "DONE" && new Date(t.dueDate) < now);
+  const overdue = tasks.filter(t => t.dueDate && t.status !== "DONE" && isDatePast(t.dueDate));
   if (overdue.length > 0) {
     recs.push({
       id: "overdue",
@@ -209,7 +210,7 @@ export function calcWeekMetrics(tasks: CalTask[]): WeekMetrics {
 
   return {
     total:        week.length,
-    overdue:      tasks.filter(t => t.dueDate && t.status !== "DONE" && new Date(t.dueDate) < now).length,
+    overdue:      tasks.filter(t => t.dueDate && t.status !== "DONE" && isDatePast(t.dueDate)).length,
     blocked:      tasks.filter(t => t.status === "BLOCKED").length,
     totalHours:   week.reduce((s,t) => s + (t.points||0), 0),
     doneThisWeek: week.filter(t => t.status === "DONE").length,

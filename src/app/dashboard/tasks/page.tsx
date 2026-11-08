@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { TaskBoard } from "@/components/tasks/TaskBoard";
+import { TASK_INCLUDE, boardTasksWhere, doneSince, olderDoneWhere, serializeTask } from "@/lib/tasks";
 
 export const metadata = {
   title: "Tareas — Laser Inova CRM",
@@ -18,20 +19,16 @@ export default async function TasksPage() {
 
   const currentUser = session.user as { id: string; role: string; name: string };
 
-  const [tasks, users, tags] = await Promise.all([
+  const since = doneSince();
+
+  const [tasks, olderDoneCount, users, tags] = await Promise.all([
     prisma.task.findMany({
+      // Terminadas: solo las recientes. Las anteriores se cargan bajo demanda desde el tablero.
+      where: boardTasksWhere(since),
       orderBy: [{ status: "asc" }, { order: "asc" }],
-      include: {
-        assignees: {
-          include: {
-            user: { select: { id: true, name: true, email: true, role: true } },
-          },
-        },
-        createdBy: { select: { id: true, name: true } },
-        subtasks: { orderBy: { order: "asc" } },
-        tags: true,
-      },
+      include: TASK_INCLUDE,
     }),
+    prisma.task.count({ where: olderDoneWhere(since) }),
     prisma.user.findMany({
       where: { active: true },
       select: { id: true, name: true, email: true, role: true },
@@ -47,23 +44,7 @@ export default async function TasksPage() {
   }
 
   const serializedTasks = tasks
-    .map((t) => ({
-      ...t,
-      status: t.status as "BACKLOG" | "PENDING" | "IN_PROGRESS" | "BLOCKED" | "DONE",
-      priority: t.priority as "LOW" | "NORMAL" | "HIGH",
-      points: t.points,
-      progress: t.progress ?? 0,
-      blockerReason: t.blockerReason ?? null,
-      dueDate: t.dueDate?.toISOString() ?? null,
-      createdAt: t.createdAt.toISOString(),
-      updatedAt: t.updatedAt.toISOString(),
-      assignees: t.assignees.map((a) => ({ user: a.user })),
-      subtasks: t.subtasks.map((s) => ({
-        ...s,
-        createdAt: s.createdAt.toISOString(),
-      })),
-      tags: t.tags || [],
-    }))
+    .map(serializeTask)
     // Sort by priority (HIGH first) then by order within each column
     .sort((a, b) => {
       if (a.status !== b.status) return 0;
@@ -74,6 +55,7 @@ export default async function TasksPage() {
   return (
     <TaskBoard
       initialTasks={serializedTasks}
+      olderDoneCount={olderDoneCount}
       users={users}
       tags={finalTags}
       currentUserId={currentUser.id}

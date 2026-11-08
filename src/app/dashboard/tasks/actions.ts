@@ -2,17 +2,52 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
+import { toDateOnlyISO } from "@/lib/dates";
+import { TASK_INCLUDE, doneSince, olderDoneWhere, serializeTask } from "@/lib/tasks";
 
 export type TaskStatus = "BACKLOG" | "PENDING" | "IN_PROGRESS" | "BLOCKED" | "DONE";
 export type TaskPriority = "LOW" | "NORMAL" | "HIGH";
 
-// Helper: include clause shared across queries
-const TASK_INCLUDE = {
-  assignees: { include: { user: { select: { id: true, name: true, email: true, role: true } } } },
-  createdBy: { select: { id: true, name: true } },
-  subtasks: { orderBy: { order: "asc" as const } },
-  tags: true,
-} as const;
+// ─── Auth / permisos ─────────────────────────────────────────────────────────
+
+type SessionUser = { id: string; role: string; name?: string };
+
+async function requireUser(): Promise<SessionUser> {
+  const session = await getServerSession(authOptions);
+  const user = session?.user as SessionUser | undefined;
+  if (!user?.id) throw new Error("No autorizado");
+  return user;
+}
+
+/** Editar o eliminar una tarea: solo ADMIN o quien la creó (mismo criterio que la interfaz). */
+async function requireCanModify(taskId: string, user: SessionUser) {
+  if (user.role === "ADMIN") return;
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { createdById: true } });
+  if (!task) return; // la acción responde "no encontrada"
+  if (task.createdById !== user.id) {
+    throw new Error("No tienes permiso para modificar esta tarea");
+  }
+}
+
+/** Progreso coherente al cambiar de columna. */
+function progressAfterMove(prevStatus: string, prevProgress: number, next: TaskStatus): number | undefined {
+  if (next === "DONE") return 100;
+  if (next === "BACKLOG" || next === "PENDING") return 0;
+  if (prevStatus === "DONE" && prevProgress >= 100) return 90; // reabierta: no puede seguir al 100 %
+  return undefined;
+}
+
+/** completedAt: se fija al entrar a DONE (si ya estaba, se conserva) y se limpia al salir. */
+function completedAtAfterMove(prevStatus: string, next: TaskStatus): Date | null | undefined {
+  if (next === "DONE") return prevStatus === "DONE" ? undefined : new Date();
+  return null;
+}
+
+async function currentProgressState(taskId: string) {
+  return prisma.task.findUnique({ where: { id: taskId }, select: { status: true, progress: true } });
+}
 
 // ─── Create ─────────────────────────────────────────────────────────────────
 
@@ -25,9 +60,14 @@ export async function createTaskAction(data: {
   assigneeIds?: string[];
   subtasks?: string[];
   tagIds?: string[];
-  createdById: string;
+  /** Se ignora: el creador siempre es el usuario de la sesión. */
+  createdById?: string;
   status?: TaskStatus;
 }) {
+  const user = await requireUser();
+  const title = data.title?.trim();
+  if (!title) throw new Error("El título es obligatorio");
+
   const maxOrder = await prisma.task.aggregate({
     _max: { order: true },
     where: { status: data.status ?? "PENDING" },
@@ -35,15 +75,16 @@ export async function createTaskAction(data: {
 
   const newTask = await prisma.task.create({
     data: {
-      title: data.title,
+      title,
       description: data.description ?? null,
       priority: data.priority ?? "NORMAL",
-      points: data.points ?? 0,
+      points: Math.max(0, data.points ?? 0),
       progress: 0,
-      dueDate: data.dueDate ? new Date(data.dueDate) : null,
+      dueDate: toDateOnlyISO(data.dueDate) ? new Date(toDateOnlyISO(data.dueDate)!) : null,
       status: data.status ?? "PENDING",
+      completedAt: data.status === "DONE" ? new Date() : null,
       order: (maxOrder._max.order ?? -1) + 1,
-      createdById: data.createdById,
+      createdById: user.id,
       assignees: data.assigneeIds?.length
         ? { create: data.assigneeIds.map((userId) => ({ userId })) }
         : undefined,
@@ -87,18 +128,21 @@ export async function updateTaskAction(
     tagIds?: string[];
   }
 ) {
+  const user = await requireUser();
+  await requireCanModify(taskId, user);
+  const dueISO = toDateOnlyISO(data.dueDate);
   try {
     await prisma.$transaction(async (tx) => {
       await tx.task.update({
         where: { id: taskId },
         data: {
-          title: data.title,
+          title: data.title?.trim() || undefined,
           description: data.description,
           priority: data.priority,
-          points: data.points,
-          dueDate: data.dueDate ? new Date(data.dueDate) : data.dueDate === null ? null : undefined,
+          points: data.points === undefined ? undefined : Math.max(0, data.points),
+          dueDate: dueISO ? new Date(dueISO) : data.dueDate === null ? null : undefined,
           blockerReason: data.blockerReason,
-          progress: data.progress,
+          progress: data.progress === undefined ? undefined : Math.max(0, Math.min(100, data.progress)),
           tags: data.tagIds ? { set: data.tagIds.map(id => ({ id })) } : undefined,
         },
       });
@@ -151,6 +195,7 @@ export async function updateTaskAction(
 // ─── Update progress only ────────────────────────────────────────────────────
 
 export async function updateTaskProgressAction(taskId: string, progress: number) {
+  await requireUser();
   try {
     await prisma.task.update({
       where: { id: taskId },
@@ -173,14 +218,17 @@ export async function updateTaskStatusAction(
   newStatus: TaskStatus,
   blockerReason?: string
 ) {
+  await requireUser();
+  if (newStatus === "BLOCKED" && !blockerReason?.trim()) throw new Error("Indica el motivo del bloqueo");
   try {
+    const prev = await currentProgressState(taskId);
     await prisma.task.update({
       where: { id: taskId },
       data: {
         status: newStatus,
-        blockerReason: newStatus === "BLOCKED" ? blockerReason ?? null : null,
-        // Auto-set progress 100 when DONE
-        progress: newStatus === "DONE" ? 100 : undefined,
+        blockerReason: newStatus === "BLOCKED" ? blockerReason?.trim() ?? null : null,
+        progress: prev ? progressAfterMove(prev.status, prev.progress ?? 0, newStatus) : undefined,
+        completedAt: prev ? completedAtAfterMove(prev.status, newStatus) : undefined,
       },
     });
   } catch (error: any) {
@@ -202,14 +250,18 @@ export async function moveTaskAction(
   newOrder: number,
   blockerReason?: string
 ) {
+  await requireUser();
+  if (newStatus === "BLOCKED" && !blockerReason?.trim()) throw new Error("Indica el motivo del bloqueo");
   try {
+    const prev = await currentProgressState(taskId);
     await prisma.task.update({
       where: { id: taskId },
       data: {
         status: newStatus,
         order: newOrder,
-        blockerReason: newStatus === "BLOCKED" ? blockerReason ?? null : null,
-        progress: newStatus === "DONE" ? 100 : undefined,
+        blockerReason: newStatus === "BLOCKED" ? blockerReason?.trim() ?? null : null,
+        progress: prev ? progressAfterMove(prev.status, prev.progress ?? 0, newStatus) : undefined,
+        completedAt: prev ? completedAtAfterMove(prev.status, newStatus) : undefined,
       },
     });
   } catch (error: any) {
@@ -223,11 +275,64 @@ export async function moveTaskAction(
   revalidatePath("/dashboard/tasks");
 }
 
+// ─── Move + reorder en una sola llamada (drag & drop) ─────────────────────────
+
+export async function moveAndReorderTasksAction(
+  taskId: string,
+  newStatus: TaskStatus,
+  blockerReason: string | undefined,
+  /** Solo las tareas de la columna destino cuyo orden cambió (incluida la movida). */
+  items: { id: string; order: number }[]
+) {
+  await requireUser();
+  if (newStatus === "BLOCKED" && !blockerReason?.trim()) throw new Error("Indica el motivo del bloqueo");
+  const movedOrder = items.find((i) => i.id === taskId)?.order;
+  try {
+    const prev = await currentProgressState(taskId);
+    if (!prev) return { success: false, error: "Task not found" };
+    await prisma.$transaction([
+      prisma.task.update({
+        where: { id: taskId },
+        data: {
+          status: newStatus,
+          order: movedOrder,
+          blockerReason: newStatus === "BLOCKED" ? blockerReason?.trim() ?? null : null,
+          progress: progressAfterMove(prev.status, prev.progress ?? 0, newStatus),
+          completedAt: completedAtAfterMove(prev.status, newStatus),
+        },
+      }),
+      ...items
+        .filter((i) => i.id !== taskId)
+        .map((i) => prisma.task.update({ where: { id: i.id }, data: { order: i.order } })),
+    ]);
+  } catch (error: any) {
+    if (error?.code === "P2025") return { success: false, error: "Task not found" };
+    throw error;
+  }
+  revalidatePath("/dashboard/tasks");
+  return { success: true };
+}
+
+// ─── Terminadas anteriores (bajo demanda) ─────────────────────────────────────
+
+export async function getOlderDoneTasksAction(skip: number, take: number = 30) {
+  await requireUser();
+  const rows = await prisma.task.findMany({
+    where: olderDoneWhere(doneSince()),
+    orderBy: [{ completedAt: "desc" }, { updatedAt: "desc" }],
+    include: TASK_INCLUDE,
+    skip: Math.max(0, skip),
+    take: Math.min(Math.max(1, take), 100),
+  });
+  return rows.map(serializeTask);
+}
+
 // ─── Reorder within same column ──────────────────────────────────────────────
 
 export async function reorderTasksAction(
   items: { id: string; order: number }[]
 ) {
+  await requireUser();
   try {
     await prisma.$transaction(
       items.map((item) =>
@@ -250,6 +355,8 @@ export async function reorderTasksAction(
 // ─── Delete ──────────────────────────────────────────────────────────────────
 
 export async function deleteTaskAction(taskId: string) {
+  const user = await requireUser();
+  await requireCanModify(taskId, user);
   try {
     await prisma.task.delete({ where: { id: taskId } });
   } catch (error: any) {
@@ -265,10 +372,12 @@ export async function deleteTaskAction(taskId: string) {
 // ─── Update due date (calendar drag) ──────────────────────────────────────────
 
 export async function updateTaskDueDateAction(taskId: string, newDate: string | null) {
+  await requireUser();
+  const iso = toDateOnlyISO(newDate);
   try {
     await prisma.task.update({
       where: { id: taskId },
-      data: { dueDate: newDate ? new Date(newDate) : null },
+      data: { dueDate: iso ? new Date(iso) : null },
     });
   } catch (error: any) {
     if (error?.code === "P2025" || error?.message?.includes("Record to update not found")) {
@@ -284,6 +393,7 @@ export async function updateTaskDueDateAction(taskId: string, newDate: string | 
 // ─── SubTask: Create ─────────────────────────────────────────────────────────
 
 export async function createSubTaskAction(taskId: string, title: string) {
+  await requireUser();
   const maxOrder = await prisma.subTask.aggregate({
     _max: { order: true },
     where: { taskId },
@@ -305,6 +415,7 @@ export async function createSubTaskAction(taskId: string, title: string) {
 // ─── SubTask: Toggle done ────────────────────────────────────────────────────
 
 export async function toggleSubTaskAction(subTaskId: string, done: boolean) {
+  await requireUser();
   await prisma.subTask.update({
     where: { id: subTaskId },
     data: { done },
@@ -315,6 +426,7 @@ export async function toggleSubTaskAction(subTaskId: string, done: boolean) {
 // ─── SubTask: Delete ─────────────────────────────────────────────────────────
 
 export async function deleteSubTaskAction(subTaskId: string) {
+  await requireUser();
   await prisma.subTask.delete({ where: { id: subTaskId } });
   revalidatePath("/dashboard/tasks");
 }
@@ -322,6 +434,7 @@ export async function deleteSubTaskAction(subTaskId: string) {
 // ─── Tags Management ─────────────────────────────────────────────────────────
 
 export async function ensureDefaultTags() {
+  await requireUser();
   const defaultTags = [
     { name: "Cotización", color: "blue" },
     { name: "Corte", color: "red" },
@@ -344,8 +457,11 @@ export async function ensureDefaultTags() {
 }
 
 export async function createTaskTag(name: string, color: string = "gray") {
+  await requireUser();
+  const cleanName = name.trim();
+  if (!cleanName) throw new Error("El nombre de la categoría es obligatorio");
   const newTag = await prisma.taskTag.create({
-    data: { name, color },
+    data: { name: cleanName, color },
   });
   revalidatePath("/dashboard/tasks");
   return newTag;

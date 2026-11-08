@@ -1,259 +1,266 @@
 import { prisma } from "@/lib/prisma";
+import { formatDueDate, todayYMD } from "@/lib/dates";
+
+const INCOME_TYPES = ["INGRESO", "ANTICIPO", "LIQUIDACION"];
+const EXPENSE_TYPES = ["GASTO_OPERATIVO", "GASTO_PROYECTO"];
+const DEAD_STATUSES = ["CANCELLED", "REJECTED"];
+const DAY = 24 * 60 * 60 * 1000;
+
+function monthRange(offsetFromCurrent: number) {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() + offsetFromCurrent, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + offsetFromCurrent + 1, 0, 23, 59, 59, 999);
+  return { start, end };
+}
+
+/** Variación porcentual real; null cuando no hay base de comparación. */
+function pctChange(current: number, previous: number): number | null {
+  if (previous === 0) return null;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
+async function sumTransactions(types: string[], start: Date, end: Date) {
+  const r = await prisma.financialTransaction.aggregate({
+    where: { isDeleted: false, type: { in: types }, date: { gte: start, lte: end } },
+    _sum: { amount: true, taxAmount: true },
+  });
+  return { amount: r._sum.amount || 0, tax: r._sum.taxAmount || 0 };
+}
 
 export async function getDashboardStatsService() {
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth();
+  const now = new Date();
+  const thisMonth = monthRange(0);
+  const prevMonth = monthRange(-1);
 
-  const startDate = new Date(currentYear, currentMonth, 1);
-  const endDate = new Date(currentYear, currentMonth + 1, 0);
+  // ── KPIs del mes (todo desde movimientos financieros reales) ──────────────
+  const [income, prevIncome, expense, prevExpense] = await Promise.all([
+    sumTransactions(INCOME_TYPES, thisMonth.start, thisMonth.end),
+    sumTransactions(INCOME_TYPES, prevMonth.start, prevMonth.end),
+    sumTransactions(EXPENSE_TYPES, thisMonth.start, thisMonth.end),
+    sumTransactions(EXPENSE_TYPES, prevMonth.start, prevMonth.end),
+  ]);
 
-  // Fetch all quotes for this month (Created or Updated)
-  const quotesThisMonth = await prisma.quote.findMany({
-    where: {
-      active: true,
-      OR: [
-        { createdAt: { gte: startDate, lte: endDate } },
-        { updatedAt: { gte: startDate, lte: endDate } }
-      ]
-    },
-    include: {
-      client: true
-    },
-    orderBy: {
-      updatedAt: 'desc'
-    }
-  });
+  const profit = income.amount - expense.amount;
+  const prevProfit = prevIncome.amount - prevExpense.amount;
 
-  // Cuentas por Cobrar (GLOBAL)
-  const allPendingQuotes = await prisma.quote.findMany({
+  // ── Cuentas por cobrar (global) ───────────────────────────────────────────
+  const pendingQuotes = await prisma.quote.findMany({
     where: {
       active: true,
       paymentStatus: { in: ["PENDING", "PARTIAL"] },
-      status: { notIn: ["CANCELLED", "REJECTED"] }
-    }
+      status: { notIn: [...DEAD_STATUSES, "DRAFT"] },
+    },
+    select: { total: true, realAmountCollected: true },
   });
+  const receivable = pendingQuotes.reduce((sum, q) => sum + Math.max(q.total - (q.realAmountCollected || 0), 0), 0);
+  const receivableCount = pendingQuotes.filter((q) => q.total - (q.realAmountCollected || 0) > 0).length;
 
-  const totalGlobalPending = allPendingQuotes.reduce((sum, q) => {
-    const balance = q.total - (q.realAmountCollected || 0);
-    return sum + (balance > 0 ? balance : 0);
-  }, 0);
-
-  const activeQuotes = quotesThisMonth.filter(q => q.status !== "CANCELLED" && q.status !== "REJECTED");
-  
-  const salesWithAnticipo = activeQuotes.filter(q => 
-    (q.realAmountCollected && q.realAmountCollected > 0) || 
-    ["PARTIAL", "PAID"].includes(q.paymentStatus)
-  );
-
-  const totalAmountWithAnticipo = salesWithAnticipo.reduce((sum, q) => sum + q.total, 0);
-  
-  // Solo cotizaciones con anticipo o liquidación para los KPIs financieros
-  const quotesPaidFilter = quotesThisMonth.filter(q =>
-    ["PARTIAL", "PAID"].includes(q.paymentStatus) && (q.realAmountCollected || 0) > 0
-  );
-
-  // IVA por pagar: solo de cotizaciones con cobro real
-  const totalTaxQuoted = quotesPaidFilter.reduce((sum, q) => {
-    if (!q.taxable) return sum;
-    const proportion = q.total > 0 ? (q.realAmountCollected || 0) / q.total : 0;
-    return sum + (q.tax * proportion);
-  }, 0);
-
-  // IVA de ingresos ya cobrados del mes
-  const totalTaxCollected = quotesPaidFilter.reduce((sum, q) => {
-    if (!q.taxable) return sum;
-    const collected = q.realAmountCollected || 0;
-    const proportion = q.total > 0 ? collected / q.total : 0;
-    return sum + Math.round(q.tax * proportion * 100) / 100;
-  }, 0);
-
-  // Gastos operativos — resiliente si la tabla FinancialTransaction aún no existe en DB
-  let totalManualExpenses = 0;
-  try {
-    const opExpenses = await prisma.financialTransaction.findMany({
-      where: { isDeleted: false, type: "GASTO_OPERATIVO", date: { gte: startDate, lte: endDate } }
-    });
-    totalManualExpenses = opExpenses.reduce((sum: number, e: { amount: number }) => sum + e.amount, 0);
-  } catch {
-    // Tabla pendiente de migración en DB
-  }
-
-  const configs = await prisma.costConfiguration.findMany();
-  const configMap = new Map(configs.map(c => [c.key, c.value]));
-
-  const totalOperationCost = totalManualExpenses;
-  const totalUtilityReal = quotesPaidFilter.reduce((sum, q) => {
-    const collected = q.realAmountCollected || 0;
-    const proportion = q.total > 0 ? collected / q.total : 0;
-    const netIncome = (q.subtotal || 0) * proportion;
-    return sum + netIncome;
-  }, 0) - totalOperationCost;
-
-  // Generate Chart Data (Gastos vs Ingresos Histórico - 6 meses)
-  const last6Months = Array.from({length: 6}).map((_, i) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - (5 - i));
-    return d;
-  });
-
-  let chartData = [];
-  try {
-    const chartDataPromises = last6Months.map(async (date) => {
-      const m = date.getMonth();
-      const y = date.getFullYear();
-      const s = new Date(y, m, 1);
-      const e = new Date(y, m + 1, 0, 23, 59, 59);
-
-      const income = await prisma.financialTransaction.aggregate({
-        where: { date: { gte: s, lte: e }, type: { in: ['INGRESO', 'ANTICIPO', 'LIQUIDACION'] }, isDeleted: false },
-        _sum: { amount: true }
-      });
-      const expense = await prisma.financialTransaction.aggregate({
-        where: { date: { gte: s, lte: e }, type: { in: ['GASTO_OPERATIVO', 'GASTO_PROYECTO'] }, isDeleted: false },
-        _sum: { amount: true }
-      });
-
-      const rev = income._sum.amount || 0;
-      const exp = expense._sum.amount || 0;
-
+  // ── Gráfica: últimos 6 meses, ingresos vs gastos ──────────────────────────
+  const months = await Promise.all(
+    Array.from({ length: 6 }).map(async (_, i) => {
+      const { start, end } = monthRange(i - 5);
+      const [inc, exp] = await Promise.all([
+        sumTransactions(INCOME_TYPES, start, end),
+        sumTransactions(EXPENSE_TYPES, start, end),
+      ]);
       return {
-        month: date.toLocaleDateString('es-MX', { month: 'short' }),
-        revenue: rev,
-        profit: rev - exp
+        month: start.toLocaleDateString("es-MX", { month: "short" }).replace(".", ""),
+        year: start.getFullYear(),
+        income: inc.amount,
+        expense: exp.amount,
+        profit: inc.amount - exp.amount,
       };
-    });
-    chartData = await Promise.all(chartDataPromises);
-  } catch (err) {
-    chartData = last6Months.map(date => ({
-      month: date.toLocaleDateString('es-MX', { month: 'short' }),
-      revenue: 0,
-      profit: 0
-    }));
-    if (chartData.length > 0) {
-       chartData[chartData.length - 1].revenue = totalAmountWithAnticipo;
-       chartData[chartData.length - 1].profit = totalUtilityReal;
-    }
-  }
+    })
+  );
 
-  const chartTotalRevenue = chartData.reduce((sum, data) => sum + data.revenue, 0);
-  const chartTotalProfit = chartData.reduce((sum, data) => sum + data.profit, 0);
-  const chartDateRange = `${last6Months[0].toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })} a ${last6Months[5].toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })}`;
-
-  // Order Stats
-  const draftCount = quotesThisMonth.filter(q => q.status === 'DRAFT').length;
-  const sentCount = quotesThisMonth.filter(q => q.status === 'SENT').length;
-  const approvedCount = quotesThisMonth.filter(q => q.status === 'APPROVED').length;
-  const inProdCount = quotesThisMonth.filter(q => q.status === 'IN_PRODUCTION').length;
-  const deliveredCount = quotesThisMonth.filter(q => q.status === 'DELIVERED').length;
-  const cancelledCount = quotesThisMonth.filter(q => ['CANCELLED', 'REJECTED'].includes(q.status)).length;
-  
-  const orderStatsData = [
-    { name: 'Borrador', value: draftCount, color: '#94a3b8', percentageChange: '0%', isPositive: true },
-    { name: 'Enviadas', value: sentCount, color: '#3b82f6', percentageChange: '0%', isPositive: true },
-    { name: 'Aprobadas', value: approvedCount, color: '#a855f7', percentageChange: '0%', isPositive: true },
-    { name: 'En Producción', value: inProdCount, color: '#f97316', percentageChange: '0%', isPositive: true },
-    { name: 'Entregadas', value: deliveredCount, color: '#10b981', percentageChange: '0%', isPositive: true },
-    { name: 'Canceladas', value: cancelledCount, color: '#ef4444', percentageChange: '0%', isPositive: false },
-  ].filter(s => s.value > 0);
-
-  // Top Clients
-  const clientRevenue: Record<string, { revenue: number, name: string }> = {};
-  quotesThisMonth.forEach(q => {
-    if (q.client) {
-      if (!clientRevenue[q.client.id]) clientRevenue[q.client.id] = { revenue: 0, name: q.client.name || q.client.company || 'Cliente' };
-      clientRevenue[q.client.id].revenue += q.total;
-    }
+  // ── Embudo de cotizaciones abiertas (estado actual, no solo del mes) ──────
+  const openQuotes = await prisma.quote.findMany({
+    where: { active: true, status: { in: ["DRAFT", "SENT", "APPROVED", "IN_PRODUCTION"] } },
+    select: { status: true, total: true },
   });
-  
-  const topClientsData = Object.values(clientRevenue)
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 4)
-    .map((c, idx) => ({
-      name: c.name,
-      industry: 'Cotizaciones Recientes',
-      sales: 0,
-      revenue: c.revenue,
-      growth: '-',
-      iconBg: ['bg-blue-100', 'bg-sky-100', 'bg-emerald-100', 'bg-purple-100'][idx % 4],
-      iconColor: ['text-blue-600', 'text-sky-600', 'text-emerald-600', 'text-purple-600'][idx % 4],
-      initial: c.name.charAt(0).toUpperCase()
-    }));
-
-  if (topClientsData.length === 0) {
-     topClientsData.push({ name: 'Sin clientes', industry: '-', sales: 0, revenue: 0, growth: '-', iconBg: 'bg-gray-100', iconColor: 'text-gray-400', initial: '-' });
-  }
-
-  // Tracking Items
-  const latestTasks = await prisma.task.findMany({
-    orderBy: { updatedAt: 'desc' },
-    take: 5,
+  const pipelineDef = [
+    { key: "DRAFT", label: "Borrador", color: "#94a3b8" },
+    { key: "SENT", label: "Enviadas", color: "#3b82f6" },
+    { key: "APPROVED", label: "Aprobadas", color: "#a855f7" },
+    { key: "IN_PRODUCTION", label: "En producción", color: "#f97316" },
+  ];
+  const pipeline = pipelineDef.map((p) => {
+    const rows = openQuotes.filter((q) => q.status === p.key);
+    return { ...p, count: rows.length, amount: rows.reduce((s, q) => s + q.total, 0) };
   });
 
-  const trackingItems = latestTasks.map((t) => {
-    let type: "PENDING" | "DELIVERED" | "RECEIVED" | "PAYMENT" = 'PENDING';
-    if (t.status === 'DONE') type = 'DELIVERED';
-    else if (t.status === 'IN_PROGRESS') type = 'RECEIVED';
-    else if (t.status === 'BLOCKED') type = 'PAYMENT';
-    
-    return {
+  // ── Cotizaciones creadas este mes: conversión ─────────────────────────────
+  const monthQuotes = await prisma.quote.findMany({
+    where: { active: true, createdAt: { gte: thisMonth.start, lte: thisMonth.end } },
+    select: { id: true, status: true, total: true, clientId: true, prospectName: true, client: { select: { name: true, company: true } } },
+  });
+  const liveMonthQuotes = monthQuotes.filter((q) => !DEAD_STATUSES.includes(q.status));
+  const closedStatuses = ["APPROVED", "IN_PRODUCTION", "DELIVERED"];
+  const sentOrBeyond = monthQuotes.filter((q) => q.status !== "DRAFT");
+  const closedCount = monthQuotes.filter((q) => closedStatuses.includes(q.status)).length;
+  const conversionRate = sentOrBeyond.length > 0 ? (closedCount / sentOrBeyond.length) * 100 : null;
+
+  // ── Mejores clientes del mes (por monto cotizado vigente) ─────────────────
+  const byClient = new Map<string, { name: string; total: number; count: number }>();
+  for (const q of liveMonthQuotes) {
+    const key = q.clientId || `prospect:${q.prospectName || "sin-nombre"}`;
+    const name = q.client?.company || q.client?.name || q.prospectName || "Sin cliente";
+    const cur = byClient.get(key) || { name, total: 0, count: 0 };
+    cur.total += q.total;
+    cur.count += 1;
+    byClient.set(key, cur);
+  }
+  const topClients = [...byClient.values()].sort((a, b) => b.total - a.total).slice(0, 5);
+
+  // ── Atención requerida ────────────────────────────────────────────────────
+  const staleCutoff = new Date(now.getTime() - 7 * DAY);
+  const [staleSent, deliveredUnpaid, overdueTasks, blockedTasks] = await Promise.all([
+    prisma.quote.findMany({
+      where: { active: true, status: "SENT", updatedAt: { lt: staleCutoff } },
+      select: { id: true, folio: true, project: true, total: true, updatedAt: true, client: { select: { name: true, company: true } }, prospectName: true },
+      orderBy: { updatedAt: "asc" },
+      take: 5,
+    }),
+    prisma.quote.findMany({
+      where: { active: true, status: "DELIVERED", paymentStatus: { in: ["PENDING", "PARTIAL"] } },
+      select: { id: true, folio: true, project: true, total: true, realAmountCollected: true, client: { select: { name: true, company: true } }, prospectName: true },
+      orderBy: { updatedAt: "asc" },
+      take: 5,
+    }),
+    prisma.task.findMany({
+      where: { status: { not: "DONE" }, dueDate: { lt: new Date(`${todayYMD("America/Mexico_City")}T00:00:00.000Z`) } },
+      select: { id: true, title: true, dueDate: true, status: true },
+      orderBy: { dueDate: "asc" },
+      take: 5,
+    }),
+    prisma.task.findMany({
+      where: { status: "BLOCKED" },
+      select: { id: true, title: true, blockerReason: true },
+      take: 5,
+    }),
+  ]);
+
+  const clientLabel = (q: { client: { name: string | null; company: string | null } | null; prospectName: string | null }) =>
+    q.client?.company || q.client?.name || q.prospectName || "Sin cliente";
+
+  type AttentionItem = { id: string; href: string; title: string; detail: string };
+  const attention: { key: string; label: string; tone: "amber" | "red" | "orange"; items: AttentionItem[] }[] = [
+    {
+      key: "stale",
+      label: "Enviadas sin respuesta (+7 días)",
+      tone: "amber" as const,
+      items: staleSent.map((q) => ({
+        id: q.id,
+        href: `/dashboard/quotes/${q.id}`,
+        title: `${q.folio} · ${q.project}`,
+        detail: `${clientLabel(q)} · hace ${Math.floor((now.getTime() - q.updatedAt.getTime()) / DAY)} días`,
+      })),
+    },
+    {
+      key: "unpaid",
+      label: "Entregadas con saldo pendiente",
+      tone: "red" as const,
+      items: deliveredUnpaid.map((q) => ({
+        id: q.id,
+        href: `/dashboard/quotes/${q.id}`,
+        title: `${q.folio} · ${q.project}`,
+        detail: `${clientLabel(q)} · debe $${Math.max(q.total - (q.realAmountCollected || 0), 0).toLocaleString("es-MX", { maximumFractionDigits: 0 })}`,
+      })),
+    },
+    {
+      key: "overdue",
+      label: "Tareas vencidas",
+      tone: "red" as const,
+      items: overdueTasks.map((t) => ({
+        id: t.id,
+        href: "/dashboard/tasks",
+        title: t.title,
+        detail: `Venció el ${formatDueDate(t.dueDate!.toISOString(), { day: "numeric", month: "short" })}`,
+      })),
+    },
+    {
+      key: "blocked",
+      label: "Tareas bloqueadas",
+      tone: "orange" as const,
+      items: blockedTasks.map((t) => ({
+        id: t.id,
+        href: "/dashboard/tasks",
+        title: t.title,
+        detail: t.blockerReason || "Sin motivo registrado",
+      })),
+    },
+  ].filter((g) => g.items.length > 0);
+
+  // ── Tareas activas (en curso, ordenadas por fecha límite) ─────────────────
+  const activeTasksRaw = await prisma.task.findMany({
+    where: { status: { in: ["IN_PROGRESS", "PENDING"] } },
+    select: { id: true, title: true, status: true, priority: true, progress: true, dueDate: true },
+    orderBy: [{ status: "asc" }, { dueDate: "asc" }],
+    take: 30,
+  });
+  // IN_PROGRESS primero; dentro de cada grupo, con fecha límite más próxima arriba y sin fecha al final.
+  const activeTasks = activeTasksRaw
+    .sort((a, b) => {
+      if (a.status !== b.status) return a.status === "IN_PROGRESS" ? -1 : 1;
+      const ad = a.dueDate ? a.dueDate.getTime() : Infinity;
+      const bd = b.dueDate ? b.dueDate.getTime() : Infinity;
+      return ad - bd;
+    })
+    .slice(0, 6)
+    .map((t) => ({
       id: t.id,
       title: t.title,
-      status: t.status === 'DONE' ? 'Completada' : t.status === 'IN_PROGRESS' ? 'En Progreso' : t.status === 'BLOCKED' ? 'Bloqueada' : 'Pendiente',
-      time: new Date(t.updatedAt).toLocaleDateString('es-MX'),
-      date: new Date(t.createdAt).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' }),
-      type
-    };
-  });
-
-  if (trackingItems.length === 0) {
-    trackingItems.push({ id: '1', title: 'Sin tareas', status: '-', time: '-', date: '-', type: 'PENDING' });
-  }
-
-  // Best Selling Products
-  const allConcepts = await prisma.quoteConcept.findMany({
-    where: { quoteId: { in: quotesThisMonth.map(q => q.id) } },
-    include: { material: true }
-  });
-
-  const materialCounts: Record<string, { count: number, name: string, category: string, price: number }> = {};
-  allConcepts.forEach(c => {
-    if (c.material) {
-      if (!materialCounts[c.material.id]) {
-        materialCounts[c.material.id] = { count: 0, name: c.material.name, category: "Material", price: c.finalUnitPrice };
-      }
-      materialCounts[c.material.id].count += c.quantity;
-    }
-  });
-
-  const bestSellingProducts = Object.values(materialCounts)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 4)
-    .map((m, idx) => ({
-      name: m.name,
-      category: m.category,
-      price: m.price,
-      rating: 5,
-      imageColor: ['bg-amber-800', 'bg-sky-400', 'bg-emerald-500', 'bg-purple-500'][idx % 4]
+      status: t.status,
+      priority: t.priority,
+      progress: t.progress,
+      dueDate: t.dueDate ? t.dueDate.toISOString() : null,
     }));
-    
-  if (bestSellingProducts.length === 0) {
-     bestSellingProducts.push({ name: 'Sin datos', category: '-', price: 0, rating: 0, imageColor: 'bg-gray-200' });
+  const taskCounts = await prisma.task.groupBy({ by: ["status"], _count: { _all: true } });
+  const tasksOpen = taskCounts.filter((t) => t.status !== "DONE" && t.status !== "BACKLOG").reduce((s, t) => s + t._count._all, 0);
+
+  // ── Materiales más vendidos del mes ───────────────────────────────────────
+  const concepts = await prisma.quoteConcept.findMany({
+    where: { quoteId: { in: liveMonthQuotes.map((q) => q.id) }, materialId: { not: null } },
+    select: { quantity: true, totalAmount: true, material: { select: { id: true, name: true } } },
+  });
+  const byMaterial = new Map<string, { name: string; quantity: number; amount: number }>();
+  for (const c of concepts) {
+    if (!c.material) continue;
+    const cur = byMaterial.get(c.material.id) || { name: c.material.name, quantity: 0, amount: 0 };
+    cur.quantity += c.quantity;
+    cur.amount += c.totalAmount;
+    byMaterial.set(c.material.id, cur);
   }
+  const topMaterials = [...byMaterial.values()].sort((a, b) => b.amount - a.amount).slice(0, 5);
 
   return {
-    totalAmountWithAnticipo,
-    totalGlobalPending,
-    totalTaxQuoted,
-    totalTaxCollected,
-    totalOperationCost,
-    totalUtilityReal,
-    chartTotalRevenue,
-    chartTotalProfit,
-    chartDateRange,
-    chartData,
-    orderStatsData,
-    topClientsData,
-    trackingItems,
-    bestSellingProducts
+    monthLabel: thisMonth.start.toLocaleDateString("es-MX", { month: "long", year: "numeric" }),
+    kpis: {
+      income: income.amount,
+      incomeChange: pctChange(income.amount, prevIncome.amount),
+      incomeTax: income.tax,
+      expense: expense.amount,
+      expenseChange: pctChange(expense.amount, prevExpense.amount),
+      profit,
+      profitChange: pctChange(profit, prevProfit),
+      receivable,
+      receivableCount,
+    },
+    chart: months,
+    chartTotals: {
+      income: months.reduce((s, m) => s + m.income, 0),
+      expense: months.reduce((s, m) => s + m.expense, 0),
+    },
+    pipeline,
+    pipelineMonth: {
+      created: monthQuotes.length,
+      quotedAmount: liveMonthQuotes.reduce((s, q) => s + q.total, 0),
+      conversionRate,
+    },
+    attention,
+    topClients,
+    activeTasks,
+    tasksOpen,
+    topMaterials,
   };
 }

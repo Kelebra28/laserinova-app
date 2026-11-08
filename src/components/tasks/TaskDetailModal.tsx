@@ -16,6 +16,8 @@ import {
   type TaskPriority,
 } from "@/app/dashboard/tasks/actions";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { isDatePast, formatDueDate } from "@/lib/dates";
+import { toast } from "react-hot-toast";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -96,14 +98,12 @@ const ALL_STATUSES: TaskStatus[] = ["BACKLOG", "PENDING", "IN_PROGRESS", "BLOCKE
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("es-MX", {
-    day: "2-digit", month: "short", year: "numeric",
-  });
+  return formatDueDate(iso, { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function isOverdue(iso: string | null, status: TaskStatus) {
   if (!iso || status === "DONE") return false;
-  return new Date(iso) < new Date();
+  return isDatePast(iso);
 }
 
 function getProgressColor(p: number) {
@@ -158,19 +158,29 @@ export function TaskDetailModal({
       return;
     }
     startTransition(async () => {
-      await updateTaskStatusAction(task.id, status);
-      onStatusChange(task.id, status);
+      try {
+        const res = await updateTaskStatusAction(task.id, status);
+        if (res && res.success === false) throw new Error("La tarea ya no existe");
+        onStatusChange(task.id, status);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "No se pudo cambiar el estatus");
+      }
     });
   };
 
   const handleBlockerConfirm = () => {
     if (!blockerReason.trim() || !pendingStatus) return;
     startTransition(async () => {
-      await updateTaskStatusAction(task.id, "BLOCKED", blockerReason.trim());
-      onStatusChange(task.id, "BLOCKED", blockerReason.trim());
-      setShowBlockerInput(false);
-      setBlockerReason("");
-      setPendingStatus(null);
+      try {
+        const res = await updateTaskStatusAction(task.id, "BLOCKED", blockerReason.trim());
+        if (res && res.success === false) throw new Error("La tarea ya no existe");
+        onStatusChange(task.id, "BLOCKED", blockerReason.trim());
+        setShowBlockerInput(false);
+        setBlockerReason("");
+        setPendingStatus(null);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "No se pudo bloquear la tarea");
+      }
     });
   };
 
@@ -182,7 +192,11 @@ export function TaskDetailModal({
     if (progressTimeout.current) clearTimeout(progressTimeout.current);
     progressTimeout.current = setTimeout(() => {
       startTransition(async () => {
-        await updateTaskProgressAction(task.id, val);
+        try {
+          await updateTaskProgressAction(task.id, val);
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "No se pudo guardar el avance");
+        }
       });
     }, 600);
   };
@@ -195,18 +209,36 @@ export function TaskDetailModal({
     const temp: SubTask = { id: tempId, title: newSubTitle.trim(), done: false, order: subtasks.length, createdAt: new Date().toISOString() };
     setSubtasks((prev) => [...prev, temp]);
     setNewSubTitle("");
-    const created = await createSubTaskAction(task.id, newSubTitle.trim());
-    setSubtasks((prev) => prev.map((s) => (s.id === tempId ? { ...created } : s)));
+    try {
+      const created = await createSubTaskAction(task.id, temp.title);
+      setSubtasks((prev) => prev.map((s) => (s.id === tempId ? { ...created } : s)));
+    } catch (err) {
+      setSubtasks((prev) => prev.filter((s) => s.id !== tempId));
+      toast.error(err instanceof Error ? err.message : "No se pudo crear la subtarea");
+    }
   };
 
   const handleToggleSubtask = async (subId: string, done: boolean) => {
+    if (subId.startsWith("tmp-")) return;
     setSubtasks((prev) => prev.map((s) => (s.id === subId ? { ...s, done } : s)));
-    await toggleSubTaskAction(subId, done);
+    try {
+      await toggleSubTaskAction(subId, done);
+    } catch (err) {
+      setSubtasks((prev) => prev.map((s) => (s.id === subId ? { ...s, done: !done } : s)));
+      toast.error(err instanceof Error ? err.message : "No se pudo actualizar la subtarea");
+    }
   };
 
   const handleDeleteSubtask = async (subId: string) => {
+    const previous = subtasks;
     setSubtasks((prev) => prev.filter((s) => s.id !== subId));
-    if (!subId.startsWith("tmp-")) await deleteSubTaskAction(subId);
+    if (subId.startsWith("tmp-")) return;
+    try {
+      await deleteSubTaskAction(subId);
+    } catch (err) {
+      setSubtasks(previous);
+      toast.error(err instanceof Error ? err.message : "No se pudo eliminar la subtarea");
+    }
   };
 
   const doneCount = subtasks.filter((s) => s.done).length;

@@ -7,6 +7,7 @@ import {
   getQuotesListService, 
   getActiveQuotesKanbanService, 
   getClientsForFiltersService,
+  getQuotesSummaryService,
   GetQuotesParams,
   updateQuoteStatusService,
   updateQuoteConsiderationsService,
@@ -50,6 +51,17 @@ export async function getQuotesList(params: GetQuotesParams) {
   } catch (error: any) {
     console.error("Error fetching quotes list:", error);
     return { success: false, error: error.message || "Error al obtener lista de cotizaciones" };
+  }
+}
+
+export async function getQuotesSummary() {
+  try {
+    await requireAuth();
+    const data = await getQuotesSummaryService();
+    return { success: true, data };
+  } catch (error: any) {
+    console.error("Error fetching quotes summary:", error);
+    return { success: false, error: error.message || "Error al obtener el resumen" };
   }
 }
 

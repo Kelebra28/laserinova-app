@@ -8,10 +8,32 @@ export interface GetQuotesParams {
   status?: string;
   page?: string;
   limit?: string;
+  quick?: string; // open | unpaid | stale | draft
+  sort?: string;  // createdAt | total | folio
+  dir?: string;   // asc | desc
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DEAD = ["CANCELLED", "REJECTED"];
+
+/** Filtros rápidos compartidos por la lista y el resumen, para que los conteos coincidan con la tabla. */
+function quickFilter(quick?: string): Prisma.QuoteWhereInput {
+  switch (quick) {
+    case "open":
+      return { status: { in: ["SENT", "APPROVED", "IN_PRODUCTION"] } };
+    case "unpaid":
+      return { paymentStatus: { in: ["PENDING", "PARTIAL"] }, status: { notIn: [...DEAD, "DRAFT", "CALCULATED"] } };
+    case "stale":
+      return { status: "SENT", updatedAt: { lt: new Date(Date.now() - 7 * DAY_MS) } };
+    case "draft":
+      return { status: { in: ["DRAFT", "CALCULATED"] } };
+    default:
+      return {};
+  }
 }
 
 export async function getQuotesListService(params: GetQuotesParams) {
-  const { search, month, clientId, status, page, limit } = params;
+  const { search, month, clientId, status, page, limit, quick, sort, dir } = params;
 
   const defaultMonth = "all";
   const targetMonth = month !== undefined ? month : defaultMonth;
@@ -37,8 +59,11 @@ export async function getQuotesListService(params: GetQuotesParams) {
         { client: { name: { contains: search } } },
         { client: { company: { contains: search } } },
         { project: { contains: search } },
+        { prospectName: { contains: search } },
       ]
     } : {}),
+    active: true,
+    ...quickFilter(quick),
     ...(clientId && clientId !== "all" ? { clientId } : {}),
     ...(status && status !== "all" ? { status: status as any } : {}),
     ...dateFilter
@@ -53,10 +78,12 @@ export async function getQuotesListService(params: GetQuotesParams) {
     prisma.quote.findMany({
       where: whereClause,
       include: {
-        client: true,
-        user: true,
+        client: { select: { id: true, name: true, company: true } },
+        user: { select: { id: true, name: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: {
+        [["createdAt", "total", "folio"].includes(sort || "") ? (sort as string) : "createdAt"]: dir === "asc" ? "asc" : "desc",
+      },
       skip,
       take: itemsPerPage,
     })
@@ -91,14 +118,35 @@ export async function getActiveQuotesKanbanService() {
       ]
     },
     include: {
-      client: true
+      client: { select: { id: true, name: true, company: true } }
     },
     orderBy: {
       updatedAt: 'desc'
-    }
+    },
+    take: 300,
   });
 
   return activeQuotes;
+}
+
+export async function getQuotesSummaryService() {
+  const base = { active: true } as const;
+  const [open, unpaidRows, stale, drafts] = await Promise.all([
+    prisma.quote.aggregate({ where: { ...base, ...quickFilter("open") }, _count: { _all: true }, _sum: { total: true } }),
+    prisma.quote.findMany({
+      where: { ...base, ...quickFilter("unpaid") },
+      select: { total: true, realAmountCollected: true },
+    }),
+    prisma.quote.aggregate({ where: { ...base, ...quickFilter("stale") }, _count: { _all: true }, _sum: { total: true } }),
+    prisma.quote.count({ where: { ...base, ...quickFilter("draft") } }),
+  ]);
+  const balances = unpaidRows.map((q) => Math.max(q.total - (q.realAmountCollected || 0), 0)).filter((b) => b > 0);
+  return {
+    open: { count: open._count._all, amount: open._sum.total || 0 },
+    unpaid: { count: balances.length, amount: balances.reduce((a, b) => a + b, 0) },
+    stale: { count: stale._count._all, amount: stale._sum.total || 0 },
+    drafts: { count: drafts },
+  };
 }
 
 export async function getClientsForFiltersService() {

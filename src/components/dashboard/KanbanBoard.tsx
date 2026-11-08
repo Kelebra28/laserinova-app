@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
+import { toast } from "react-hot-toast";
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
+import MenuSelect from "@/components/ui/MenuSelect";
 import Link from "next/link";
 import { Package, CheckSquare } from "lucide-react";
 import { updateQuoteStatusAction } from "@/server/actions/quote.actions";
@@ -24,13 +27,23 @@ const paymentLabels: Record<string, string> = {
 
 export default function KanbanBoard({ 
   initialQuotes, 
-  columns 
+  columns,
+  onChanged,
 }: { 
   initialQuotes: any[], 
-  columns: any[] 
+  columns: any[],
+  onChanged?: () => void,
 }) {
   const [quotes, setQuotes] = useState(initialQuotes);
-  const [isPending, startTransition] = useTransition();
+  const [pendingMove, setPendingMove] = useState<{ quoteId: string; newStatus: string } | null>(null);
+  const [isMoving, setIsMoving] = useState(false);
+
+  // Mantener el tablero sincronizado cuando llegan datos nuevos del servidor
+  const [syncedFrom, setSyncedFrom] = useState(initialQuotes);
+  if (syncedFrom !== initialQuotes) {
+    setSyncedFrom(initialQuotes);
+    setQuotes(initialQuotes);
+  }
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
 
@@ -75,16 +88,42 @@ export default function KanbanBoard({
     setDragOverCol(null);
     
     if (!quoteId) return;
+    await requestMove(quoteId, newStatus);
+  };
 
-    // Optimistic Update
-    const updatedQuotes = quotes.map(q => 
-      q.id === quoteId ? { ...q, status: newStatus } : q
-    );
-    setQuotes(updatedQuotes);
+  const requestMove = async (quoteId: string, newStatus: string) => {
+    const quote = quotes.find(q => q.id === quoteId);
+    if (!quote) return;
+    const current = quote.status === "REJECTED" ? "CANCELLED" : quote.status;
+    if (current === newStatus) return;
 
-    startTransition(async () => {
+    // Estas transiciones descuentan inventario la primera vez: pedir confirmación
+    if (["APPROVED", "IN_PRODUCTION", "DELIVERED"].includes(newStatus) && !quote.stockDeducted) {
+      setPendingMove({ quoteId, newStatus });
+      return;
+    }
+    await moveQuote(quoteId, newStatus);
+  };
+
+  const moveQuote = async (quoteId: string, newStatus: string) => {
+    const previous = quotes;
+    // Optimistic update con rollback si el servidor falla
+    setQuotes(quotes.map(q => (q.id === quoteId ? { ...q, status: newStatus } : q)));
+    try {
       await updateQuoteStatusAction(quoteId, newStatus);
-    });
+      onChanged?.();
+    } catch (err: any) {
+      setQuotes(previous);
+      toast.error(err?.message || "No se pudo cambiar el estatus");
+    }
+  };
+
+  const confirmMove = async () => {
+    if (!pendingMove) return;
+    setIsMoving(true);
+    await moveQuote(pendingMove.quoteId, pendingMove.newStatus);
+    setIsMoving(false);
+    setPendingMove(null);
   };
 
   const getQuotesByStatus = (statusId: string) => {
@@ -94,14 +133,28 @@ export default function KanbanBoard({
     return quotes.filter(q => q.status === statusId);
   };
 
+  const pendingLabel = columns.find(c => c.id === pendingMove?.newStatus)?.label;
+
   return (
     <div className="pb-4 overflow-x-auto">
+      <ConfirmationModal
+        isOpen={!!pendingMove}
+        onClose={() => setPendingMove(null)}
+        onConfirm={confirmMove}
+        isLoading={isMoving}
+        variant="warning"
+        title="Mover cotización"
+        message={`Al pasar a "${pendingLabel}" se descontará del inventario el stock de los productos de esta cotización. ¿Continuar?`}
+        confirmText="Sí, mover"
+        cancelText="Cancelar"
+      />
       <div className="flex gap-6 pb-6 min-w-max px-2">
         {columns.map(col => {
           const columnQuotes = getQuotesByStatus(col.id);
           const getDropZoneColor = (statusId: string) => {
             switch(statusId) {
               case 'DRAFT': return 'bg-gray-100 border-gray-200';
+              case 'CALCULATED': return 'bg-cyan-50 border-cyan-200';
               case 'SENT': return 'bg-blue-50 border-blue-200';
               case 'APPROVED': return 'bg-purple-50 border-purple-200';
               case 'IN_PRODUCTION': return 'bg-orange-50 border-orange-200';
@@ -159,7 +212,7 @@ export default function KanbanBoard({
                       )}
 
 
-                      <TaskCard quote={quote} />
+                      <TaskCard quote={quote} columns={columns} onMove={requestMove} />
                     </div>
                   );
                 })}
@@ -175,8 +228,7 @@ export default function KanbanBoard({
   );
 }
 
-function TaskCard({ quote }: { quote: any }) {
-  const remaining = quote.total - (quote.realAmountCollected || 0);
+function TaskCard({ quote, columns, onMove }: { quote: any; columns: any[]; onMove: (id: string, status: string) => void }) {
 
   return (
     <Link 
@@ -209,9 +261,16 @@ function TaskCard({ quote }: { quote: any }) {
           <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total</span>
           <span className="text-sm font-black text-slate-900">${quote.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
-        {quote.paymentStatus === "PAID" && (
-          <CheckSquare className="h-4 w-4 text-emerald-500" />
-        )}
+        <div className="flex items-center gap-2">
+          {quote.paymentStatus === "PAID" && <CheckSquare className="h-4 w-4 text-emerald-500" />}
+          {/* Alternativa al arrastre: funciona con teclado y en pantallas táctiles */}
+          <MenuSelect
+            ariaLabel={`Mover ${quote.folio} a otro estatus`}
+            value={quote.status === "REJECTED" ? "CANCELLED" : quote.status}
+            options={columns.map((c) => ({ value: c.id, label: c.label.split(" / ")[0], dot: c.dotClass }))}
+            onChange={(v) => onMove(quote.id, v)}
+          />
+        </div>
       </div>
     </Link>
   );
