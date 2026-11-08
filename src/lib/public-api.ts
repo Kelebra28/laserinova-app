@@ -138,6 +138,7 @@ export function toPublicProduct(rows: Row[]) {
   const first = rows[0];
   const slug = slugify(first.model ?? first.sku ?? first.id);
   const prices = rows.map((r) => r.unitPrice).filter((p) => p > 0);
+  const multiColor = new Set(rows.filter((r) => r.color).map((r) => slugify(colorLabel(r.color!)))).size >= 2;
   return {
     slug,
     model: first.model ?? first.sku,
@@ -150,7 +151,8 @@ export function toPublicProduct(rows: Row[]) {
     printTechniques: first.printTechniques,
     images: imageFor(slug),
     colors: rows.filter((r) => r.color).map((r) => {
-      const image = imageForColor(slug, r.color!);
+      // Un modelo de un solo color no tiene foto de color (usa la del modelo; mismo criterio que mirror-color-images.ts).
+      const image = multiColor ? imageForColor(slug, r.color!) : undefined;
       return { name: colorLabel(r.color!), sku: r.sku, ...(image ? { image } : {}), ...(showStock() ? { stock: pieces(r.stockQuantity) } : {}) };
     }),
     ...(showPrices() && prices.length ? { priceFrom: Math.min(...prices) } : {}),
