@@ -1,5 +1,5 @@
 "use client";
-import { resolveProductUnitPrice, pickProductPricing, calculateProductTierPrice } from "@/lib/calculations";
+import { resolveProductUnitPrice, pickProductPricing, calculateProductTierPrice, maxCostOfModel } from "@/lib/calculations";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -19,7 +19,8 @@ export function ProductDetailClient({ initialProduct, variants, pricing = {} }: 
   const [activeVariant, setActiveVariant] = useState(initialProduct);
 
   // Precio de catálogo = escala de pocas piezas (1 a N); las demás escalas se listan abajo
-  const catalogPrice = resolveProductUnitPrice(activeVariant, 1, pricing);
+  const modelMaxCost = maxCostOfModel(activeVariant, variants);
+  const catalogPrice = resolveProductUnitPrice(activeVariant, 1, pricing, modelMaxCost);
   const displayPrice = catalogPrice.unitPrice || activeVariant.unitCost || 0;
   const pp = pickProductPricing(pricing);
   const tierRows = catalogPrice.tiered
@@ -27,7 +28,7 @@ export function ProductDetailClient({ initialProduct, variants, pricing = {} }: 
         { label: `1 a ${pp.producto_escala_2 - 1} pzs`, qty: 1 },
         { label: `${pp.producto_escala_2} a ${pp.producto_escala_3 - 1} pzs`, qty: pp.producto_escala_2 },
         { label: `${pp.producto_escala_3}+ pzs`, qty: pp.producto_escala_3 },
-      ].map((t) => ({ ...t, ...calculateProductTierPrice(Number(activeVariant.unitCost) || 0, t.qty, pricing) }))
+      ].map((t) => ({ ...t, ...calculateProductTierPrice(modelMaxCost, t.qty, pricing) }))
     : [];
   const activeStock = activeVariant.stockQuantity ?? 0;
 
@@ -91,7 +92,7 @@ export function ProductDetailClient({ initialProduct, variants, pricing = {} }: 
                 {formatCurrency(displayPrice * 1.16)} <span className="text-sm font-medium text-zinc-500 ml-1">con IVA</span>
               </p>
               <p className="text-sm font-medium text-zinc-400 mt-1">
-                {formatCurrency(displayPrice)} sin IVA • Costo: <span className="font-bold text-red-600">{formatCurrency(activeVariant.unitCost)}</span>
+                {formatCurrency(displayPrice)} sin IVA • Costo: <span className="font-bold text-red-600">{formatCurrency(catalogPrice.tiered ? modelMaxCost : activeVariant.unitCost)}</span>
               </p>
               {tierRows.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-zinc-100 space-y-1">

@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { Calculator, Save, Plus, Trash2, Info, DollarSign, Check, Loader2 } from "lucide-react";
 import Link from "next/link";
 import SubmitButton from "@/components/ui/SubmitButton";
-import { calculateConcept, CalculationInput, GlobalCosts, MaterialData, resolveProductUnitPrice } from "@/lib/calculations";
+import { calculateConcept, CalculationInput, GlobalCosts, MaterialData, resolveProductUnitPrice, maxCostOfModel } from "@/lib/calculations";
 import { updateQuoteAction } from "@/server/actions/quote.actions";
 import MaterialSelector from "@/components/quotes/MaterialSelector";
 import ClientSelector from "@/components/quotes/ClientSelector";
@@ -109,8 +109,8 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
         if (field === "quantity" && updated.productId) {
           const prod = products.find((p: any) => p.id === updated.productId);
           if (prod) {
-            const prev = resolveProductUnitPrice(prod, Number(c.quantity) || 1, globalCosts);
-            const next = resolveProductUnitPrice(prod, Number(value) || 1, globalCosts);
+            const prev = resolveProductUnitPrice(prod, Number(c.quantity) || 1, globalCosts, maxCostOfModel(prod, products));
+            const next = resolveProductUnitPrice(prod, Number(value) || 1, globalCosts, maxCostOfModel(prod, products));
             if (next.tiered && Math.abs((Number(c.finalUnitPrice) || 0) - prev.unitPrice) < 0.01) {
               updated.manualUnitPrice = String(next.unitPrice);
               updated.manualUnitCost = String(next.unitCost);
@@ -305,7 +305,7 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
       if (c.id === conceptId) {
         const qty = Number(c.quantity) || 1;
         // Precio por escalas de cantidad (o precio manual del producto si lo tiene)
-        const resolved = resolveProductUnitPrice(product, qty, globalCosts);
+        const resolved = resolveProductUnitPrice(product, qty, globalCosts, maxCostOfModel(product, products));
         const unitCost = resolved.unitCost;
         const suggestedSalePrice = resolved.unitPrice;
         const finalUnitPrice = suggestedSalePrice;

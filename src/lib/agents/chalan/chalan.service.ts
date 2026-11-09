@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
-import { calculateConcept, GlobalCosts, pickProductPricing } from "@/lib/calculations";
+import { calculateConcept, GlobalCosts, pickProductPricing, resolveProductUnitPrice, modelCostKey } from "@/lib/calculations";
+import { getModelMaxCostMap } from "@/lib/product-pricing";
 import { ChalanEstimateInput, ChalanContext, getChalanPrompt } from "./prompt";
 import { getWorkshopRulesFromPinecone } from "./knowledge-base";
 
@@ -47,10 +48,17 @@ export async function executeChalanEstimate(
   try {
     const products = await prisma.product.findMany({
       where: { active: true },
-      select: { name: true, unitPrice: true },
+      select: { name: true, unitPrice: true, unitCost: true, provider: true, model: true },
     });
     if (products.length > 0) {
-      productListContext = products.map((p) => `- ${p.name}: $${p.unitPrice} MXN`).join("\n");
+      // Precio de catálogo (escala de pocas piezas) con los costos globales de la configuración.
+      const pricingConfigs = await prisma.costConfiguration.findMany({ where: { active: true } });
+      const pricingGlobals: Record<string, number> = {};
+      pricingConfigs.forEach((c) => { pricingGlobals[c.key] = c.value; });
+      const modelMaxCosts = await getModelMaxCostMap();
+      productListContext = products
+        .map((p) => `- ${p.name}: $${resolveProductUnitPrice(p, 1, pricingGlobals, modelMaxCosts[modelCostKey(p)]).unitPrice} MXN`)
+        .join("\n");
     }
 
     materials = await prisma.material.findMany({ orderBy: { name: "asc" } });

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Calculator, Save, Plus, Trash2, Info, DollarSign, Check, Loader2 } from "lucide-react";
-import { calculateConcept, CalculationInput, GlobalCosts, MaterialData, resolveProductUnitPrice } from "@/lib/calculations";
+import { calculateConcept, CalculationInput, GlobalCosts, MaterialData, resolveProductUnitPrice, maxCostOfModel } from "@/lib/calculations";
 import { createQuoteAction } from "@/server/actions/quote.actions";
 import MaterialSelector from "@/components/quotes/MaterialSelector";
 import ClientSelector from "@/components/quotes/ClientSelector";
@@ -135,7 +135,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
         
         if (initType === "RESALE" && matchedProduct) {
            const currentMargin = Number(margin) || 35;
-           const resolvedProduct = resolveProductUnitPrice(matchedProduct, initQuantity, globalCosts);
+           const resolvedProduct = resolveProductUnitPrice(matchedProduct, initQuantity, globalCosts, maxCostOfModel(matchedProduct, products));
            const uCost = resolvedProduct.unitCost;
            const calculatedSalePrice = resolvedProduct.unitPrice;
 
@@ -292,7 +292,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
       if (c.id === conceptId) {
         const qty = Number(c.quantity) || 1;
         // Precio por escalas de cantidad (o precio manual del producto si lo tiene)
-        const resolved = resolveProductUnitPrice(product, qty, globalCosts);
+        const resolved = resolveProductUnitPrice(product, qty, globalCosts, maxCostOfModel(product, products));
         const unitCost = resolved.unitCost;
         const suggestedSalePrice = resolved.unitPrice;
         const finalUnitPrice = suggestedSalePrice;
@@ -369,8 +369,8 @@ export default function NewQuoteForm({ clients, materials, products = [], global
         if (field === "quantity" && updated.productId) {
           const prod = products.find((p: any) => p.id === updated.productId);
           if (prod) {
-            const prev = resolveProductUnitPrice(prod, Number(c.quantity) || 1, globalCosts);
-            const next = resolveProductUnitPrice(prod, Number(value) || 1, globalCosts);
+            const prev = resolveProductUnitPrice(prod, Number(c.quantity) || 1, globalCosts, maxCostOfModel(prod, products));
+            const next = resolveProductUnitPrice(prod, Number(value) || 1, globalCosts, maxCostOfModel(prod, products));
             if (next.tiered && Math.abs((Number(c.finalUnitPrice) || 0) - prev.unitPrice) < 0.01) {
               updated.manualUnitPrice = String(next.unitPrice);
               updated.manualUnitCost = String(next.unitCost);

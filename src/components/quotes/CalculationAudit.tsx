@@ -124,7 +124,8 @@ export default function CalculationAudit({ concepts, margin, globals = {} }: Cal
           </div>
           <p className="text-[10px] font-mono text-gray-400 leading-relaxed mb-3">
             Costo c/IVA: <span className="text-gray-300">{pp.proveedor_incluye_iva ? "Costo proveedor (ya trae IVA)" : `Costo proveedor × ${(1 + iva / 100).toFixed(2)}`}</span><br/>
-            Precio: <span className="text-gray-300">Costo c/IVA ÷ (1 − margen de la escala)</span><br/>
+            Costo base: <span className="text-gray-300">el del color más caro del modelo</span><br/>
+            Precio: <span className="text-gray-300">Costo c/IVA ÷ (1 − margen de la escala), mínimo Costo c/IVA + ${pp.ganancia_minima_pieza}</span><br/>
             Factura: <span className="text-gray-300">Precio × {(1 + iva / 100).toFixed(2)} (solo si el cliente factura)</span>
           </p>
           <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Ejemplo con costo proveedor ${EXAMPLE_COST}</p>

@@ -29,6 +29,7 @@ export interface ProductPricingConfig {
   producto_escala_2: number;     // piezas donde inicia la 2ª escala
   producto_escala_3: number;     // piezas donde inicia la 3ª escala
   proveedor_incluye_iva: number; // 1 = el costo del proveedor ya trae IVA, 0 = viene sin IVA
+  ganancia_minima_pieza: number; // $ mínimos de ganancia por pieza (sobre el costo con IVA)
 }
 
 export const PRODUCT_PRICING_DEFAULTS: ProductPricingConfig = {
@@ -38,6 +39,7 @@ export const PRODUCT_PRICING_DEFAULTS: ProductPricingConfig = {
   producto_escala_2: 50,
   producto_escala_3: 200,
   proveedor_incluye_iva: 0,
+  ganancia_minima_pieza: 1,
 };
 
 /** Extrae la configuración de precios de producto de un mapa key→valor, con valores por defecto (0 es válido). */
@@ -62,6 +64,7 @@ export interface ProductTierPrice {
   costWithIva: number; // costo por pieza con IVA (base del margen)
   margin: number;      // % de margen aplicado según cantidad
   price: number;       // precio unitario sin factura (sin IVA de venta)
+  minProfitApplied: boolean; // true si el piso de ganancia mínima subió el precio
 }
 
 export function calculateProductTierPrice(
@@ -74,16 +77,46 @@ export function calculateProductTierPrice(
   const cost = Number(supplierUnitCost) || 0;
   const costWithIva = c.proveedor_incluye_iva ? cost : cost * ivaFactor;
   const margin = Math.min(getProductMarginPct(qty, g), 99);
-  const price = costWithIva > 0 ? costWithIva / ((100 - margin) / 100) : 0;
+  const byMargin = costWithIva > 0 ? costWithIva / ((100 - margin) / 100) : 0;
+  const byMinProfit = costWithIva > 0 ? costWithIva + Math.max(c.ganancia_minima_pieza, 0) : 0;
+  const price = Math.max(byMargin, byMinProfit);
   return {
     costWithIva: Math.round(costWithIva * 100) / 100,
     margin,
     price: Math.round(price * 100) / 100,
+    minProfitApplied: byMinProfit > byMargin,
   };
 }
 
-/** Un producto tiene precio manual cuando su precio de venta es distinto al costo del proveedor (el sync los guarda iguales). */
-export function hasManualProductPrice(product: { unitCost?: number | null; unitPrice?: number | null }): boolean {
+// Productos que se sincronizan con el proveedor: su precio de venta guardado NO es manual (es un resto del sync).
+const SUPPLIER_PROVIDERS = ["doble vela", "promoopcion", "promo opcion", "promo opción"];
+
+type PricedProduct = { unitCost?: number | null; unitPrice?: number | null; provider?: string | null; model?: string | null };
+
+export function isSupplierSyncedProduct(product: { provider?: string | null }): boolean {
+  return SUPPLIER_PROVIDERS.includes((product.provider ?? "").trim().toLowerCase());
+}
+
+/** Clave proveedor+modelo: todos los colores de un modelo comparten precio. */
+export function modelCostKey(product: { provider?: string | null; model?: string | null }): string {
+  return `${(product.provider ?? "").trim().toLowerCase()}|${(product.model ?? "").trim().toLowerCase()}`;
+}
+
+/** Costo más alto entre los colores del mismo modelo (si no hay modelo, el costo del propio producto). */
+export function maxCostOfModel(product: PricedProduct, all: PricedProduct[]): number {
+  const own = Number(product.unitCost) || 0;
+  if (!product.model) return own;
+  const key = modelCostKey(product);
+  let max = own;
+  for (const p of all) {
+    if (modelCostKey(p) === key) max = Math.max(max, Number(p.unitCost) || 0);
+  }
+  return max;
+}
+
+/** Un producto tiene precio manual cuando NO viene del proveedor y su precio de venta es distinto al costo. */
+export function hasManualProductPrice(product: PricedProduct): boolean {
+  if (isSupplierSyncedProduct(product)) return false;
   const price = Number(product.unitPrice) || 0;
   const cost = Number(product.unitCost) || 0;
   return price > 0 && Math.abs(price - cost) > 0.001;
@@ -91,16 +124,19 @@ export function hasManualProductPrice(product: { unitCost?: number | null; unitP
 
 /**
  * Precio unitario de un producto para una cantidad dada.
- * Respeta el precio manual; si no lo tiene, aplica las escalas por cantidad.
+ * Respeta el precio manual; si no lo tiene, aplica las escalas por cantidad
+ * usando el costo más alto de los colores del modelo (modelMaxCost) y la ganancia mínima por pieza.
  */
 export function resolveProductUnitPrice(
-  product: { unitCost?: number | null; unitPrice?: number | null },
+  product: PricedProduct,
   qty: number,
-  g: Record<string, number | undefined>
+  g: Record<string, number | undefined>,
+  modelMaxCost?: number
 ): { unitCost: number; unitPrice: number; margin: number | null; tiered: boolean } {
-  const supplierCost = Number(product.unitCost) || 0;
+  const ownCost = Number(product.unitCost) || 0;
+  const supplierCost = Math.max(ownCost, Number(modelMaxCost) || 0);
   if (hasManualProductPrice(product)) {
-    return { unitCost: supplierCost, unitPrice: Number(product.unitPrice) || 0, margin: null, tiered: false };
+    return { unitCost: ownCost, unitPrice: Number(product.unitPrice) || 0, margin: null, tiered: false };
   }
   if (supplierCost <= 0) {
     return { unitCost: 0, unitPrice: Number(product.unitPrice) || 0, margin: null, tiered: false };

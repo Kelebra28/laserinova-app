@@ -19,7 +19,7 @@ import {
   Sparkles
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { calculateConcept, resolveProductUnitPrice, GlobalCosts } from "@/lib/calculations";
+import { calculateConcept, resolveProductUnitPrice, maxCostOfModel, GlobalCosts } from "@/lib/calculations";
 import { getQuickQuoteDataAction } from "@/server/actions/quote.actions";
 
 interface MaterialItem {
@@ -38,6 +38,8 @@ interface ProductItem {
   name: string;
   unitCost: number;
   unitPrice: number;
+  provider?: string | null;
+  model?: string | null;
   image?: string | null;
 }
 
@@ -163,7 +165,7 @@ export function QuickQuoteModal({ isOpen, onClose }: Props) {
         if (merged.type === "PRODUCT") {
           const prod = products.find((p) => p.id === merged.productId);
           if (prod) {
-            const resolved = resolveProductUnitPrice(prod, Number(merged.quantity) || 1, globalCosts);
+            const resolved = resolveProductUnitPrice(prod, Number(merged.quantity) || 1, globalCosts, maxCostOfModel(prod, products));
             if (resolved.tiered && updates.margin === undefined) {
               // Escala por cantidad (costo + IVA, margen según piezas)
               calculatedCost = resolved.unitCost;

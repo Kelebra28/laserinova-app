@@ -416,6 +416,8 @@ export async function getQuickQuoteDataAction() {
           name: true,
           unitCost: true,
           unitPrice: true,
+          provider: true,
+          model: true,
           image: true,
         },
         orderBy: { name: "asc" }

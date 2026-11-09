@@ -3,7 +3,7 @@ import { timingSafeEqual } from "crypto";
 import { existsSync } from "fs";
 import { prisma } from "@/lib/prisma";
 import path from "path";
-import { resolveProductUnitPrice } from "@/lib/calculations";
+import { resolveProductUnitPrice, maxCostOfModel } from "@/lib/calculations";
 import { getProductPricingGlobals } from "@/lib/product-pricing";
 
 /**
@@ -81,6 +81,7 @@ export const productSelect = {
   printTechniques: true,
   unitPrice: true,
   unitCost: true,
+  provider: true,
   stockQuantity: true,
   category: { select: { name: true, slug: true } },
 } as const;
@@ -88,7 +89,7 @@ export const productSelect = {
 type Row = {
   id: string; sku: string | null; name: string; model: string | null; brand: string | null; color: string | null;
   description: string | null; material: string | null;
-  measurements: string | null; printTechniques: string | null; unitPrice: number; unitCost: number; stockQuantity: number;
+  measurements: string | null; printTechniques: string | null; unitPrice: number; unitCost: number; provider: string | null; stockQuantity: number;
   category: { name: string; slug: string };
 };
 
@@ -141,7 +142,7 @@ export function toPublicProduct(rows: Row[], pricing: Record<string, number> = {
   const first = rows[0];
   const slug = slugify(first.model ?? first.sku ?? first.id);
   // Precio de la página = escala de pocas piezas (la más alta); precio manual del producto se respeta.
-  const prices = rows.map((r) => resolveProductUnitPrice(r, 1, pricing).unitPrice).filter((p) => p > 0);
+  const prices = rows.map((r) => resolveProductUnitPrice({ ...r, model: first.model }, 1, pricing, maxCostOfModel({ ...first }, rows.map((x) => ({ ...x, model: first.model })))).unitPrice).filter((p) => p > 0);
   const multiColor = new Set(rows.filter((r) => r.color).map((r) => slugify(colorLabel(r.color!)))).size >= 2;
   return {
     slug,

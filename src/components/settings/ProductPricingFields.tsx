@@ -11,6 +11,7 @@ interface Props {
     producto_escala_2: number;
     producto_escala_3: number;
     proveedor_incluye_iva: number;
+    ganancia_minima_pieza: number;
   };
 }
 
@@ -42,6 +43,7 @@ export function ProductPricingFields({ initial }: Props) {
   const [m3, setM3] = useState<number | string>(initial.margen_producto_3);
   const [e2, setE2] = useState<number | string>(initial.producto_escala_2);
   const [e3, setE3] = useState<number | string>(initial.producto_escala_3);
+  const [minProfit, setMinProfit] = useState<number | string>(initial.ganancia_minima_pieza);
   const [includesIva, setIncludesIva] = useState(String(initial.proveedor_incluye_iva ? 1 : 0));
 
   const e2n = Number(e2) || 0;
@@ -103,6 +105,17 @@ export function ProductPricingFields({ initial }: Props) {
           La Escala 3 debe empezar en más piezas que la Escala 2.
         </p>
       )}
+
+      <div className="max-w-sm space-y-2">
+        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+          Ganancia mínima por pieza
+        </label>
+        <Field name="ganancia_minima_pieza" value={minProfit} onChange={setMinProfit} unit="$" />
+        <p className="text-[11px] text-gray-400 ml-1">
+          Si el margen deja menos que esto sobre el costo con IVA, el precio se sube hasta ganar al menos este monto.
+          El costo que se usa es el del color más caro de cada modelo.
+        </p>
+      </div>
 
       <div className="max-w-sm">
         <Select

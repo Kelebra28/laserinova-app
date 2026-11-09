@@ -147,6 +147,7 @@ export default async function SettingsPage() {
                 producto_escala_2: configMap.get("producto_escala_2") ?? 50,
                 producto_escala_3: configMap.get("producto_escala_3") ?? 200,
                 proveedor_incluye_iva: configMap.get("proveedor_incluye_iva") ?? 0,
+                ganancia_minima_pieza: configMap.get("ganancia_minima_pieza") ?? 1,
               }}
             />
           </div>
