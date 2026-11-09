@@ -310,7 +310,7 @@ export function UsersPanel({ users: initialUsers, currentUserId }: Props) {
   };
 
   const handleDelete = (user: AppUser) => {
-    if (!window.confirm(`¿Eliminar a "${user.name}" definitivamente? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(`¿Eliminar a "${user.name}" definitivamente? Sus cotizaciones, proveedores y recibos pasarán a tu usuario. No se puede deshacer.`)) return;
     startTransition(async () => {
       const res = await deleteUserAction(user.id);
       if (res.success) setUsers((prev) => prev.filter((u) => u.id !== user.id));

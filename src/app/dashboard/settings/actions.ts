@@ -125,17 +125,26 @@ export async function deleteUserAction(userId: string): Promise<{ success: boole
   if ((session?.user as any)?.role !== "ADMIN") return { success: false, error: "No autorizado" };
   if ((session?.user as any)?.id === userId) return { success: false, error: "No puedes eliminar tu propio usuario" };
 
+  const adminId = (session?.user as any)?.id as string;
+
   try {
-    await prisma.user.delete({ where: { id: userId } });
+    // Los registros del usuario pasan al admin que lo elimina; el resto se desvincula.
+    await prisma.$transaction([
+      prisma.quote.updateMany({ where: { userId }, data: { userId: adminId } }),
+      prisma.provider.updateMany({ where: { userId }, data: { userId: adminId } }),
+      prisma.receipt.updateMany({ where: { userId }, data: { userId: adminId } }),
+      prisma.paymentRequest.updateMany({ where: { createdById: userId }, data: { createdById: adminId } }),
+      prisma.financialTransaction.updateMany({ where: { createdById: userId }, data: { createdById: null } }),
+      prisma.financialTransaction.updateMany({ where: { deletedById: userId }, data: { deletedById: null } }),
+      prisma.task.updateMany({ where: { createdById: userId }, data: { createdById: null } }),
+      prisma.taskAssignee.deleteMany({ where: { userId } }),
+      prisma.email.deleteMany({ where: { userId } }),
+      prisma.user.delete({ where: { id: userId } }),
+    ]);
     revalidatePath("/dashboard/settings");
     return { success: true };
   } catch (e: any) {
-    if (e?.code === "P2003" || e?.code === "P2014") {
-      return {
-        success: false,
-        error: "Este usuario tiene registros asociados (tareas, cotizaciones, pagos, etc.) y no se puede eliminar. Desactívalo en su lugar.",
-      };
-    }
+    console.error("deleteUserAction", e);
     return { success: false, error: "No se pudo eliminar el usuario" };
   }
 }
