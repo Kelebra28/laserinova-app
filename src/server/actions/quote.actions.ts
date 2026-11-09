@@ -27,7 +27,7 @@ import { prisma } from "@/lib/prisma";
 import { generateQuotePDF } from "@/lib/pdf";
 import fs from "fs";
 import path from "path";
-import { processAIAgentResponse, sendDocumentToMeta } from "../services/whatsapp.service";
+import { processAIAgentResponse, sendQuotePdfToClient } from "../services/whatsapp.service";
 import { notificationEmitter } from "@/lib/notification-emitter";
 import { after } from "next/server";
 
@@ -372,84 +372,10 @@ export async function sendQuoteViaWhatsAppAction(quoteId: string) {
   try {
     await requireAuth();
     
-    const quote = await prisma.quote.findUnique({
-      where: { id: quoteId },
-      include: {
-        client: true,
-        concepts: {
-          orderBy: { order: 'asc' },
-          include: { material: true, product: true }
-        }
-      }
-    });
+    // PDF + envío por WhatsApp + instrucción interna para la IA (lógica compartida con la autorización por WhatsApp)
+    const { contact } = await sendQuotePdfToClient(quoteId);
 
-    if (!quote || (!quote.clientId && !quote.contactId)) {
-      throw new Error("Cotización no encontrada o sin cliente asociado");
-    }
-
-    const contact = await prisma.whatsAppContact.findFirst({
-      where: quote.contactId ? { id: quote.contactId } : { clientId: quote.clientId }
-    });
-
-    if (!contact) {
-      throw new Error("El cliente no tiene un número de WhatsApp registrado en el sistema");
-    }
-
-    // 1. Generar PDF localmente y pasarlo a Base64 para Vercel
-    const pdfBuffer = await generateQuotePDF([quote]);
-    const base64 = (pdfBuffer as Buffer).toString('base64');
-    const publicUrl = `data:application/pdf;base64,${base64}`;
-    const filename = `Cotizacion_${quote.folio}_${Date.now()}.pdf`;
-
-    // 2. Mandar el PDF de verdad por WhatsApp (el simulador no sale a Meta) y guardarlo en el chat
-    let metaMessageId = `local_pdf_${Date.now()}`;
-    if (!contact.name?.includes('Simulador')) {
-      try {
-        const sentId = await sendDocumentToMeta(contact.phone, pdfBuffer as Buffer, filename, `Cotización ${quote.folio}`);
-        if (sentId) metaMessageId = sentId;
-      } catch (e: any) {
-        console.error('Error enviando PDF de cotización por WhatsApp:', e);
-        const msg = String(e?.message || '');
-        const outside24h = /131047|re-engage|24 hours/i.test(msg);
-        throw new Error(
-          outside24h
-            ? 'Han pasado más de 24 h desde el último mensaje del cliente: WhatsApp no deja enviar el PDF hasta que él escriba (o se use una plantilla).'
-            : `WhatsApp rechazó el envío: ${msg}`
-        );
-      }
-    }
-
-    const docMsg = await prisma.whatsAppMessage.create({
-      data: {
-        contactId: contact.id,
-        messageId: metaMessageId,
-        direction: 'OUTBOUND',
-        type: 'DOCUMENT',
-        content: `Cotización ${quote.folio}`,
-        mediaUrl: publicUrl,
-        mimeType: 'application/pdf',
-        status: 'SENT'
-      }
-    });
-    await notificationEmitter.emit('whatsapp_message', { message: { ...docMsg, mediaUrl: 'FETCH_REQUIRED' }, contact });
-
-    // 3. Insertar instrucción INTERNAL para la IA
-    const internalPrompt = `[INSTRUCCIÓN INTERNA DEL SISTEMA]: Acabo de enviarle al cliente la Cotización Aprobada ${quote.folio} en formato PDF. El total es de $${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN. 
-Por favor, escríbele un mensaje corto y amigable avisándole que ya tiene la cotización oficial arriba y que cualquier duda me la escriba por aquí. No le preguntes qué le parece.
-REGLA CRÍTICA: Recuerda que tienes prohibido desglosar costos en materiales y horas. Solo menciona el precio final que acabo de darte.`;
-
-    const internalMsg = await prisma.whatsAppMessage.create({
-      data: {
-        contactId: contact.id,
-        messageId: `internal_instruction_${Date.now()}`,
-        direction: 'INTERNAL',
-        type: 'TEXT',
-        content: internalPrompt,
-        status: 'DELIVERED'
-      }
-    });
-
-    // 4. Detonar la respuesta de la IA
+    // Detonar la respuesta de la IA
     if (contact.botMode) {
       // after() mantiene viva la función en Vercel hasta que el bot termine de contestar.
       after(async () => {

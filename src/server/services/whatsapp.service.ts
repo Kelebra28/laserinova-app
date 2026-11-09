@@ -8,6 +8,7 @@ import { getSecretarySystemPrompt } from '@/lib/agents/secretary/prompt';
 import { getRelevantRules } from '@/lib/agents/secretary/knowledge-base';
 import { executeChalanEstimate } from '@/lib/agents/chalan';
 import { sendPushToAdmins } from '@/lib/push';
+import { generateQuotePDF } from '@/lib/pdf';
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -68,6 +69,23 @@ export async function sendDocumentToMeta(to: string, buffer: Buffer, filename: s
     document: { id: upload.id, filename, ...(caption ? { caption } : {}) },
   });
   return (sent?.messages?.[0]?.id as string | undefined) ?? null;
+}
+
+/**
+ * ¿Este teléfono es de un administrador (ADMIN_ALERT_PHONE)? Se compara por los últimos 10 dígitos
+ * porque Meta entrega los números de México como 521XXXXXXXXXX y la variable suele ir como 52XXXXXXXXXX.
+ */
+export function isAdminPhone(phone: string): boolean {
+  const last10 = (p: string) => p.replace(/\D/g, '').slice(-10);
+  const mine = last10(phone);
+  if (mine.length < 10) return false;
+  return (process.env.ADMIN_ALERT_PHONE || '').split(',').map(p => last10(p.trim())).some(p => p === mine);
+}
+
+/** Enlace que abre una cotización dentro del CRM. */
+export function quoteLink(quoteId: string) {
+  const base = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://app.laserinova.com').replace(/\/$/, '');
+  return `${base}/dashboard/quotes/${quoteId}`;
 }
 
 /** Ruta relativa del chat (para push: abre en el mismo origen de la PWA instalada). */
@@ -261,6 +279,12 @@ export async function processIncomingMessage(entry: any) {
     });
   }
 
+  // Los administradores hablan con el bot de gestión (whatsapp-admin.service), no con el bot de clientes.
+  const isAdmin = isAdminPhone(senderPhone);
+  if (isAdmin && contact.botMode) {
+    contact = await prisma.whatsAppContact.update({ where: { id: contact.id }, data: { botMode: false } });
+  }
+
   // Comprobar si el mensaje ya fue procesado
   const existingMsg = await prisma.whatsAppMessage.findUnique({
     where: { messageId: msg.id }
@@ -301,7 +325,7 @@ export async function processIncomingMessage(entry: any) {
     await prisma.whatsAppMessage.update({ where: { id: target.id }, data: { reaction: emoji } });
     await notificationEmitter.emit('whatsapp_reaction', { id: target.id, contactId: contact.id, reaction: emoji });
 
-    if (emoji && !contact.name?.includes('Simulador')) {
+    if (emoji && !isAdminPhone(senderPhone) && !contact.name?.includes('Simulador')) {
       const preview = target.content?.replace(/\s*\n\s*/g, ' ').slice(0, 80);
       await sendPushToAdmins({
         title: `${emoji} ${contact.name || `+${contact.phone}`}`,
@@ -358,8 +382,8 @@ export async function processIncomingMessage(entry: any) {
     }
   });
 
-  // Push a los admins: quién escribe y qué dice (el simulador no avisa).
-  if (!contact.name?.includes('Simulador')) {
+  // Push a los admins: quién escribe y qué dice (el simulador y los propios admins no avisan).
+  if (!isAdmin && !contact.name?.includes('Simulador')) {
     const label = { IMAGE: skipBot ? '' : '📷 Foto', AUDIO: '🎤 Audio', DOCUMENT: '📄 Documento' }[type as string];
     const preview = messageContent.replace(/\s*\n\s*/g, ' ').slice(0, 160);
     const body = label ? (preview ? `${label}: ${preview}` : label) : preview || 'Nuevo mensaje';
@@ -371,7 +395,7 @@ export async function processIncomingMessage(entry: any) {
     });
   }
 
-  return { type: 'message', message: savedMessage, contact, skipBot };
+  return { type: 'message', message: savedMessage, contact, skipBot, isAdmin };
 }
 
 // Mensajes del cliente que disparan al bot (los stickers se guardan como IMAGE pero no lo disparan).
@@ -459,6 +483,86 @@ async function reportBotFailure(contact: { id: string; name: string | null; phon
   } catch (e) {
     console.error('No se pudo avisar de la falla del bot:', e);
   }
+}
+
+/**
+ * Genera el PDF de una cotización, se lo manda al cliente por WhatsApp y lo guarda en el chat.
+ * No revisa sesión: quien lo llame (acción del CRM o el flujo de autorización por WhatsApp)
+ * es responsable de haber autorizado el envío. Lanza Error con un mensaje legible si falla.
+ * Devuelve el contacto y el folio; disparar la respuesta del bot queda a cargo de quien llama.
+ */
+export async function sendQuotePdfToClient(quoteId: string) {
+  const quote = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    include: {
+      client: true,
+      concepts: { orderBy: { order: 'asc' }, include: { material: true, product: true } },
+    },
+  });
+
+  if (!quote || (!quote.clientId && !quote.contactId)) {
+    throw new Error("Cotización no encontrada o sin cliente asociado");
+  }
+
+  const contact = await prisma.whatsAppContact.findFirst({
+    where: quote.contactId ? { id: quote.contactId } : { clientId: quote.clientId },
+  });
+  if (!contact) {
+    throw new Error("El cliente no tiene un número de WhatsApp registrado en el sistema");
+  }
+
+  // Generar PDF y pasarlo a Base64 para Vercel
+  const pdfBuffer = (await generateQuotePDF([quote])) as Buffer;
+  const publicUrl = `data:application/pdf;base64,${pdfBuffer.toString('base64')}`;
+  const filename = `Cotizacion_${quote.folio}_${Date.now()}.pdf`;
+
+  // Mandar el PDF de verdad por WhatsApp (el simulador no sale a Meta)
+  let metaMessageId = `local_pdf_${Date.now()}`;
+  if (!contact.name?.includes('Simulador')) {
+    try {
+      const sentId = await sendDocumentToMeta(contact.phone, pdfBuffer, filename, `Cotización ${quote.folio}`);
+      if (sentId) metaMessageId = sentId;
+    } catch (e: any) {
+      console.error('Error enviando PDF de cotización por WhatsApp:', e);
+      const msg = String(e?.message || '');
+      const outside24h = /131047|re-engage|24 hours/i.test(msg);
+      throw new Error(
+        outside24h
+          ? 'Han pasado más de 24 h desde el último mensaje del cliente: WhatsApp no deja enviar el PDF hasta que él escriba (o se use una plantilla).'
+          : `WhatsApp rechazó el envío: ${msg}`
+      );
+    }
+  }
+
+  const docMsg = await prisma.whatsAppMessage.create({
+    data: {
+      contactId: contact.id,
+      messageId: metaMessageId,
+      direction: 'OUTBOUND',
+      type: 'DOCUMENT',
+      content: `Cotización ${quote.folio}`,
+      mediaUrl: publicUrl,
+      mimeType: 'application/pdf',
+      status: 'SENT',
+    },
+  });
+  await notificationEmitter.emit('whatsapp_message', { message: { ...docMsg, mediaUrl: 'FETCH_REQUIRED' }, contact });
+
+  // Instrucción INTERNAL para que la IA le avise al cliente que ya tiene su cotización
+  await prisma.whatsAppMessage.create({
+    data: {
+      contactId: contact.id,
+      messageId: `internal_instruction_${Date.now()}`,
+      direction: 'INTERNAL',
+      type: 'TEXT',
+      content: `[INSTRUCCIÓN INTERNA DEL SISTEMA]: Acabo de enviarle al cliente la Cotización Aprobada ${quote.folio} en formato PDF. El total es de $${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN.
+Por favor, escríbele un mensaje corto y amigable avisándole que ya tiene la cotización oficial arriba y que cualquier duda me la escriba por aquí. No le preguntes qué le parece.
+REGLA CRÍTICA: Recuerda que tienes prohibido desglosar costos en materiales y horas. Solo menciona el precio final que acabo de darte.`,
+      status: 'DELIVERED',
+    },
+  });
+
+  return { contact, folio: quote.folio, total: quote.total };
 }
 
 /**

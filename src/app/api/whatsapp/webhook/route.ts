@@ -4,6 +4,7 @@ export const maxDuration = 60;
 import { NextResponse, after } from 'next/server';
 import crypto from 'crypto';
 import { processIncomingMessage, processAIAgentResponse } from '@/server/services/whatsapp.service';
+import { handleAdminMessage } from '@/server/services/whatsapp-admin.service';
 import { notificationEmitter } from '@/lib/notification-emitter';
 import { prisma } from '@/lib/prisma';
 
@@ -73,8 +74,17 @@ export async function POST(request: Request) {
             }
             await notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact: result.contact });
             
+            // Mensajes de un administrador: los atiende el bot de gestión (cotizar con autorización), nunca el bot de clientes.
+            if (result.isAdmin) {
+              if (result.message?.type === 'TEXT' && result.message.content) {
+                const admin = { id: result.contact.id, phone: result.contact.phone, name: result.contact.name };
+                const text = result.message.content;
+                after(async () => {
+                  await handleAdminMessage(admin, text);
+                });
+              }
             // IA: Responder si botMode está activado
-            if (result.contact?.botMode && !result.skipBot && ['TEXT', 'IMAGE', 'AUDIO'].includes(result.message?.type)) {
+            } else if (result.contact?.botMode && !result.skipBot && ['TEXT', 'IMAGE', 'AUDIO'].includes(result.message?.type)) {
               // Llamar al servicio especializado de IA de WhatsApp
               // En Vercel la función se congela al responder; after() la mantiene viva hasta terminar.
               const contactId = result.contact.id;
