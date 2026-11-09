@@ -412,6 +412,80 @@ async function shouldRespondAfterDebounce(contactId: string, debounceMs: number)
   return !answered;
 }
 
+const BOT_FAILURE_MARKER = '⚠️ Falla del bot';
+const BOT_FAILURE_ALERT_COOLDOWN_MS = 10 * 60 * 1000;
+
+/**
+ * El bot falló al contestar: avisa a los administradores (WhatsApp + push) y deja una nota
+ * interna en el chat. NO escribe nada al cliente. Para no spamear mientras Gemini siga caído,
+ * solo avisa una vez por contacto cada 10 minutos (la nota interna sirve de marca).
+ */
+async function reportBotFailure(contact: { id: string; name: string | null; phone: string }, error: unknown) {
+  try {
+    if (contact.name?.includes('Simulador')) return;
+
+    const recent = await prisma.whatsAppMessage.findFirst({
+      where: {
+        contactId: contact.id,
+        direction: 'INTERNAL',
+        content: { startsWith: BOT_FAILURE_MARKER },
+        timestamp: { gt: new Date(Date.now() - BOT_FAILURE_ALERT_COOLDOWN_MS) },
+      },
+      select: { id: true },
+    });
+    if (recent) return;
+
+    const detail = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ').slice(0, 200);
+    await prisma.whatsAppMessage.create({
+      data: {
+        contactId: contact.id,
+        messageId: `bot_failure_${Date.now()}`,
+        direction: 'INTERNAL',
+        type: 'TEXT',
+        content: `${BOT_FAILURE_MARKER}: no pudo contestar este mensaje (${detail}). El cliente no recibió ningún aviso.`,
+        status: 'SENT',
+      },
+    });
+
+    await notifyAdmin(
+      [
+        `⚠️ El bot dejó de funcionar con ${contact.name || 'un cliente'}`,
+        `Tel: +${contact.phone}`,
+        `No pudo contestar su último mensaje y el cliente NO recibió ningún aviso. Contéstale tú desde el CRM.`,
+        `Error: ${detail}`,
+      ].join('\n'),
+      '/dashboard/chats'
+    );
+  } catch (e) {
+    console.error('No se pudo avisar de la falla del bot:', e);
+  }
+}
+
+/**
+ * Botón manual "Reintentar bot": vuelve a contestar el último mensaje del cliente cuando el bot
+ * falló y se quedó sin responder. No hace nada si ya hay una respuesta (humana o del bot)
+ * posterior al último mensaje del cliente.
+ */
+export async function retryBotReply(contactId: string): Promise<{ success: boolean; error?: string }> {
+  const contact = await prisma.whatsAppContact.findUnique({ where: { id: contactId } });
+  if (!contact) return { success: false, error: 'Contacto no encontrado.' };
+  if (!contact.botMode) return { success: false, error: 'El bot está en modo humano. Actívalo primero.' };
+
+  const latest = await latestBotTriggerMessage(contactId);
+  if (!latest) return { success: false, error: 'No hay ningún mensaje del cliente que contestar.' };
+
+  const answerFilter = { contactId, direction: 'OUTBOUND', timestamp: { gt: latest.timestamp } };
+  if (await prisma.whatsAppMessage.findFirst({ where: answerFilter, select: { id: true } })) {
+    return { success: false, error: 'El último mensaje del cliente ya tiene respuesta.' };
+  }
+
+  await executeAIAgentResponse(contactId).catch(console.error);
+
+  // executeAIAgentResponse no lanza error si falla (avisa a los admins), así que se verifica el resultado.
+  const replied = await prisma.whatsAppMessage.findFirst({ where: answerFilter, select: { id: true } });
+  return replied ? { success: true } : { success: false, error: 'El bot volvió a fallar. Revisa el aviso en el chat o contesta tú.' };
+}
+
 export async function processAIAgentResponse(contactId: string, opts?: { debounceMs?: number }) {
   // Fetch contact to know if it's a simulator or real case
   const contact = await prisma.whatsAppContact.findUnique({
@@ -449,6 +523,7 @@ async function executeAIAgentResponse(contactId: string) {
     // Construir el historial (Gemini exige que los roles 'user' y 'model' se alternen estrictamente)
     const contents: any[] = [];
     recentMessages.forEach(msg => {
+      if (msg.direction === 'INTERNAL' && msg.content?.startsWith(BOT_FAILURE_MARKER)) return; // nota interna, no es parte de la charla
       const role = msg.direction === 'INBOUND' ? 'user' : 'model';
       // Fotos/audios sin texto llegan con content vacío; Gemini rechaza partes de texto vacías.
       const text = msg.content || (msg.type === 'IMAGE' ? '[El cliente envió una imagen]' : msg.type === 'AUDIO' ? '[El cliente envió un audio]' : '');
@@ -463,6 +538,7 @@ async function executeAIAgentResponse(contactId: string) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       console.error("No hay GEMINI_API_KEY configurada.");
+      await reportBotFailure(contact, new Error('GEMINI_API_KEY no configurada'));
       return;
     }
 
@@ -626,8 +702,20 @@ async function executeAIAgentResponse(contactId: string) {
     let responseText = "";
 
     try {
-      const result = await model.generateContent({ contents });
-      
+      // Fallos transitorios de Gemini (503/429/red): se reintenta antes de rendirse.
+      let result: Awaited<ReturnType<typeof model.generateContent>> | undefined;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          result = await model.generateContent({ contents });
+          break;
+        } catch (e) {
+          if (attempt === 3) throw e;
+          console.warn(`Gemini falló (intento ${attempt}/3), reintentando:`, e);
+          await new Promise((r) => setTimeout(r, 1500 * attempt));
+        }
+      }
+      if (!result) throw new Error('Gemini no devolvió respuesta');
+
       // REGISTRAR TOKENS INMEDIATAMENTE ANTES DE QUE ALGO MÁS PUEDA FALLAR
       try {
         if (result.response.usageMetadata) {
@@ -969,12 +1057,10 @@ async function executeAIAgentResponse(contactId: string) {
       }
     } catch (error: any) {
       console.error("Error crítico en Gemini (main):", error);
-      responseText = "Disculpa, nuestro sistema automático está experimentando intermitencias técnicas. En un momento un asesor humano retomará tu conversación.";
-      // Ya no apagamos el bot para que no se quede mudo por fallos temporales
-      // await prisma.whatsAppContact.update({
-      //   where: { id: contact.id },
-      //   data: { botMode: false }
-      // });
+      // Nunca se le manda un mensaje de error al cliente: se avisa al equipo y el bot
+      // retoma solo con el siguiente mensaje del cliente (botMode se queda activo).
+      await reportBotFailure(contact, error);
+      return;
     }
 
     // Enviar el mensaje físico por WhatsApp
@@ -1015,6 +1101,8 @@ async function executeAIAgentResponse(contactId: string) {
     
   } catch (error) {
     console.error("Error en processAIAgentResponse:", error);
+    const failed = await prisma.whatsAppContact.findUnique({ where: { id: contactId } }).catch(() => null);
+    if (failed) await reportBotFailure(failed, error);
   }
 }
 

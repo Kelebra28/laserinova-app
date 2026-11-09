@@ -4,7 +4,7 @@ import path from 'path';
 
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sendMessageToMeta, processAIAgentResponse, deleteConversationService, clearConversationMessagesService } from '@/server/services/whatsapp.service';
+import { sendMessageToMeta, processAIAgentResponse, retryBotReply, deleteConversationService, clearConversationMessagesService } from '@/server/services/whatsapp.service';
 import { notificationEmitter } from '@/lib/notification-emitter';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { revalidatePath } from 'next/cache';
@@ -146,6 +146,11 @@ export async function sendManualMessageAction(contactId: string, content: string
   }
 
   return { success: false, error: 'No se pudo enviar el mensaje a Meta. Verifica tus tokens.' };
+}
+
+export async function retryBotReplyAction(contactId: string) {
+  await requireAuth();
+  return await retryBotReply(contactId);
 }
 
 export async function toggleBotModeAction(contactId: string, botMode: boolean) {

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { useWhatsAppEvents } from '@/hooks/useWhatsAppEvents';
 import { getPusherClient } from '@/lib/pusher';
-import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simulateIncomingMessageAction, createDummyContactAction, sendMediaMessageAction, generateSummaryAction, deleteConversationAction, getContactsAction } from '@/server/actions/whatsapp.actions';
+import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simulateIncomingMessageAction, retryBotReplyAction, createDummyContactAction, sendMediaMessageAction, generateSummaryAction, deleteConversationAction, getContactsAction } from '@/server/actions/whatsapp.actions';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
@@ -550,6 +550,21 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
     }
   };
 
+  const [retryingBot, setRetryingBot] = useState(false);
+  const retryBotReply = async () => {
+    if (!activeContact || retryingBot) return;
+    setRetryingBot(true);
+    try {
+      const res = await retryBotReplyAction(activeContact.id);
+      if (res.success) toast.success('El bot ya respondió');
+      else toast.error(res.error || 'No se pudo reintentar');
+    } catch (e) {
+      toast.error('Error al reintentar el bot');
+    } finally {
+      setRetryingBot(false);
+    }
+  };
+
   const createDummyContact = async () => {
     try {
       const res = await createDummyContactAction();
@@ -858,6 +873,18 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                   ? <><Bot size={15} className="xl:mr-1.5" /><span className="hidden xl:inline">Bot activo</span></>
                   : <><UserIcon size={15} className="xl:mr-1.5" /><span className="hidden xl:inline">Modo humano</span></>}
               </Button>
+
+              {activeContact.botMode && (
+                <button
+                  type="button"
+                  onClick={retryBotReply}
+                  disabled={retryingBot}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-[#00a884] hover:bg-[#00a884]/15 transition-colors active:scale-95 disabled:opacity-50"
+                  title="Reintentar bot: contesta el último mensaje del cliente si se quedó sin respuesta"
+                >
+                  {retryingBot ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
+                </button>
+              )}
 
               <button
                 type="button"
