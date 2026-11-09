@@ -8,6 +8,7 @@ import { ProfileForm } from "@/components/settings/ProfileForm";
 import { UsersPanel } from "@/components/settings/UsersPanel";
 import { Save, Settings2, User, Users, SlidersHorizontal, Database, HardDrive, Mail } from "lucide-react";
 import { SettingsTabs } from "@/components/settings/SettingsTabs";
+import { ProductPricingFields } from "@/components/settings/ProductPricingFields";
 import { EmailConfigForm } from "@/components/settings/EmailConfigForm";
 import CalculationAudit from "@/components/quotes/CalculationAudit";
 import fs from "fs";
@@ -56,14 +57,6 @@ const DEFAULT_CONFIGS = [
   { key: "horas_maquina_dia",         name: "Horas Máquina al Día",               default: 8,      unit: "horas"},
   { key: "porcentaje_transporte_material", name: "Transporte de Material (Inflado)", default: 20, unit: "%" },
   { key: "porcentaje_merma_corte",         name: "Merma de Corte (Desperdicio)",     default: 20, unit: "%" },
-];
-
-const PRODUCT_CONFIGS = [
-  { key: "margen_producto_1",     name: "Margen escala 1 (pocas piezas)",    default: 50,  unit: "%" },
-  { key: "producto_escala_2",     name: "Escala 2 inicia en (piezas)",       default: 50,  unit: "pzs" },
-  { key: "margen_producto_2",     name: "Margen escala 2",                   default: 40,  unit: "%" },
-  { key: "producto_escala_3",     name: "Escala 3 inicia en (piezas)",       default: 200, unit: "pzs" },
-  { key: "margen_producto_3",     name: "Margen escala 3 (volumen)",         default: 30,  unit: "%" },
 ];
 
 export default async function SettingsPage() {
@@ -146,45 +139,16 @@ export default async function SettingsPage() {
               Precio = costo del proveedor (+ IVA) ÷ (1 − margen según cantidad). Si el cliente factura, el IVA se suma al final.
               Los productos con precio manual no se modifican.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {PRODUCT_CONFIGS.map((config) => {
-                const value = configMap.has(config.key) ? configMap.get(config.key) : config.default;
-                return (
-                  <div key={config.key} className="space-y-2">
-                    <label htmlFor={config.key} className="block text-[11px] font-black text-gray-400 uppercase tracking-widest">
-                      {config.name}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        step="0.01"
-                        name={config.key}
-                        id={config.key}
-                        defaultValue={value}
-                        className="w-full px-4 py-3 pr-12 rounded-2xl border border-gray-200 text-sm text-gray-900 bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all font-bold"
-                      />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-400 pointer-events-none uppercase">
-                        {config.unit}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-              <div className="space-y-2">
-                <label htmlFor="proveedor_incluye_iva" className="block text-[11px] font-black text-gray-400 uppercase tracking-widest">
-                  Precio del proveedor
-                </label>
-                <select
-                  name="proveedor_incluye_iva"
-                  id="proveedor_incluye_iva"
-                  defaultValue={String(configMap.get("proveedor_incluye_iva") ?? 0)}
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-sm text-gray-900 bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all font-bold"
-                >
-                  <option value="0">Viene SIN IVA (se le suma)</option>
-                  <option value="1">Ya incluye IVA</option>
-                </select>
-              </div>
-            </div>
+            <ProductPricingFields
+              initial={{
+                margen_producto_1: configMap.get("margen_producto_1") ?? 50,
+                margen_producto_2: configMap.get("margen_producto_2") ?? 40,
+                margen_producto_3: configMap.get("margen_producto_3") ?? 30,
+                producto_escala_2: configMap.get("producto_escala_2") ?? 50,
+                producto_escala_3: configMap.get("producto_escala_3") ?? 200,
+                proveedor_incluye_iva: configMap.get("proveedor_incluye_iva") ?? 0,
+              }}
+            />
           </div>
 
           <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
