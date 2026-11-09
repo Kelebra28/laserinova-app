@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { getUsers, createUser, updateUser } from "@/server/actions/user.actions";
-import { Users, UserPlus, Shield, Check, X, ShieldAlert, Loader2, Save, Trash2 } from "lucide-react";
+import { Users, UserPlus, Shield, Check, X, ShieldAlert, Loader2, Save, Trash2, ChevronDown } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { deleteUserAction } from "@/app/dashboard/settings/actions";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -27,12 +27,65 @@ const PERMISSION_MODULES = [
   { key: "reports", label: "Reportes" },
 ];
 
+const ROLE_OPTIONS = [
+  { value: "SELLER", label: "EMPLEADO" },
+  { value: "ADMIN", label: "ADMIN" },
+];
+
+function RoleDropdown({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const isAdmin = value === "ADMIN";
+  const current = ROLE_OPTIONS.find((o) => o.value === value) ?? ROLE_OPTIONS[0];
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-2 text-sm font-bold px-3 py-1.5 rounded-lg border transition ${
+          isAdmin ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-slate-100 text-slate-700 border-slate-200"
+        }`}
+      >
+        {current.label}
+        <ChevronDown className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-2 w-40 bg-white border border-slate-200 rounded-xl shadow-lg z-20 p-1 animate-in fade-in zoom-in-95 duration-150">
+          {ROLE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { setOpen(false); if (opt.value !== value) onChange(opt.value); }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-bold transition ${
+                opt.value === value ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {opt.label}
+              {opt.value === value && <Check className="w-4 h-4 text-red-600" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function UsersPage() {
   const { data: session } = useSession();
   const currentUserId = (session?.user as any)?.id;
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // New user form state
   const [isCreating, setIsCreating] = useState(false);
@@ -195,14 +248,7 @@ export default function UsersPage() {
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Rol:</span>
-                      <select
-                        value={user.role}
-                        onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                        className={`text-sm font-bold px-3 py-1.5 rounded-lg border outline-none transition ${isAdmin ? 'bg-indigo-50 text-indigo-700 border-indigo-200 focus:ring-indigo-500' : 'bg-slate-100 text-slate-700 border-slate-200 focus:ring-slate-500'}`}
-                      >
-                        <option value="SELLER">EMPLEADO</option>
-                        <option value="ADMIN">ADMIN</option>
-                      </select>
+                      <RoleDropdown value={user.role} onChange={(v) => handleRoleChange(user.id, v)} />
                     </div>
                     {savingId === user.id && <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />}
                     {user.id !== currentUserId && (
@@ -227,11 +273,22 @@ export default function UsersPage() {
                     </div>
                   ) : (
                     <div>
-                      <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        <Shield className="w-4 h-4 text-slate-400" />
-                        Permisos de Módulos
-                      </h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(expandedId === user.id ? null : user.id)}
+                        className="w-full flex items-center justify-between text-sm font-bold text-slate-800"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Shield className="w-4 h-4 text-slate-400" />
+                          Permisos de Módulos
+                          <span className="text-xs font-semibold text-slate-400">
+                            ({PERMISSION_MODULES.filter((m) => perms[m.key] !== false).length}/{PERMISSION_MODULES.length} activos)
+                          </span>
+                        </span>
+                        <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${expandedId === user.id ? "rotate-180" : ""}`} />
+                      </button>
+                      {expandedId === user.id && (
+                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                         {PERMISSION_MODULES.map((mod) => {
                           const hasAccess = perms[mod.key] !== false; // Default true if undefined
                           
@@ -264,6 +321,7 @@ export default function UsersPage() {
                           );
                         })}
                       </div>
+                      )}
                     </div>
                   )}
                 </div>
