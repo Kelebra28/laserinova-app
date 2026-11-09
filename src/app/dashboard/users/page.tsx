@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import { getUsers, createUser, updateUser } from "@/server/actions/user.actions";
-import { Users, UserPlus, Shield, Check, X, ShieldAlert, Loader2, Save } from "lucide-react";
+import { Users, UserPlus, Shield, Check, X, ShieldAlert, Loader2, Save, Trash2 } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { deleteUserAction } from "@/app/dashboard/settings/actions";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 const PERMISSION_MODULES = [
@@ -26,6 +28,8 @@ const PERMISSION_MODULES = [
 ];
 
 export default function UsersPage() {
+  const { data: session } = useSession();
+  const currentUserId = (session?.user as any)?.id;
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -74,6 +78,15 @@ export default function UsersPage() {
     setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
     setSavingId(userId);
     await updateUser(userId, { role: newRole });
+    setSavingId(null);
+  };
+
+  const handleDeleteUser = async (user: any) => {
+    if (!window.confirm(`¿Eliminar a "${user.name}" definitivamente? Sus cotizaciones, proveedores y recibos pasarán a tu usuario. No se puede deshacer.`)) return;
+    setSavingId(user.id);
+    const res = await deleteUserAction(user.id);
+    if (res.success) setUsers((prev) => prev.filter((u) => u.id !== user.id));
+    else alert(res.error ?? "No se pudo eliminar el usuario");
     setSavingId(null);
   };
 
@@ -192,6 +205,16 @@ export default function UsersPage() {
                       </select>
                     </div>
                     {savingId === user.id && <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />}
+                    {user.id !== currentUserId && (
+                      <button
+                        onClick={() => handleDeleteUser(user)}
+                        disabled={savingId === user.id}
+                        title="Eliminar usuario"
+                        className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
