@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { Calculator, Save, Plus, Trash2, Info, DollarSign, Check, Loader2 } from "lucide-react";
 import Link from "next/link";
 import SubmitButton from "@/components/ui/SubmitButton";
-import { calculateConcept, CalculationInput, GlobalCosts, MaterialData } from "@/lib/calculations";
+import { calculateConcept, CalculationInput, GlobalCosts, MaterialData, resolveProductUnitPrice } from "@/lib/calculations";
 import { updateQuoteAction } from "@/server/actions/quote.actions";
 import MaterialSelector from "@/components/quotes/MaterialSelector";
 import ClientSelector from "@/components/quotes/ClientSelector";
@@ -103,6 +103,21 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
     setConcepts(prev => prev.map(c => {
       if (c.id === id) {
         const updated = { ...c, [field]: value };
+
+        // Productos de catálogo: al cambiar la cantidad se re-aplica la escala de margen
+        // (solo si el precio no fue editado a mano).
+        if (field === "quantity" && updated.productId) {
+          const prod = products.find((p: any) => p.id === updated.productId);
+          if (prod) {
+            const prev = resolveProductUnitPrice(prod, Number(c.quantity) || 1, globalCosts);
+            const next = resolveProductUnitPrice(prod, Number(value) || 1, globalCosts);
+            if (next.tiered && Math.abs((Number(c.finalUnitPrice) || 0) - prev.unitPrice) < 0.01) {
+              updated.manualUnitPrice = String(next.unitPrice);
+              updated.manualUnitCost = String(next.unitCost);
+              updated.finalUnitPrice = next.unitPrice;
+            }
+          }
+        }
         
         // Si el campo afecta el cálculo, recalcular
         if (["type", "quantity", "materialId", "partWidth", "partHeight", "timeMin", "clientProvidesMaterial", "manualUnitPrice", "manualUnitCost", "serviceDays", "serviceHours", "transportCost", "margin", "operatorCost", "installCost", "laserUseCost", "consumablesCost", "viaticsCost"].includes(field)) {
@@ -288,14 +303,11 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
     // 3. Actualizar el concepto con el nuevo producto
     setConcepts(prevConcepts => prevConcepts.map(c => {
       if (c.id === conceptId) {
-        const currentMargin = c.margin ? Number(c.margin) : (Number(margin) || 35);
-        const marginFactor = currentMargin >= 100 ? 0.01 : (100 - currentMargin) / 100;
-        const unitCost = Number(product.unitCost) || 0;
-        const suggestedSalePrice = product.unitPrice > 0 
-          ? product.unitPrice 
-          : (unitCost > 0 ? Math.round((unitCost / marginFactor) * 100) / 100 : 0);
-        
         const qty = Number(c.quantity) || 1;
+        // Precio por escalas de cantidad (o precio manual del producto si lo tiene)
+        const resolved = resolveProductUnitPrice(product, qty, globalCosts);
+        const unitCost = resolved.unitCost;
+        const suggestedSalePrice = resolved.unitPrice;
         const finalUnitPrice = suggestedSalePrice;
         const totalAmount = finalUnitPrice * qty;
         const realCost = unitCost * qty;

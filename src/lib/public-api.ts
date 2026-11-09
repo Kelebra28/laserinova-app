@@ -3,6 +3,8 @@ import { timingSafeEqual } from "crypto";
 import { existsSync } from "fs";
 import { prisma } from "@/lib/prisma";
 import path from "path";
+import { resolveProductUnitPrice } from "@/lib/calculations";
+import { getProductPricingGlobals } from "@/lib/product-pricing";
 
 /**
  * API pública de catálogo (solo lectura) para el sitio web.
@@ -78,6 +80,7 @@ export const productSelect = {
   measurements: true,
   printTechniques: true,
   unitPrice: true,
+  unitCost: true,
   stockQuantity: true,
   category: { select: { name: true, slug: true } },
 } as const;
@@ -85,7 +88,7 @@ export const productSelect = {
 type Row = {
   id: string; sku: string | null; name: string; model: string | null; brand: string | null; color: string | null;
   description: string | null; material: string | null;
-  measurements: string | null; printTechniques: string | null; unitPrice: number; stockQuantity: number;
+  measurements: string | null; printTechniques: string | null; unitPrice: number; unitCost: number; stockQuantity: number;
   category: { name: string; slug: string };
 };
 
@@ -134,10 +137,11 @@ function baseName(name: string, colors: string[]): string {
 /** Existencia publicable: sin negativos ni decimales. */
 const pieces = (n: number) => Math.max(0, Math.floor(Number.isFinite(n) ? n : 0));
 
-export function toPublicProduct(rows: Row[]) {
+export function toPublicProduct(rows: Row[], pricing: Record<string, number> = {}) {
   const first = rows[0];
   const slug = slugify(first.model ?? first.sku ?? first.id);
-  const prices = rows.map((r) => r.unitPrice).filter((p) => p > 0);
+  // Precio de la página = escala de pocas piezas (la más alta); precio manual del producto se respeta.
+  const prices = rows.map((r) => resolveProductUnitPrice(r, 1, pricing).unitPrice).filter((p) => p > 0);
   const multiColor = new Set(rows.filter((r) => r.color).map((r) => slugify(colorLabel(r.color!)))).size >= 2;
   return {
     slug,
@@ -190,13 +194,15 @@ let catalogCache: { key: string; at: number; ready: Promise<PublicProduct[]> } |
 export function getAllPublicProducts(categorySlugs: string[]): Promise<PublicProduct[]> {
   const key = categorySlugs.join(",");
   if (!catalogCache || catalogCache.key !== key || Date.now() - catalogCache.at > CATALOG_TTL) {
-    const ready = prisma.product
-      .findMany({
+    const ready = Promise.all([
+      prisma.product.findMany({
         where: { active: true, category: { active: true, slug: { in: categorySlugs } } },
         select: productSelect,
         orderBy: [{ model: "asc" }, { color: "asc" }],
-      })
-      .then((rows) => {
+      }),
+      getProductPricingGlobals(),
+    ])
+      .then(([rows, pricing]) => {
         const groups = new Map<string, typeof rows>();
         for (const r of rows) {
           const k = r.model ?? r.sku ?? r.id;
@@ -204,7 +210,7 @@ export function getAllPublicProducts(categorySlugs: string[]): Promise<PublicPro
           if (g) g.push(r);
           else groups.set(k, [r]);
         }
-        return [...groups.values()].map(toPublicProduct);
+        return [...groups.values()].map((g) => toPublicProduct(g, pricing));
       });
     const entry = { key, at: Date.now(), ready };
     catalogCache = entry;

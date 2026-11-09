@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Calculator, Save, Plus, Trash2, Info, DollarSign, Check, Loader2 } from "lucide-react";
-import { calculateConcept, CalculationInput, GlobalCosts, MaterialData } from "@/lib/calculations";
+import { calculateConcept, CalculationInput, GlobalCosts, MaterialData, resolveProductUnitPrice } from "@/lib/calculations";
 import { createQuoteAction } from "@/server/actions/quote.actions";
 import MaterialSelector from "@/components/quotes/MaterialSelector";
 import ClientSelector from "@/components/quotes/ClientSelector";
@@ -135,11 +135,9 @@ export default function NewQuoteForm({ clients, materials, products = [], global
         
         if (initType === "RESALE" && matchedProduct) {
            const currentMargin = Number(margin) || 35;
-           const marginFactor = currentMargin >= 100 ? 0.01 : (100 - currentMargin) / 100;
-           const uCost = Number(matchedProduct.unitCost) || 0;
-           const calculatedSalePrice = matchedProduct.unitPrice > 0 
-             ? matchedProduct.unitPrice 
-             : (uCost > 0 ? Math.round((uCost / marginFactor) * 100) / 100 : 0);
+           const resolvedProduct = resolveProductUnitPrice(matchedProduct, initQuantity, globalCosts);
+           const uCost = resolvedProduct.unitCost;
+           const calculatedSalePrice = resolvedProduct.unitPrice;
 
            mUnitPrice = String(calculatedSalePrice);
            mUnitCost = String(uCost);
@@ -292,14 +290,11 @@ export default function NewQuoteForm({ clients, materials, products = [], global
     // 3. Actualizar el concepto con el nuevo producto
     setConcepts(prevConcepts => prevConcepts.map(c => {
       if (c.id === conceptId) {
-        const currentMargin = c.margin ? Number(c.margin) : (Number(margin) || 35);
-        const marginFactor = currentMargin >= 100 ? 0.01 : (100 - currentMargin) / 100;
-        const unitCost = Number(product.unitCost) || 0;
-        const suggestedSalePrice = product.unitPrice > 0 
-          ? product.unitPrice 
-          : (unitCost > 0 ? Math.round((unitCost / marginFactor) * 100) / 100 : 0);
-        
         const qty = Number(c.quantity) || 1;
+        // Precio por escalas de cantidad (o precio manual del producto si lo tiene)
+        const resolved = resolveProductUnitPrice(product, qty, globalCosts);
+        const unitCost = resolved.unitCost;
+        const suggestedSalePrice = resolved.unitPrice;
         const finalUnitPrice = suggestedSalePrice;
         const totalAmount = finalUnitPrice * qty;
         const realCost = unitCost * qty;
@@ -368,6 +363,21 @@ export default function NewQuoteForm({ clients, materials, products = [], global
     setConcepts(prevConcepts => prevConcepts.map(c => {
       if (c.id === id) {
         const updated = { ...c, [field]: value };
+
+        // Productos de catálogo: al cambiar la cantidad se re-aplica la escala de margen
+        // (solo si el precio no fue editado a mano).
+        if (field === "quantity" && updated.productId) {
+          const prod = products.find((p: any) => p.id === updated.productId);
+          if (prod) {
+            const prev = resolveProductUnitPrice(prod, Number(c.quantity) || 1, globalCosts);
+            const next = resolveProductUnitPrice(prod, Number(value) || 1, globalCosts);
+            if (next.tiered && Math.abs((Number(c.finalUnitPrice) || 0) - prev.unitPrice) < 0.01) {
+              updated.manualUnitPrice = String(next.unitPrice);
+              updated.manualUnitCost = String(next.unitCost);
+              updated.finalUnitPrice = next.unitPrice;
+            }
+          }
+        }
         
         // Al cambiar parámetros de la fórmula (tiempo, ancho, material, etc.), reseteamos el precio manual para forzar recálculo
         if (["materialId", "partWidth", "partHeight", "timeMin", "clientProvidesMaterial", "serviceDays", "serviceHours", "transportCost", "operatorCost", "installCost", "laserUseCost", "consumablesCost", "viaticsCost"].includes(field)) {

@@ -19,7 +19,7 @@ import {
   Sparkles
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { calculateConcept, GlobalCosts } from "@/lib/calculations";
+import { calculateConcept, resolveProductUnitPrice, GlobalCosts } from "@/lib/calculations";
 import { getQuickQuoteDataAction } from "@/server/actions/quote.actions";
 
 interface MaterialItem {
@@ -163,9 +163,19 @@ export function QuickQuoteModal({ isOpen, onClose }: Props) {
         if (merged.type === "PRODUCT") {
           const prod = products.find((p) => p.id === merged.productId);
           if (prod) {
-            calculatedCost = Number(prod.unitCost) || 0;
-            const marginFactor = merged.margin >= 100 ? 0.01 : (100 - merged.margin) / 100;
-            suggested = calculatedCost > 0 ? Math.round((calculatedCost / marginFactor) * 100) / 100 : prod.unitPrice || 0;
+            const resolved = resolveProductUnitPrice(prod, Number(merged.quantity) || 1, globalCosts);
+            if (resolved.tiered && updates.margin === undefined) {
+              // Escala por cantidad (costo + IVA, margen según piezas)
+              calculatedCost = resolved.unitCost;
+              suggested = resolved.unitPrice;
+              merged.margin = resolved.margin ?? merged.margin;
+            } else {
+              calculatedCost = resolved.tiered ? resolved.unitCost : Number(prod.unitCost) || 0;
+              const marginFactor = merged.margin >= 100 ? 0.01 : (100 - merged.margin) / 100;
+              suggested = resolved.tiered
+                ? (calculatedCost > 0 ? Math.round((calculatedCost / marginFactor) * 100) / 100 : 0)
+                : resolved.unitPrice;
+            }
           }
         } else if (merged.type === "LASER") {
           const mat = materials.find((m) => m.id === merged.materialId);

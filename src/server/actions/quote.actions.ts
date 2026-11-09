@@ -30,6 +30,7 @@ import path from "path";
 import { processAIAgentResponse, sendQuotePdfToClient } from "../services/whatsapp.service";
 import { notificationEmitter } from "@/lib/notification-emitter";
 import { after } from "next/server";
+import { pickProductPricing } from "@/lib/calculations";
 
 async function requireAuth(allowedRoles?: string[]) {
   const session = await getServerSession(authOptions);
@@ -455,6 +456,7 @@ export async function getQuickQuoteDataAction() {
           factor_miedo: globalCosts["factor_miedo"] || 2,
           porcentaje_transporte_material: globalCosts["porcentaje_transporte_material"] || 20,
           porcentaje_merma_corte: globalCosts["porcentaje_merma_corte"] || 20,
+          ...pickProductPricing(globalCosts),
         }
       }
     };

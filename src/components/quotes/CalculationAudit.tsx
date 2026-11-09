@@ -1,14 +1,26 @@
 "use client";
 
 import { Info, Calculator, Zap, Scissors, TrendingUp, Box } from "lucide-react";
+import { pickProductPricing, calculateProductTierPrice } from "@/lib/calculations";
 
 interface CalculationAuditProps {
   concepts: any[];
   margin: number;
+  globals?: Record<string, number>;
 }
 
-export default function CalculationAudit({ concepts, margin }: CalculationAuditProps) {
+export default function CalculationAudit({ concepts, margin, globals = {} }: CalculationAuditProps) {
   const divisor = (100 - margin) / 100;
+  const pp = pickProductPricing(globals);
+  const iva = globals.porcentaje_iva ?? 16;
+  const fearFactor = globals.factor_miedo ?? 2;
+  const prodFactor = globals.factor_produccion_default ?? 3;
+  const EXAMPLE_COST = 100;
+  const tiers = [
+    { label: `1 a ${pp.producto_escala_2 - 1} pzs`, qty: 1 },
+    { label: `${pp.producto_escala_2} a ${pp.producto_escala_3 - 1} pzs`, qty: pp.producto_escala_2 },
+    { label: `${pp.producto_escala_3}+ pzs`, qty: pp.producto_escala_3 },
+  ].map((t) => ({ ...t, ...calculateProductTierPrice(EXAMPLE_COST, t.qty, globals) }));
   const formulaConcepts = concepts.filter(c => c.type === "CORTE" || c.type === "GRABADO" || c.type === "SERVICIO_SITIO");
 
   return (
@@ -88,7 +100,7 @@ export default function CalculationAudit({ concepts, margin }: CalculationAuditP
             <span className="text-[11px] font-black uppercase tracking-tight text-orange-400">2. Operación (Máquina)</span>
           </div>
           <p className="text-[10px] font-mono text-gray-400 leading-relaxed">
-            Final: <span className="text-gray-300">CostoTuboMinuto × Tiempo × F. Miedo (2) × F. Prod (3)</span>
+            Final: <span className="text-gray-300">CostoTuboMinuto × Tiempo × F. Miedo ({fearFactor}) × F. Prod ({prodFactor})</span>
           </p>
         </div>
         
@@ -101,6 +113,31 @@ export default function CalculationAudit({ concepts, margin }: CalculationAuditP
           <p className="text-[10px] font-mono text-gray-400 leading-relaxed">
             Sugerido: <span className="text-gray-300">Costo Total / {divisor.toFixed(2)} (por margen del {margin}%)</span>
           </p>
+        </div>
+      </div>
+
+      <div className="pt-4 border-t border-gray-800">
+        <div className="bg-gray-800/30 p-3 rounded-xl border border-gray-800">
+          <div className="flex items-center gap-2 mb-2">
+            <Box className="h-4 w-4 text-violet-400" />
+            <span className="text-[11px] font-black uppercase tracking-tight text-violet-400">4. Productos (escalas por cantidad)</span>
+          </div>
+          <p className="text-[10px] font-mono text-gray-400 leading-relaxed mb-3">
+            Costo c/IVA: <span className="text-gray-300">{pp.proveedor_incluye_iva ? "Costo proveedor (ya trae IVA)" : `Costo proveedor × ${(1 + iva / 100).toFixed(2)}`}</span><br/>
+            Precio: <span className="text-gray-300">Costo c/IVA ÷ (1 − margen de la escala)</span><br/>
+            Factura: <span className="text-gray-300">Precio × {(1 + iva / 100).toFixed(2)} (solo si el cliente factura)</span>
+          </p>
+          <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Ejemplo con costo proveedor ${EXAMPLE_COST}</p>
+          <div className="space-y-1">
+            {tiers.map((t) => (
+              <div key={t.label} className="flex justify-between text-[10px] font-mono text-gray-400">
+                <span>{t.label} · {t.margin}%</span>
+                <span className="text-violet-300 font-bold">
+                  ${t.price.toFixed(2)} <span className="text-gray-500">/ ${(t.price * (1 + iva / 100)).toFixed(2)} c/factura</span>
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

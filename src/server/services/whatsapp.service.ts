@@ -9,6 +9,8 @@ import { getRelevantRules } from '@/lib/agents/secretary/knowledge-base';
 import { executeChalanEstimate } from '@/lib/agents/chalan';
 import { sendPushToAdmins } from '@/lib/push';
 import { generateQuotePDF } from '@/lib/pdf';
+import { resolveProductUnitPrice } from '@/lib/calculations';
+import { getProductPricingGlobals } from '@/lib/product-pricing';
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -884,8 +886,9 @@ async function executeAIAgentResponse(contactId: string) {
             take: 3,
             skip: skip,
             distinct: ['model'],
-            select: { name: true, model: true, sku: true, unitPrice: true, color: true, image: true, images: true }
+            select: { name: true, model: true, sku: true, unitPrice: true, unitCost: true, color: true, image: true, images: true }
           });
+          const pricingGlobals = await getProductPricingGlobals();
 
           // 1. Enviar imágenes de WhatsApp si hay productos
           for (const prod of foundProducts) {
@@ -912,7 +915,7 @@ async function executeAIAgentResponse(contactId: string) {
                 // Limpiar posibles espacios dobles o guiones
                 cleanName = cleanName.replace(/[-\s]+$/, '').trim();
 
-                const caption = `🔥 ${cleanName || prod.name}\n💰 Precio: $${prod.unitPrice.toFixed(2)} MXN`;
+                const caption = `🔥 ${cleanName || prod.name}\n💰 Precio: $${resolveProductUnitPrice(prod, 1, pricingGlobals).unitPrice.toFixed(2)} MXN`;
                 
                 // Enviar a WhatsApp Real y conservar el id de Meta (sirve para palomitas y para ubicar la cita si el cliente responde a esta foto)
                 let imageMessageId = `bot_img_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -982,9 +985,10 @@ async function executeAIAgentResponse(contactId: string) {
             ? await prisma.product.findMany({
                 where: { active: true, AND: tokens.map((t: string) => ({ name: { contains: t } })) },
                 take: 40,
-                select: { name: true, color: true, stockQuantity: true, unitPrice: true, model: true, provider: true, image: true },
+                select: { name: true, color: true, stockQuantity: true, unitPrice: true, unitCost: true, model: true, provider: true, image: true },
               })
             : [];
+          const pricingGlobals = await getProductPricingGlobals();
 
           // Foto del color pedido (misma regla que la ficha del producto en el CRM: Doble Vela tiene una foto por color).
           let fotoColorEnviada: string | null = null;
@@ -1000,7 +1004,7 @@ async function executeAIAgentResponse(contactId: string) {
                 : match.image;
               if (photoUrl) {
                 const baseName = match.name.replace(new RegExp(match.color!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').trim();
-                const caption = `🔥 ${baseName || match.name} · ${colorLabel}\n💰 Precio: $${match.unitPrice.toFixed(2)} MXN`;
+                const caption = `🔥 ${baseName || match.name} · ${colorLabel}\n💰 Precio: $${resolveProductUnitPrice(match, 1, pricingGlobals).unitPrice.toFixed(2)} MXN`;
                 let photoMessageId = `bot_img_${Date.now()}_${Math.random().toString(36).substring(7)}`;
                 try {
                   if (!contact.name?.includes("Simulador")) {
@@ -1025,7 +1029,7 @@ async function executeAIAgentResponse(contactId: string) {
             const color = (v.color || 'Sin color especificado').trim();
             const cur = byColor.get(color.toLowerCase());
             if (cur) cur.stock += v.stockQuantity;
-            else byColor.set(color.toLowerCase(), { color, stock: v.stockQuantity, precio: v.unitPrice });
+            else byColor.set(color.toLowerCase(), { color, stock: v.stockQuantity, precio: resolveProductUnitPrice(v, 1, pricingGlobals).unitPrice });
           }
 
           if (result.response.candidates && result.response.candidates[0].content) {

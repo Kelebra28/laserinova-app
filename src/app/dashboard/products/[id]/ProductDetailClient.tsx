@@ -1,4 +1,5 @@
 "use client";
+import { resolveProductUnitPrice, pickProductPricing, calculateProductTierPrice } from "@/lib/calculations";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -10,13 +11,24 @@ interface ProductDetailClientProps {
   initialProduct: any;
   variants: any[];
   liveStockData?: any[] | null;
+  pricing?: Record<string, number>;
 }
 
-export function ProductDetailClient({ initialProduct, variants }: ProductDetailClientProps) {
+export function ProductDetailClient({ initialProduct, variants, pricing = {} }: ProductDetailClientProps) {
   // Estado para el producto seleccionado actualmente
   const [activeVariant, setActiveVariant] = useState(initialProduct);
 
-  const displayPrice = activeVariant.unitPrice || activeVariant.unitCost || 0;
+  // Precio de catálogo = escala de pocas piezas (1 a N); las demás escalas se listan abajo
+  const catalogPrice = resolveProductUnitPrice(activeVariant, 1, pricing);
+  const displayPrice = catalogPrice.unitPrice || activeVariant.unitCost || 0;
+  const pp = pickProductPricing(pricing);
+  const tierRows = catalogPrice.tiered
+    ? [
+        { label: `1 a ${pp.producto_escala_2 - 1} pzs`, qty: 1 },
+        { label: `${pp.producto_escala_2} a ${pp.producto_escala_3 - 1} pzs`, qty: pp.producto_escala_2 },
+        { label: `${pp.producto_escala_3}+ pzs`, qty: pp.producto_escala_3 },
+      ].map((t) => ({ ...t, ...calculateProductTierPrice(Number(activeVariant.unitCost) || 0, t.qty, pricing) }))
+    : [];
   const activeStock = activeVariant.stockQuantity ?? 0;
 
   // Calcular las imágenes específicas de todas las variantes
@@ -81,6 +93,16 @@ export function ProductDetailClient({ initialProduct, variants }: ProductDetailC
               <p className="text-sm font-medium text-zinc-400 mt-1">
                 {formatCurrency(displayPrice)} sin IVA • Costo: <span className="font-bold text-red-600">{formatCurrency(activeVariant.unitCost)}</span>
               </p>
+              {tierRows.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-zinc-100 space-y-1">
+                  {tierRows.map((t) => (
+                    <div key={t.label} className="flex justify-between text-xs text-zinc-500">
+                      <span>{t.label} · {t.margin}% margen</span>
+                      <span className="font-bold text-zinc-700">{formatCurrency(t.price)} <span className="font-normal text-zinc-400">sin IVA</span></span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className={`border rounded-2xl p-6 relative overflow-hidden shadow-sm ${

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import NewQuoteForm from "@/components/quotes/NewQuoteForm";
+import { pickProductPricing } from "@/lib/calculations";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,7 @@ export default async function NewQuotePage({
     factor_miedo: globalCosts["factor_miedo"] || 2,
     porcentaje_transporte_material: globalCosts["porcentaje_transporte_material"] || 20,
     porcentaje_merma_corte: globalCosts["porcentaje_merma_corte"] || 20,
+    ...pickProductPricing(globalCosts),
   };
 
   return (

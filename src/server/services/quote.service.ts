@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { pickProductPricing } from "@/lib/calculations";
 
 export interface GetQuotesParams {
   search?: string;
@@ -245,6 +246,7 @@ export async function getQuoteEditDataService(quoteId: string) {
     factor_miedo: globalCostsObj["factor_miedo"] || 2,
     porcentaje_transporte_material: globalCostsObj["porcentaje_transporte_material"] || 20,
     porcentaje_merma_corte: globalCostsObj["porcentaje_merma_corte"] || 20,
+    ...pickProductPricing(globalCostsObj),
   };
 
   return { quote, versions, materials, products, safeGlobals };

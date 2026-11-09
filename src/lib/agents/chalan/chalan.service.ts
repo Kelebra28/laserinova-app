@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
-import { calculateConcept, GlobalCosts } from "@/lib/calculations";
+import { calculateConcept, GlobalCosts, pickProductPricing } from "@/lib/calculations";
 import { ChalanEstimateInput, ChalanContext, getChalanPrompt } from "./prompt";
 import { getWorkshopRulesFromPinecone } from "./knowledge-base";
 
@@ -29,6 +29,7 @@ function buildGlobals(configs: { key: string; value: number }[]): GlobalCosts {
     factor_miedo: g["factor_miedo"] || 2,
     porcentaje_transporte_material: g["porcentaje_transporte_material"] || 20,
     porcentaje_merma_corte: g["porcentaje_merma_corte"] || 20,
+    ...pickProductPricing(g),
   };
 }
 

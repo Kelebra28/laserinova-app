@@ -16,6 +16,99 @@ export interface GlobalCosts {
   [key: string]: number;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Precio de productos de catálogo (Doble Vela / PromoOpción) con escalas por cantidad
+// costo proveedor (sin IVA) → + IVA → / (1 − margen según cantidad) = precio sin factura.
+// Si el cliente factura, el IVA se suma al final sobre ese precio (lo hace la cotización).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ProductPricingConfig {
+  margen_producto_1: number;     // % margen de 1 hasta (escala_2 − 1) piezas
+  margen_producto_2: number;     // % margen de escala_2 hasta (escala_3 − 1) piezas
+  margen_producto_3: number;     // % margen de escala_3 en adelante
+  producto_escala_2: number;     // piezas donde inicia la 2ª escala
+  producto_escala_3: number;     // piezas donde inicia la 3ª escala
+  proveedor_incluye_iva: number; // 1 = el costo del proveedor ya trae IVA, 0 = viene sin IVA
+}
+
+export const PRODUCT_PRICING_DEFAULTS: ProductPricingConfig = {
+  margen_producto_1: 50,
+  margen_producto_2: 40,
+  margen_producto_3: 30,
+  producto_escala_2: 50,
+  producto_escala_3: 200,
+  proveedor_incluye_iva: 0,
+};
+
+/** Extrae la configuración de precios de producto de un mapa key→valor, con valores por defecto (0 es válido). */
+export function pickProductPricing(g: Record<string, number | undefined> = {}): ProductPricingConfig {
+  const out = { ...PRODUCT_PRICING_DEFAULTS } as Record<string, number>;
+  for (const key of Object.keys(PRODUCT_PRICING_DEFAULTS)) {
+    const v = g[key];
+    if (typeof v === "number" && Number.isFinite(v)) out[key] = v;
+  }
+  return out as unknown as ProductPricingConfig;
+}
+
+export function getProductMarginPct(qty: number, g: Record<string, number | undefined>): number {
+  const c = pickProductPricing(g);
+  const q = Number(qty) || 1;
+  if (q >= c.producto_escala_3) return c.margen_producto_3;
+  if (q >= c.producto_escala_2) return c.margen_producto_2;
+  return c.margen_producto_1;
+}
+
+export interface ProductTierPrice {
+  costWithIva: number; // costo por pieza con IVA (base del margen)
+  margin: number;      // % de margen aplicado según cantidad
+  price: number;       // precio unitario sin factura (sin IVA de venta)
+}
+
+export function calculateProductTierPrice(
+  supplierUnitCost: number,
+  qty: number,
+  g: Record<string, number | undefined>
+): ProductTierPrice {
+  const c = pickProductPricing(g);
+  const ivaFactor = 1 + ((g.porcentaje_iva ?? 16) / 100);
+  const cost = Number(supplierUnitCost) || 0;
+  const costWithIva = c.proveedor_incluye_iva ? cost : cost * ivaFactor;
+  const margin = Math.min(getProductMarginPct(qty, g), 99);
+  const price = costWithIva > 0 ? costWithIva / ((100 - margin) / 100) : 0;
+  return {
+    costWithIva: Math.round(costWithIva * 100) / 100,
+    margin,
+    price: Math.round(price * 100) / 100,
+  };
+}
+
+/** Un producto tiene precio manual cuando su precio de venta es distinto al costo del proveedor (el sync los guarda iguales). */
+export function hasManualProductPrice(product: { unitCost?: number | null; unitPrice?: number | null }): boolean {
+  const price = Number(product.unitPrice) || 0;
+  const cost = Number(product.unitCost) || 0;
+  return price > 0 && Math.abs(price - cost) > 0.001;
+}
+
+/**
+ * Precio unitario de un producto para una cantidad dada.
+ * Respeta el precio manual; si no lo tiene, aplica las escalas por cantidad.
+ */
+export function resolveProductUnitPrice(
+  product: { unitCost?: number | null; unitPrice?: number | null },
+  qty: number,
+  g: Record<string, number | undefined>
+): { unitCost: number; unitPrice: number; margin: number | null; tiered: boolean } {
+  const supplierCost = Number(product.unitCost) || 0;
+  if (hasManualProductPrice(product)) {
+    return { unitCost: supplierCost, unitPrice: Number(product.unitPrice) || 0, margin: null, tiered: false };
+  }
+  if (supplierCost <= 0) {
+    return { unitCost: 0, unitPrice: Number(product.unitPrice) || 0, margin: null, tiered: false };
+  }
+  const t = calculateProductTierPrice(supplierCost, qty, g);
+  return { unitCost: t.costWithIva, unitPrice: t.price, margin: t.margin, tiered: true };
+}
+
 export interface MaterialData {
   length?: number | null;
   width?: number | null;
