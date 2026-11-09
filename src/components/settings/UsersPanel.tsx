@@ -5,6 +5,8 @@ import {
   Users, UserPlus, Pencil, Power, X, Save, Eye, EyeOff,
   CheckCircle2, AlertCircle, ShieldCheck, User, Trash2
 } from "lucide-react";
+import toast from "react-hot-toast";
+import { ConfirmModal } from "@/components/tasks/ConfirmModal";
 import { createUserAction, updateUserAction, toggleUserActiveAction, deleteUserAction } from "@/app/dashboard/settings/actions";
 
 interface AppUser {
@@ -302,6 +304,7 @@ export function UsersPanel({ users: initialUsers, currentUserId }: Props) {
   const [editingUser, setEdit]  = useState<AppUser | null>(null);
   const [showCreate, setCreate] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [userToDelete, setUserToDelete] = useState<AppUser | null>(null);
 
   const handleToggle = (user: AppUser) => {
     const newActive = !user.active;
@@ -309,12 +312,18 @@ export function UsersPanel({ users: initialUsers, currentUserId }: Props) {
     startTransition(() => toggleUserActiveAction(user.id, newActive));
   };
 
-  const handleDelete = (user: AppUser) => {
-    if (!window.confirm(`¿Eliminar a "${user.name}" definitivamente? Sus cotizaciones, proveedores y recibos pasarán a tu usuario. No se puede deshacer.`)) return;
+  const handleDelete = () => {
+    if (!userToDelete) return;
+    const user = userToDelete;
     startTransition(async () => {
       const res = await deleteUserAction(user.id);
-      if (res.success) setUsers((prev) => prev.filter((u) => u.id !== user.id));
-      else window.alert(res.error ?? "No se pudo eliminar el usuario");
+      if (res.success) {
+        setUsers((prev) => prev.filter((u) => u.id !== user.id));
+        toast.success(`Usuario "${user.name}" eliminado`);
+      } else {
+        toast.error(res.error ?? "No se pudo eliminar el usuario");
+      }
+      setUserToDelete(null);
     });
   };
 
@@ -410,7 +419,7 @@ export function UsersPanel({ users: initialUsers, currentUserId }: Props) {
                 )}
                 {!isMe && (
                   <button
-                    onClick={() => handleDelete(user)}
+                    onClick={() => setUserToDelete(user)}
                     disabled={isPending}
                     className="p-2 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all"
                     title="Eliminar"
@@ -425,6 +434,16 @@ export function UsersPanel({ users: initialUsers, currentUserId }: Props) {
       </div>
 
       {/* Modals */}
+      {userToDelete && (
+        <ConfirmModal
+          title={`¿Eliminar a ${userToDelete.name}?`}
+          message="Sus cotizaciones, proveedores y recibos pasarán a tu usuario. Esta acción no se puede deshacer."
+          confirmLabel="Sí, eliminar"
+          loading={isPending}
+          onConfirm={handleDelete}
+          onCancel={() => setUserToDelete(null)}
+        />
+      )}
       {editingUser && (
         <EditUserModal
           user={editingUser}

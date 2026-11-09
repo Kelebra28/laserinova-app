@@ -8,9 +8,10 @@ interface Props {
   confirmLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  loading?: boolean;
 }
 
-export function ConfirmModal({ title, message, confirmLabel = "Eliminar", onConfirm, onCancel }: Props) {
+export function ConfirmModal({ title, message, confirmLabel = "Eliminar", onConfirm, onCancel, loading = false }: Props) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div
@@ -36,14 +37,16 @@ export function ConfirmModal({ title, message, confirmLabel = "Eliminar", onConf
           <div className="flex gap-2 mt-5">
             <button
               onClick={onCancel}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
+              disabled={loading}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 disabled:opacity-50 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
             >
               <X className="w-4 h-4" />
               Cancelar
             </button>
             <button
               onClick={onConfirm}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold shadow-md shadow-red-600/25 transition-all hover:scale-[1.02] active:scale-95"
+              disabled={loading}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-bold shadow-md shadow-red-600/25 transition-all hover:scale-[1.02] active:scale-95"
             >
               <Trash2 className="w-4 h-4" />
               {confirmLabel}

@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { getUsers, createUser, updateUser } from "@/server/actions/user.actions";
 import { Users, UserPlus, Shield, Check, X, ShieldAlert, Loader2, Save, Trash2, ChevronDown } from "lucide-react";
 import { useSession } from "next-auth/react";
+import toast from "react-hot-toast";
+import { ConfirmModal } from "@/components/tasks/ConfirmModal";
 import { deleteUserAction } from "@/app/dashboard/settings/actions";
 import { Skeleton } from "@/components/ui/Skeleton";
 
@@ -86,6 +88,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [userToDelete, setUserToDelete] = useState<any | null>(null);
 
   // New user form state
   const [isCreating, setIsCreating] = useState(false);
@@ -113,7 +116,7 @@ export default function UsersPage() {
       setNewUserData({ name: "", email: "", password: "", role: "SELLER" });
       await fetchUsers();
     } else {
-      alert("Error: " + res.error);
+      toast.error(res.error ?? "No se pudo crear el usuario");
     }
     setSavingId(null);
   };
@@ -134,13 +137,19 @@ export default function UsersPage() {
     setSavingId(null);
   };
 
-  const handleDeleteUser = async (user: any) => {
-    if (!window.confirm(`¿Eliminar a "${user.name}" definitivamente? Sus cotizaciones, proveedores y recibos pasarán a tu usuario. No se puede deshacer.`)) return;
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    const user = userToDelete;
     setSavingId(user.id);
     const res = await deleteUserAction(user.id);
-    if (res.success) setUsers((prev) => prev.filter((u) => u.id !== user.id));
-    else alert(res.error ?? "No se pudo eliminar el usuario");
+    if (res.success) {
+      setUsers((prev) => prev.filter((u) => u.id !== user.id));
+      toast.success(`Usuario "${user.name}" eliminado`);
+    } else {
+      toast.error(res.error ?? "No se pudo eliminar el usuario");
+    }
     setSavingId(null);
+    setUserToDelete(null);
   };
 
   return (
@@ -253,7 +262,7 @@ export default function UsersPage() {
                     {savingId === user.id && <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />}
                     {user.id !== currentUserId && (
                       <button
-                        onClick={() => handleDeleteUser(user)}
+                        onClick={() => setUserToDelete(user)}
                         disabled={savingId === user.id}
                         title="Eliminar usuario"
                         className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
@@ -329,6 +338,17 @@ export default function UsersPage() {
             );
           })}
         </div>
+      )}
+
+      {userToDelete && (
+        <ConfirmModal
+          title={`¿Eliminar a ${userToDelete.name}?`}
+          message="Sus cotizaciones, proveedores y recibos pasarán a tu usuario. Esta acción no se puede deshacer."
+          confirmLabel="Sí, eliminar"
+          loading={savingId === userToDelete.id}
+          onConfirm={handleDeleteUser}
+          onCancel={() => setUserToDelete(null)}
+        />
       )}
     </div>
   );
