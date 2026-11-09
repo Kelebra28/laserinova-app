@@ -118,6 +118,28 @@ export async function toggleUserActiveAction(userId: string, active: boolean) {
   revalidatePath("/dashboard/settings");
 }
 
+// ─── Delete user ──────────────────────────────────────────────────────────────
+
+export async function deleteUserAction(userId: string): Promise<{ success: boolean; error?: string }> {
+  const session = await getServerSession(authOptions);
+  if ((session?.user as any)?.role !== "ADMIN") return { success: false, error: "No autorizado" };
+  if ((session?.user as any)?.id === userId) return { success: false, error: "No puedes eliminar tu propio usuario" };
+
+  try {
+    await prisma.user.delete({ where: { id: userId } });
+    revalidatePath("/dashboard/settings");
+    return { success: true };
+  } catch (e: any) {
+    if (e?.code === "P2003" || e?.code === "P2014") {
+      return {
+        success: false,
+        error: "Este usuario tiene registros asociados (tareas, cotizaciones, pagos, etc.) y no se puede eliminar. Desactívalo en su lugar.",
+      };
+    }
+    return { success: false, error: "No se pudo eliminar el usuario" };
+  }
+}
+
 // ─── Update own email credentials ─────────────────────────────────────────────
 
 export async function updateUserEmailConfigAction(formData: FormData) {

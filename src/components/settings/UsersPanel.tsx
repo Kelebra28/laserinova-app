@@ -3,9 +3,9 @@
 import { useState, useTransition } from "react";
 import {
   Users, UserPlus, Pencil, Power, X, Save, Eye, EyeOff,
-  CheckCircle2, AlertCircle, ShieldCheck, User
+  CheckCircle2, AlertCircle, ShieldCheck, User, Trash2
 } from "lucide-react";
-import { createUserAction, updateUserAction, toggleUserActiveAction } from "@/app/dashboard/settings/actions";
+import { createUserAction, updateUserAction, toggleUserActiveAction, deleteUserAction } from "@/app/dashboard/settings/actions";
 
 interface AppUser {
   id: string;
@@ -309,6 +309,15 @@ export function UsersPanel({ users: initialUsers, currentUserId }: Props) {
     startTransition(() => toggleUserActiveAction(user.id, newActive));
   };
 
+  const handleDelete = (user: AppUser) => {
+    if (!window.confirm(`¿Eliminar a "${user.name}" definitivamente? Esta acción no se puede deshacer.`)) return;
+    startTransition(async () => {
+      const res = await deleteUserAction(user.id);
+      if (res.success) setUsers((prev) => prev.filter((u) => u.id !== user.id));
+      else window.alert(res.error ?? "No se pudo eliminar el usuario");
+    });
+  };
+
   const refreshAfterSave = () => {
     // Revalidation happens server-side; for optimistic UI we just reload users list by re-fetching
     // In practice Next.js revalidatePath will update on next navigation
@@ -397,6 +406,16 @@ export function UsersPanel({ users: initialUsers, currentUserId }: Props) {
                     title={user.active ? "Desactivar" : "Activar"}
                   >
                     <Power className="w-4 h-4" />
+                  </button>
+                )}
+                {!isMe && (
+                  <button
+                    onClick={() => handleDelete(user)}
+                    disabled={isPending}
+                    className="p-2 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 )}
               </div>
