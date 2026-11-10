@@ -6,7 +6,8 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { sendMessageToMeta, isAdminPhone, processAIAgentResponse, retryBotReply, deleteConversationService, clearConversationMessagesService } from '@/server/services/whatsapp.service';
 import { notificationEmitter } from '@/lib/notification-emitter';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { executeChalanEstimate } from '@/lib/agents/chalan';
 import { revalidatePath } from 'next/cache';
 
 export async function simulateIncomingMessageAction(contactId: string, content: string) {
@@ -339,6 +340,186 @@ ${transcript}`;
   } catch (error: any) {
     console.error("Error generando resumen:", error);
     return { success: false, error: 'Error al generar resumen' };
+  }
+}
+
+// Datos de una cotización sacados del chat (botón "Calcular"). Mismos campos que le manda el bot al Chalán.
+type ManualQuoteData = {
+  project_name: string;
+  tipo_concepto: string;
+  material: string;
+  grosor: string;
+  ancho_cm: number;
+  alto_cm: number;
+  cantidad: number;
+  diseno_incluido: boolean;
+  nombre_cliente: string;
+  correo_cliente: string;
+  descripcion_concepto: string;
+};
+
+/**
+ * Botón "Calcular" del chat, paso 1: lee la conversación y saca los datos de la cotización para
+ * que el asesor los revise. Sirve cuando el bot no llegó a pedir la cotización (el cliente se
+ * desvió con una duda, el bot está apagado, etc.). No guarda nada ni avisa a nadie.
+ */
+export async function extractQuoteDataAction(contactId: string) {
+  try {
+    await requireAuth();
+    const contact = await prisma.whatsAppContact.findUnique({ where: { id: contactId } });
+    if (!contact) return { success: false as const, error: 'Contacto no encontrado' };
+
+    const empty: ManualQuoteData = {
+      project_name: '', tipo_concepto: 'CORTE', material: '', grosor: '', ancho_cm: 0, alto_cm: 0, cantidad: 0,
+      diseno_incluido: false, nombre_cliente: contact.name || '', correo_cliente: '', descripcion_concepto: '',
+    };
+
+    const messages = await prisma.whatsAppMessage.findMany({
+      where: { contactId, direction: { in: ['INBOUND', 'OUTBOUND'] } },
+      orderBy: { timestamp: 'desc' },
+      take: 60,
+      select: { direction: true, type: true, content: true },
+    });
+    const transcript = messages
+      .reverse()
+      .map(m => {
+        const text = m.content || (m.type === 'IMAGE' ? '[imagen]' : m.type === 'AUDIO' ? '[audio]' : m.type === 'DOCUMENT' ? '[documento]' : '');
+        return text ? `${m.direction === 'INBOUND' ? 'Cliente' : 'Asesor/Bot'}: ${text}` : '';
+      })
+      .filter(Boolean)
+      .join('\n');
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    // Sin conversación o sin IA: el formulario se abre vacío y el asesor lo llena a mano.
+    if (!transcript.trim() || !apiKey) return { success: true as const, data: empty, missing: [] as string[] };
+
+    const str = { type: SchemaType.STRING, nullable: true } as const;
+    const num = { type: SchemaType.NUMBER, nullable: true } as const;
+    const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
+      model: 'gemini-3.5-flash',
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: SchemaType.OBJECT,
+          properties: {
+            project_name: str, tipo_concepto: str, material: str, grosor: str,
+            ancho_cm: num, alto_cm: num, cantidad: num,
+            diseno_incluido: { type: SchemaType.BOOLEAN, nullable: true },
+            nombre_cliente: str, correo_cliente: str, descripcion_concepto: str,
+          },
+        },
+      },
+    });
+
+    const result = await model.generateContent(`Eres asistente de Laser Inova (taller de corte y grabado láser e impresión UV). Lee la conversación de WhatsApp y extrae los datos del trabajo que el cliente quiere cotizar. Si hablaron de varios trabajos, toma el más reciente.
+
+Reglas:
+- NO inventes nada. Si un dato no aparece en la conversación, devuélvelo como null.
+- project_name: nombre corto del proyecto (ej. "Placas de acrílico", "Termos grabados").
+- tipo_concepto: "CORTE" o "GRABADO" si es trabajo en material suelto; "REVENTA" si es un producto de catálogo (termos, plumas, libretas).
+- material: el material sin el grosor (ej. "Acrílico cristal", "MDF"). grosor aparte (ej. "3mm").
+- ancho_cm y alto_cm: medidas de UNA pieza en centímetros (convierte si vienen en mm, m o pulgadas). Si es circular, ancho y alto son el diámetro.
+- cantidad: número de piezas.
+- diseno_incluido: true si el cliente dijo que ya tiene su diseño o archivo; false si dijo que no; null si no se habló.
+- nombre_cliente y correo_cliente: solo si el cliente los escribió.
+- descripcion_concepto: una frase con el detalle del trabajo (forma, acabado, grabado, orificios, etc.).
+
+Conversación:
+${transcript}`);
+
+    if (result.response.usageMetadata) {
+      const inputTokens = result.response.usageMetadata.promptTokenCount || 0;
+      const outputTokens = result.response.usageMetadata.candidatesTokenCount || 0;
+      await prisma.aiUsageLog.create({
+        data: {
+          agentName: 'Calcular (chat)', contactId, inputTokens, outputTokens, totalTokens: inputTokens + outputTokens,
+          estimatedCost: (inputTokens * 0.075) / 1000000 + (outputTokens * 0.3) / 1000000,
+        },
+      }).catch((e) => console.error('Fallo al guardar tokens de Calcular:', e));
+    }
+
+    const raw = JSON.parse(result.response.text() || '{}') as Record<string, unknown>;
+    const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+    const positive = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+    const tipo = text(raw.tipo_concepto).toUpperCase();
+    const data: ManualQuoteData = {
+      project_name: text(raw.project_name),
+      tipo_concepto: ['CORTE', 'GRABADO', 'REVENTA'].includes(tipo) ? tipo : 'CORTE',
+      material: text(raw.material),
+      grosor: text(raw.grosor),
+      ancho_cm: positive(raw.ancho_cm),
+      alto_cm: positive(raw.alto_cm),
+      cantidad: Math.round(positive(raw.cantidad)),
+      diseno_incluido: raw.diseno_incluido === true,
+      nombre_cliente: text(raw.nombre_cliente) || contact.name || '',
+      correo_cliente: text(raw.correo_cliente),
+      descripcion_concepto: text(raw.descripcion_concepto),
+    };
+
+    // Lo que el asesor tiene que completar antes de calcular.
+    const missing = ([
+      ['project_name', 'proyecto'], ['material', 'material'], ['ancho_cm', 'ancho'], ['alto_cm', 'alto'], ['cantidad', 'cantidad'],
+    ] as const).filter(([key]) => !data[key]).map(([, label]) => label);
+
+    return { success: true as const, data, missing };
+  } catch (error) {
+    console.error('Error extrayendo datos de cotización del chat:', error);
+    return { success: false as const, error: 'No se pudieron leer los datos de la conversación.' };
+  }
+}
+
+/**
+ * Botón "Calcular" del chat, paso 2: corre el mismo cálculo del Chalán con los datos que confirmó
+ * el asesor y deja la nota de estimación en el chat (la que habilita "Generar cotización").
+ * No se avisa al administrador: quien lo pide ya está viendo el chat.
+ */
+export async function runManualEstimateAction(contactId: string, input: ManualQuoteData) {
+  try {
+    await requireAuth();
+    const contact = await prisma.whatsAppContact.findUnique({ where: { id: contactId } });
+    if (!contact) return { success: false as const, error: 'Contacto no encontrado' };
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return { success: false as const, error: 'Falta configurar GEMINI_API_KEY.' };
+
+    const tipo = ['CORTE', 'GRABADO', 'REVENTA'].includes(input.tipo_concepto) ? input.tipo_concepto : 'CORTE';
+    const data = {
+      project_name: String(input.project_name || '').trim(),
+      material: String(input.material || '').trim(),
+      grosor: String(input.grosor || '').trim() || undefined,
+      ancho_cm: Number(input.ancho_cm) || 0,
+      alto_cm: Number(input.alto_cm) || 0,
+      cantidad: Math.round(Number(input.cantidad) || 0),
+      diseno_incluido: !!input.diseno_incluido,
+      nombre_cliente: String(input.nombre_cliente || '').trim() || contact.name || '',
+      correo_cliente: String(input.correo_cliente || '').trim(),
+      tipo_concepto: tipo,
+      descripcion_concepto: String(input.descripcion_concepto || '').trim(),
+    };
+    if (!data.project_name || !data.material) return { success: false as const, error: 'Faltan el proyecto y el material.' };
+    if (data.cantidad <= 0) return { success: false as const, error: 'La cantidad debe ser mayor a cero.' };
+    if (tipo !== 'REVENTA' && (data.ancho_cm <= 0 || data.alto_cm <= 0)) {
+      return { success: false as const, error: 'Faltan las medidas (ancho y alto en cm).' };
+    }
+
+    const chalanResult = await executeChalanEstimate(data, contact, new GoogleGenerativeAI(apiKey));
+
+    const message = await prisma.whatsAppMessage.create({
+      data: {
+        contactId,
+        messageId: `chalan_manual_${Date.now()}`,
+        direction: 'INTERNAL',
+        type: 'TEXT',
+        content: `Estimación del Chalán:\n${chalanResult.cleanEstimate}\n${chalanResult.quotePayload}`,
+        status: 'DELIVERED',
+      },
+    });
+    await notificationEmitter.emit('whatsapp_message', { message, contact });
+
+    return { success: true as const, message };
+  } catch (error) {
+    console.error('Error calculando la estimación manual:', error);
+    return { success: false as const, error: 'No se pudo calcular la estimación.' };
   }
 }
 

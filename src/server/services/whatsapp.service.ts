@@ -750,7 +750,7 @@ async function runAIAgentResponse(contactId: string) {
     // Definición de Herramientas (Function Calling)
     const notificar_solicitud_cotizacion: FunctionDeclaration = {
       name: 'notificar_solicitud_cotizacion',
-      description: 'Envía los datos recolectados al administrador humano para que autorice y genere la cotización final. IMPORTANTE: NO puedes usar esta herramienta hasta que le hayas preguntado al cliente y tengas TODOS los siguientes datos obligatorios: Material, Ancho, Alto, Cantidad y Nombre del Cliente. Si falta algo, pregúntale al cliente antes de llamar a esta función.',
+      description: 'Envía los datos recolectados al administrador humano para que autorice y genere la cotización final. IMPORTANTE: NO puedes usar esta herramienta hasta tener los datos técnicos obligatorios: Material, Ancho, Alto y Cantidad. Si falta alguno, pregúntale al cliente antes de llamar a esta función. El nombre y el correo son opcionales: NUNCA dejes de llamarla por no tenerlos.',
       parameters: {
         type: SchemaType.OBJECT,
         properties: {
@@ -761,12 +761,12 @@ async function runAIAgentResponse(contactId: string) {
           alto_cm: { type: SchemaType.NUMBER, description: 'Medida del ALTO en centímetros exactos (Obligatorio)' },
           cantidad: { type: SchemaType.INTEGER, description: 'Cantidad de piezas solicitadas por el cliente (Obligatorio)' },
           diseno_incluido: { type: SchemaType.BOOLEAN, description: 'True si el cliente tiene diseño en vectores, False si no.' },
-          nombre_cliente: { type: SchemaType.STRING, description: 'Nombre de la persona con la que estás hablando (Obligatorio)' },
+          nombre_cliente: { type: SchemaType.STRING, description: 'Nombre que el cliente te dijo (Opcional: déjalo vacío si no lo dio; el sistema usa su nombre de WhatsApp)' },
           correo_cliente: { type: SchemaType.STRING, description: 'Correo electrónico del cliente (Opcional, puede venir vacío)' },
           tipo_concepto: { type: SchemaType.STRING, description: 'Si el proyecto es un producto del catálogo (ej. Termos, libretas) manda "REVENTA". Si es material suelto manda "CORTE" o "GRABADO".' },
           descripcion_concepto: { type: SchemaType.STRING, description: 'Descripción detallada del concepto (ej. "Termo Space de 550ml con grabado láser")' },
         },
-        required: ['project_name', 'material', 'ancho_cm', 'alto_cm', 'cantidad', 'nombre_cliente', 'tipo_concepto'],
+        required: ['project_name', 'material', 'ancho_cm', 'alto_cm', 'cantidad', 'tipo_concepto'],
       }
     };
 
@@ -901,6 +901,41 @@ async function runAIAgentResponse(contactId: string) {
         console.error("Error adjuntando media a Gemini:", e);
       }
     }
+
+    // Duda que el bot no sabe contestar: deja la nota en el chat y avisa al equipo.
+    const escalateDoubt = async (duda: string) => {
+      // Nota en el chat: el equipo ve qué quedó pendiente y el bot, al releer el historial,
+      // sabe que esta duda ya la escaló y no vuelve a mandar el mismo aviso.
+      try {
+        const dudaNote = await prisma.whatsAppMessage.create({
+          data: {
+            contactId: contact.id,
+            messageId: `duda_${Date.now()}`,
+            direction: 'INTERNAL',
+            type: 'TEXT',
+            content: `${SYSTEM_NOTE_PREFIX}: Ya se avisó al equipo de esta duda del cliente: «${duda}». No vuelvas a avisar por la misma duda; si el cliente insiste y el equipo aún no contesta, dile que sigues esperando la confirmación.`,
+            status: 'DELIVERED',
+          },
+        });
+        await notificationEmitter.emit('whatsapp_message', { message: dudaNote, contact });
+      } catch (e) {
+        console.error('Error guardando la nota de duda avisada:', e);
+      }
+
+      if (!contact.name?.includes("Simulador")) {
+        const summary = await quickConversationSummary(contact.id);
+        await notifyAdmin(
+          [
+            `❓ ${contact.name || 'Un cliente'} tiene una duda que el bot no pudo resolver`,
+            `Tel: +${contact.phone}`,
+            `Duda: ${duda}`,
+            summary ? `\nResumen:\n${summary}` : '',
+            `\nResponder en el chat: ${conversationLink(contact.id)}`,
+          ].filter(Boolean).join('\n'),
+          conversationPath(contact.id)
+        ).catch((e) => console.error('Error avisando duda al equipo:', e));
+      }
+    };
 
     let responseText = "";
 
@@ -1169,37 +1204,7 @@ async function runAIAgentResponse(contactId: string) {
         } else if (call.name === 'avisar_duda_al_equipo') {
           const args = call.args as any;
 
-          // Nota en el chat: el equipo ve qué quedó pendiente y el bot, al releer el historial,
-          // sabe que esta duda ya la escaló y no vuelve a mandar el mismo aviso.
-          try {
-            const dudaNote = await prisma.whatsAppMessage.create({
-              data: {
-                contactId: contact.id,
-                messageId: `duda_${Date.now()}`,
-                direction: 'INTERNAL',
-                type: 'TEXT',
-                content: `${SYSTEM_NOTE_PREFIX}: Ya se avisó al equipo de esta duda del cliente: «${args.duda}». No vuelvas a avisar por la misma duda; si el cliente insiste y el equipo aún no contesta, dile que sigues esperando la confirmación.`,
-                status: 'DELIVERED',
-              },
-            });
-            await notificationEmitter.emit('whatsapp_message', { message: dudaNote, contact });
-          } catch (e) {
-            console.error('Error guardando la nota de duda avisada:', e);
-          }
-
-          if (!contact.name?.includes("Simulador")) {
-            const summary = await quickConversationSummary(contact.id);
-            await notifyAdmin(
-              [
-                `❓ ${contact.name || 'Un cliente'} tiene una duda que el bot no pudo resolver`,
-                `Tel: +${contact.phone}`,
-                `Duda: ${args.duda}`,
-                summary ? `\nResumen:\n${summary}` : '',
-                `\nResponder en el chat: ${conversationLink(contact.id)}`,
-              ].filter(Boolean).join('\n'),
-              conversationPath(contact.id)
-            ).catch((e) => console.error('Error avisando duda al equipo:', e));
-          }
+          await escalateDoubt(args.duda);
 
           if (result.response.candidates && result.response.candidates[0].content) {
             contents.push(result.response.candidates[0].content);
@@ -1237,7 +1242,8 @@ async function runAIAgentResponse(contactId: string) {
               alto_cm: args.alto_cm,
               cantidad: args.cantidad,
               diseno_incluido: args.diseno_incluido,
-              nombre_cliente: args.nombre_cliente,
+              // La cotización no espera al nombre: si el cliente no lo dio, va el de su perfil de WhatsApp.
+              nombre_cliente: args.nombre_cliente || contact.name || '',
               correo_cliente: args.correo_cliente,
               tipo_concepto: args.tipo_concepto,
               descripcion_concepto: args.descripcion_concepto,
@@ -1271,7 +1277,38 @@ async function runAIAgentResponse(contactId: string) {
             console.log("[SIMULADOR] Alerta de cotización al admin simulada:", chalanResult.adminAlertMsg);
           }
           
-          responseText = `¡Excelente! Ya capturé todos los detalles y se los pasé al taller. En un momento un asesor revisará la información y te enviará la cotización por este medio.`;
+          // 4. Respuesta al cliente. Se redacta con Gemini para que, si en el mismo mensaje venía
+          // una duda, también la conteste (antes se perdía tras el texto fijo).
+          const quoteRequestedText = `¡Excelente! Ya capturé todos los detalles y se los pasé al taller. En un momento un asesor revisará la información y te enviará la cotización por este medio.`;
+          responseText = quoteRequestedText;
+          if (result.response.candidates && result.response.candidates[0].content) {
+            contents.push(result.response.candidates[0].content);
+            contents.push({
+              role: 'user',
+              parts: [{
+                functionResponse: {
+                  name: 'notificar_solicitud_cotizacion',
+                  response: {
+                    solicitud_enviada: true,
+                    instruccion: 'Dile al cliente, en una o dos frases, que ya pasaste los detalles al taller y que un asesor revisará la información y le enviará la cotización por este medio. NO des precios ni tiempos. Si en su último mensaje además hizo una pregunta, contéstala brevemente con las reglas de negocio; si no sabes la respuesta, invoca avisar_duda_al_equipo. No menciones herramientas ni notificaciones.',
+                  },
+                },
+              }],
+            });
+            try {
+              const followUp = await model.generateContent({ contents });
+              const followCall = followUp.response.functionCalls()?.[0];
+              if (followCall?.name === 'avisar_duda_al_equipo') {
+                toolsUsed.push(followCall.name);
+                await escalateDoubt(String((followCall.args as { duda?: string })?.duda || ''));
+                responseText = `${quoteRequestedText} Sobre tu duda, la confirmo con el equipo y te aviso por aquí.`;
+              } else if (!followCall) {
+                responseText = followUp.response.text() || quoteRequestedText;
+              }
+            } catch (e) {
+              console.error('Error redactando respuesta de solicitud de cotización:', e);
+            }
+          }
         }
       } else {
         responseText = result.response.text();

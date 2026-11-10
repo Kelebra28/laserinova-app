@@ -9,7 +9,8 @@ import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simula
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
-import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle } from 'lucide-react';
+import CalculateQuoteModal from './CalculateQuoteModal';
+import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 type Contact = any;
@@ -85,6 +86,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [reactionMenuFor, setReactionMenuFor] = useState<string | null>(null);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [isCalculateOpen, setIsCalculateOpen] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryText, setSummaryText] = useState('');
   const [summaryCache, setSummaryCache] = useState<Record<string, { text: string; messageCount: number }>>({});
@@ -862,6 +864,17 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                 </Link>
               )}
 
+              {!activeContact.isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setIsCalculateOpen(true)}
+                  className="h-9 rounded-full px-3 flex items-center gap-1.5 text-xs font-semibold bg-[#202c33] text-amber-300 hover:bg-[#2a3942] transition-colors active:scale-95"
+                  title="Calcular cotización con los datos de esta conversación"
+                >
+                  <Calculator size={16} /><span className="hidden xl:inline">Calcular</span>
+                </button>
+              )}
+
               <div title="Modo simulador" className="hidden md:flex items-center gap-2 bg-[#202c33] 2xl:pl-3 pl-2 pr-2 py-1 rounded-full">
                 <span className="text-[11px] font-medium text-[#8696a0] hidden 2xl:inline">Simulador</span>
                 <button
@@ -1297,6 +1310,21 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
             <p className="text-[#8696a0] leading-relaxed text-sm">Selecciona una conversación de la lista para ver los mensajes y atender a los prospectos de Laser Inova.</p>
           </div>
         </div>
+      )}
+
+      {isCalculateOpen && activeContact && (
+        <CalculateQuoteModal
+          key={activeContact.id}
+          contactId={activeContact.id}
+          onClose={() => setIsCalculateOpen(false)}
+          onDone={(message) => {
+            setIsCalculateOpen(false);
+            if (activeContactIdRef.current === message.contactId) {
+              setMessages(prev => (prev.some(m => m.id === message.id) ? prev : [...prev, message]));
+            }
+            bumpContactPreview(message);
+          }}
+        />
       )}
 
       {/* Modal Resumen IA */}
