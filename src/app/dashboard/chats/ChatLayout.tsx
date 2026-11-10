@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import CalculateQuoteModal from './CalculateQuoteModal';
+import ImageViewer, { type ViewerImage } from './ImageViewer';
 import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator, Download, ExternalLink } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -87,6 +88,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
   const [reactionMenuFor, setReactionMenuFor] = useState<string | null>(null);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [isCalculateOpen, setIsCalculateOpen] = useState(false);
+  const [viewerImageId, setViewerImageId] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryText, setSummaryText] = useState('');
   const [summaryCache, setSummaryCache] = useState<Record<string, { text: string; messageCount: number }>>({});
@@ -1085,13 +1087,13 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
 
                           {msg.type === 'IMAGE' ? (
                             <div className="flex flex-col gap-1.5 relative w-[min(300px,72vw)]">
-                              <a href={mediaSrc} target="_blank" rel="noreferrer" className="block rounded-xl overflow-hidden bg-black/25">
+                              <button type="button" onClick={() => setViewerImageId(msg.id)} className="block w-full rounded-xl overflow-hidden bg-black/25 cursor-zoom-in">
                                 <img src={mediaSrc} alt="Adjunto" className="w-full max-h-80 object-contain" />
-                              </a>
+                              </button>
                               <div className="flex gap-1.5">
-                                <a href={mediaSrc} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
+                                <button type="button" onClick={() => setViewerImageId(msg.id)} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
                                   <ExternalLink size={14} /> Abrir
-                                </a>
+                                </button>
                                 <a href={`/api/media/${msg.id}?download=1`} download className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
                                   <Download size={14} /> Descargar
                                 </a>
@@ -1390,6 +1392,28 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
           </div>
         </div>
       )}
+
+      {viewerImageId && (() => {
+        const viewerImages: ViewerImage[] = messages
+          .filter((m: Message) => m.type === 'IMAGE' && m.content !== '🎭 Sticker')
+          .map((m: Message) => ({
+            id: m.id,
+            src: m.mediaUrl?.startsWith('http') ? m.mediaUrl : `/api/media/${m.id}`,
+            caption: m.content,
+            sender: m.direction === 'INBOUND' ? (activeContact?.name || `+${activeContact?.phone ?? ''}`) : 'Tú',
+            timestamp: m.timestamp,
+          }));
+        const index = viewerImages.findIndex(img => img.id === viewerImageId);
+        if (index === -1) return null;
+        return (
+          <ImageViewer
+            images={viewerImages}
+            index={index}
+            onIndexChange={(i) => setViewerImageId(viewerImages[i].id)}
+            onClose={() => setViewerImageId(null)}
+          />
+        );
+      })()}
 
       {/* Modal Confirmación Borrar Conversación */}
       <ConfirmationModal
