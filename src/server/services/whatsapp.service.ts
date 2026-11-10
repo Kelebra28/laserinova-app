@@ -419,7 +419,8 @@ async function latestBotTriggerMessage(contactId: string) {
 /**
  * Agrupa mensajes seguidos del cliente. En serverless no hay timers persistentes, así que:
  * cada llamada espera `debounceMs` y luego revisa en la BD si llegó un mensaje más nuevo
- * (entonces esa otra llamada se encarga) o si alguien ya contestó (humano o bot).
+ * (entonces esa otra llamada se encarga). Si el mensaje ya quedó contestado lo decide
+ * runAIAgentResponse con el candado tomado, que es cuando el historial ya no cambia.
  * Devuelve true si esta llamada debe seguir y responder.
  */
 async function shouldRespondAfterDebounce(contactId: string, debounceMs: number): Promise<boolean> {
@@ -429,13 +430,89 @@ async function shouldRespondAfterDebounce(contactId: string, debounceMs: number)
   await new Promise((resolve) => setTimeout(resolve, debounceMs));
 
   const latest = await latestBotTriggerMessage(contactId);
-  if (latest && latest.id !== mine.id) return false; // llegó otro mensaje: responde la llamada de ese
+  return !latest || latest.id === mine.id; // llegó otro mensaje: responde la llamada de ese
+}
 
-  const answered = await prisma.whatsAppMessage.findFirst({
-    where: { contactId, direction: 'OUTBOUND', timestamp: { gt: mine.timestamp } },
-    select: { id: true },
+// Candado por contacto: una sola respuesta del bot a la vez. Sin él, si el cliente escribe
+// mientras el bot sigue armando la respuesta anterior, dos corridas se enciman (avisos
+// duplicados al equipo, historial que termina en turno del bot y Gemini lo rechaza).
+const BOT_LOCK_TTL_MS = 90 * 1000; // por si una corrida muere sin soltarlo
+const BOT_LOCK_WAIT_MS = 45 * 1000;
+
+async function tryAcquireBotLock(contactId: string): Promise<Date | null> {
+  const lockedUntil = new Date(Date.now() + BOT_LOCK_TTL_MS);
+  try {
+    await prisma.whatsAppBotLock.create({ data: { contactId, lockedUntil } });
+    return lockedUntil;
+  } catch (e) {
+    if ((e as { code?: string } | null)?.code !== 'P2002') throw e; // P2002 = ya hay candado para este contacto
+  }
+  // Candado vencido (la corrida anterior murió): se lo queda quien lo actualice primero.
+  const taken = await prisma.whatsAppBotLock.updateMany({
+    where: { contactId, lockedUntil: { lt: new Date() } },
+    data: { lockedUntil },
   });
-  return !answered;
+  return taken.count === 1 ? lockedUntil : null;
+}
+
+/**
+ * Espera su turno para contestarle a este contacto. Devuelve la marca del candado (para soltarlo)
+ * o null si no se pudo tomar: falta la tabla o se agotó la espera. En ese caso se contesta
+ * de todos modos, porque es peor dejar al cliente sin respuesta que arriesgar un encimado.
+ */
+async function acquireBotLock(contactId: string): Promise<Date | null> {
+  const deadline = Date.now() + BOT_LOCK_WAIT_MS;
+  try {
+    for (;;) {
+      const lock = await tryAcquireBotLock(contactId);
+      if (lock) return lock;
+      if (Date.now() >= deadline) {
+        console.warn(`[BOT] Candado ocupado más de ${BOT_LOCK_WAIT_MS / 1000}s para ${contactId}; se contesta sin candado.`);
+        return null;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  } catch (e) {
+    console.error('[BOT] No se pudo usar el candado (¿falta la tabla WhatsAppBotLock?); se contesta sin candado:', e);
+    return null;
+  }
+}
+
+async function releaseBotLock(contactId: string, lock: Date) {
+  // Solo suelta el suyo: si venció y otra corrida lo tomó, lockedUntil ya es otro.
+  await prisma.whatsAppBotLock
+    .deleteMany({ where: { contactId, lockedUntil: lock } })
+    .catch((e) => console.error('[BOT] No se pudo soltar el candado:', e));
+}
+
+// Notas INTERNAL que son instrucciones del sistema para el bot: van a Gemini como turno
+// 'user'. El resto de notas internas y lo que ya se le mandó al cliente van como 'model'.
+const SYSTEM_INSTRUCTION_PREFIX = '[INSTRUCCIÓN INTERNA DEL SISTEMA]';
+const SYSTEM_NOTE_PREFIX = '[NOTA INTERNA DEL SISTEMA]';
+
+/**
+ * El bot guarda en aiTrace.upTo el último mensaje del cliente que alcanzó a leer. Si el cliente
+ * escribió mientras el bot armaba esa respuesta, su mensaje queda ANTES de la respuesta al ordenar
+ * por hora, aunque el bot nunca lo vio. Aquí se recoloca después de esa respuesta para que la
+ * siguiente corrida lo conteste en vez de darlo por atendido.
+ */
+function moveUnseenClientMessagesAfterReply<T extends { id: string; direction: string; aiTrace: string | null }>(msgs: T[]): T[] {
+  for (let r = msgs.length - 1; r >= 0; r--) {
+    const reply = msgs[r];
+    if (reply.direction !== 'OUTBOUND' || !reply.aiTrace) continue;
+
+    let upTo: unknown;
+    try { upTo = JSON.parse(reply.aiTrace).upTo; } catch { /* aiTrace viejo o ilegible */ }
+    const seenIdx = typeof upTo === 'string' ? msgs.findIndex((m) => m.id === upTo) : -1;
+    if (seenIdx < 0 || seenIdx > r) return msgs;
+
+    const unseen = msgs.slice(seenIdx + 1, r).filter((m) => m.direction === 'INBOUND');
+    if (unseen.length === 0) return msgs;
+    const rest = msgs.filter((m) => !unseen.includes(m));
+    const at = rest.indexOf(reply) + 1;
+    return [...rest.slice(0, at), ...unseen, ...rest.slice(at)];
+  }
+  return msgs;
 }
 
 const BOT_FAILURE_MARKER = '⚠️ Falla del bot';
@@ -557,7 +634,7 @@ export async function sendQuotePdfToClient(quoteId: string) {
       messageId: `internal_instruction_${Date.now()}`,
       direction: 'INTERNAL',
       type: 'TEXT',
-      content: `[INSTRUCCIÓN INTERNA DEL SISTEMA]: Acabo de enviarle al cliente la Cotización Aprobada ${quote.folio} en formato PDF. El total es de $${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN.
+      content: `${SYSTEM_INSTRUCTION_PREFIX}: Acabo de enviarle al cliente la Cotización Aprobada ${quote.folio} en formato PDF. El total es de $${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN.
 Por favor, escríbele un mensaje corto y amigable avisándole que ya tiene la cotización oficial arriba y que cualquier duda me la escriba por aquí. No le preguntes qué le parece.
 REGLA CRÍTICA: Recuerda que tienes prohibido desglosar costos en materiales y horas. Solo menciona el precio final que acabo de darte.`,
       status: 'DELIVERED',
@@ -611,6 +688,15 @@ export async function processAIAgentResponse(contactId: string, opts?: { debounc
 }
 
 async function executeAIAgentResponse(contactId: string) {
+  const lock = await acquireBotLock(contactId);
+  try {
+    return await runAIAgentResponse(contactId);
+  } finally {
+    if (lock) await releaseBotLock(contactId, lock);
+  }
+}
+
+async function runAIAgentResponse(contactId: string) {
   try {
     const contact = await prisma.whatsAppContact.findUnique({
       where: { id: contactId }
@@ -624,13 +710,17 @@ async function executeAIAgentResponse(contactId: string) {
       orderBy: { timestamp: 'desc' },
       take: 12
     });
-    const recentMessages = recentMessagesDesc.reverse();
+    const recentMessages = moveUnseenClientMessagesAfterReply(recentMessagesDesc.reverse());
+    // Se guarda en aiTrace.upTo de la respuesta (ver moveUnseenClientMessagesAfterReply).
+    const lastSeenInboundId = recentMessages.slice().reverse().find(m => m.direction === 'INBOUND')?.id;
 
     // Construir el historial (Gemini exige que los roles 'user' y 'model' se alternen estrictamente)
     const contents: any[] = [];
     recentMessages.forEach(msg => {
       if (msg.direction === 'INTERNAL' && msg.content?.startsWith(BOT_FAILURE_MARKER)) return; // nota interna, no es parte de la charla
-      const role = msg.direction === 'INBOUND' ? 'user' : 'model';
+      const isSystemNote = msg.direction === 'INTERNAL'
+        && [SYSTEM_INSTRUCTION_PREFIX, SYSTEM_NOTE_PREFIX].some(p => msg.content?.startsWith(p));
+      const role = msg.direction === 'INBOUND' || isSystemNote ? 'user' : 'model';
       // Fotos/audios sin texto llegan con content vacío; Gemini rechaza partes de texto vacías.
       const text = msg.content || (msg.type === 'IMAGE' ? '[El cliente envió una imagen]' : msg.type === 'AUDIO' ? '[El cliente envió un audio]' : '');
       if (!text) return;
@@ -640,6 +730,13 @@ async function executeAIAgentResponse(contactId: string) {
         contents.push({ role, parts: [{ text }] });
       }
     });
+
+    // Gemini rechaza un historial que termina en turno del bot ("Requests ending with a model
+    // turn"). Si lo último ya es nuestro, no hay nada nuevo del cliente que contestar.
+    if (contents.length === 0 || contents[contents.length - 1].role !== 'user') {
+      console.warn(`[BOT] Sin mensaje pendiente del cliente para ${contactId}; no se contesta.`);
+      return;
+    }
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -1072,6 +1169,24 @@ async function executeAIAgentResponse(contactId: string) {
         } else if (call.name === 'avisar_duda_al_equipo') {
           const args = call.args as any;
 
+          // Nota en el chat: el equipo ve qué quedó pendiente y el bot, al releer el historial,
+          // sabe que esta duda ya la escaló y no vuelve a mandar el mismo aviso.
+          try {
+            const dudaNote = await prisma.whatsAppMessage.create({
+              data: {
+                contactId: contact.id,
+                messageId: `duda_${Date.now()}`,
+                direction: 'INTERNAL',
+                type: 'TEXT',
+                content: `${SYSTEM_NOTE_PREFIX}: Ya se avisó al equipo de esta duda del cliente: «${args.duda}». No vuelvas a avisar por la misma duda; si el cliente insiste y el equipo aún no contesta, dile que sigues esperando la confirmación.`,
+                status: 'DELIVERED',
+              },
+            });
+            await notificationEmitter.emit('whatsapp_message', { message: dudaNote, contact });
+          } catch (e) {
+            console.error('Error guardando la nota de duda avisada:', e);
+          }
+
           if (!contact.name?.includes("Simulador")) {
             const summary = await quickConversationSummary(contact.id);
             await notifyAdmin(
@@ -1199,7 +1314,7 @@ async function executeAIAgentResponse(contactId: string) {
         content: responseText,
         status: 'SENT',
         // Qué influyó en esta respuesta (se muestra en el chat del CRM para depurar al bot)
-        aiTrace: JSON.stringify({ rules: rag.sources, tools: toolsUsed }),
+        aiTrace: JSON.stringify({ rules: rag.sources, tools: toolsUsed, upTo: lastSeenInboundId }),
       }
     });
 

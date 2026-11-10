@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 // La respuesta de la IA corre después de contestar a Meta (ver after() abajo); darle margen.
-export const maxDuration = 60;
+// Incluye hasta 45 s de espera del candado si el bot sigue contestando un mensaje anterior.
+export const maxDuration = 120;
 import { NextResponse, after } from 'next/server';
 import crypto from 'crypto';
 import { processIncomingMessage, processAIAgentResponse } from '@/server/services/whatsapp.service';
