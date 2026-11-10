@@ -10,6 +10,26 @@ export interface ChalanExecutionResult {
   estimatedTimeMin: number | string;
   quotePayload: string;
   adminAlertMsg: string;
+  /**
+   * Precio calculado con la fórmula del CRM. Solo viene cuando el cálculo es confiable (material
+   * del catálogo con precio y tiempo de máquina estimado): con esto se arma el borrador automático.
+   */
+  pricing?: ChalanPricing;
+}
+
+export interface ChalanPricing {
+  materialName: string;
+  tipo: "CORTE" | "GRABADO";
+  quantity: number;
+  widthCm: number;
+  heightCm: number;
+  timeMinPerPiece: number;
+  /** Precio de venta sin IVA por todas las piezas. */
+  subtotal: number;
+  /** Costo real (material + máquina) de todas las piezas. */
+  realCost: number;
+  marginPct: number;
+  ivaPct: number;
 }
 
 const money = (n: number) => `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -135,6 +155,7 @@ export async function executeChalanEstimate(
 
   const lines: string[] = [];
   if (note) lines.push(note);
+  let pricing: ChalanPricing | undefined;
 
   if (canCalculate && material) {
     const r = calculateConcept({
@@ -153,6 +174,20 @@ export async function executeChalanEstimate(
     }, globals);
 
     const sinPrecioMaterial = r.materialCost === 0;
+    if (!sinPrecioMaterial && r.suggestedPrice > 0) {
+      pricing = {
+        materialName: material.name.trim(),
+        tipo: tipo as "CORTE" | "GRABADO",
+        quantity: input.cantidad,
+        widthCm: input.ancho_cm,
+        heightCm: input.alto_cm,
+        timeMinPerPiece: Number(estimatedTimeMin),
+        subtotal: r.suggestedPrice,
+        realCost: r.realCost,
+        marginPct: globals.margen_default,
+        ivaPct: globals.porcentaje_iva,
+      };
+    }
     lines.push(
       "",
       `Material: ${material.name.trim()}`,
@@ -215,5 +250,6 @@ _Para responder, busca este cliente en el CRM o comunícate con él directamente
     estimatedTimeMin,
     quotePayload,
     adminAlertMsg,
+    pricing,
   };
 }

@@ -135,7 +135,7 @@ async function quickConversationSummary(contactId: string): Promise<string | nul
  * escribió al número del bot en las últimas 24 h; fuera de esa ventana se usa la plantilla aprobada
  * WHATSAPP_ADMIN_TEMPLATE (una sola variable en el cuerpo, ej. "Aviso Laser Inova: {{1}}").
  */
-async function notifyAdmin(text: string, url?: string) {
+export async function notifyAdmin(text: string, url?: string) {
   const [title, ...rest] = text.split('\n').filter(Boolean);
   await sendPushToAdmins({ title: title.slice(0, 80), body: rest.join(' · ').slice(0, 180), url, tag: 'admin-alert' });
 
@@ -1270,9 +1270,31 @@ async function runAIAgentResponse(contactId: string) {
             console.error("Error guardando mensaje interno de El Chalán:", e);
           }
 
-          // 3. Alertar al admin (si falla, no rompas el flujo de la IA)
+          // 3. Avisar a los administradores (si falla, no rompas el flujo de la IA).
+          // Con precio confiable se les manda el borrador ya armado para que solo autoricen;
+          // si no hay precio (o el borrador falla) va el aviso de solicitud para cotizar a mano.
           if (!contact.name?.includes("Simulador")) {
-            await notifyAdmin(`${chalanResult.adminAlertMsg}\n\nAbrir chat: ${conversationLink(contact.id)}`, conversationPath(contact.id));
+            let draftSent = false;
+            if (chalanResult.pricing) {
+              try {
+                const { proposeAutoDraft } = await import('./whatsapp-admin.service');
+                await proposeAutoDraft({
+                  contact,
+                  project: args.project_name || 'Cotización',
+                  description: args.descripcion_concepto,
+                  designIncluded: !!args.diseno_incluido,
+                  pricing: chalanResult.pricing,
+                  chatLink: conversationLink(contact.id),
+                  chatPath: conversationPath(contact.id),
+                });
+                draftSent = true;
+              } catch (e) {
+                console.error('No se pudo crear el borrador automático de cotización:', e);
+              }
+            }
+            if (!draftSent) {
+              await notifyAdmin(`${chalanResult.adminAlertMsg}\n\nAbrir chat: ${conversationLink(contact.id)}`, conversationPath(contact.id));
+            }
           } else {
             console.log("[SIMULADOR] Alerta de cotización al admin simulada:", chalanResult.adminAlertMsg);
           }

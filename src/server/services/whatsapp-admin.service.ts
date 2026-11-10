@@ -8,13 +8,19 @@ import {
   processAIAgentResponse,
   isAdminPhone,
   quoteLink,
+  notifyAdmin,
 } from '@/server/services/whatsapp.service';
+import type { ChalanPricing } from '@/lib/agents/chalan';
 
 /**
  * Bot de gestión: los administradores (ADMIN_ALERT_PHONE) le escriben al número del bot para
  * pedir cotizaciones ("cotízale a Sara 220 navajas a $45 c/u"). El bot NUNCA manda nada al
  * cliente por su cuenta: crea un borrador, se lo muestra al administrador y solo lo envía
  * cuando el administrador responde AUTORIZAR.
+ *
+ * Los borradores también nacen solos: cuando el bot de clientes junta los datos y el Chalán saca
+ * un precio confiable, proposeAutoDraft crea el borrador y se lo manda a los administradores.
+ * Puede haber varios pendientes a la vez; con más de uno se autoriza por folio (AUTORIZAR 0123).
  *
  * Estado del flujo, guardado como mensajes INTERNAL en el chat del administrador:
  *   [PENDIENTE] <quoteId>  borrador esperando autorización
@@ -44,32 +50,56 @@ async function replyToAdmin(admin: AdminContact, text: string) {
   await notificationEmitter.emit('whatsapp_message', { message: saved, contact: admin }).catch(() => {});
 }
 
-async function setMarker(adminId: string, kind: typeof PENDING | typeof RESOLVED, quoteId: string) {
+async function setMarker(adminId: string, kind: typeof PENDING | typeof RESOLVED, quoteId: string, auto = false) {
   await prisma.whatsAppMessage.create({
     data: {
       contactId: adminId,
       messageId: `admin_marker_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       direction: 'INTERNAL',
       type: 'TEXT',
-      content: `${kind} ${quoteId}`,
+      content: `${kind} ${quoteId}${auto ? ' auto' : ''}`,
       status: 'DELIVERED',
     },
   });
 }
 
-/** Id del borrador que espera autorización (el marcador más reciente, si es PENDIENTE). */
-async function getPendingQuoteId(adminId: string): Promise<string | null> {
-  const last = await prisma.whatsAppMessage.findFirst({
+// auto: el borrador lo armó el bot de clientes (no lo dictó el administrador).
+type PendingQuote = { id: string; folio: string; project: string | null; total: number; contactId: string | null; auto: boolean };
+
+/**
+ * Borradores que esperan autorización de este administrador, del más reciente al más antiguo.
+ * Se descartan los que ya resolvió él (marcador RESUELTA) y los que ya no son borrador
+ * (otro administrador los envió o descartó, o se cambiaron desde el CRM).
+ */
+async function getPendingQuotes(adminId: string): Promise<PendingQuote[]> {
+  const markers = await prisma.whatsAppMessage.findMany({
     where: {
       contactId: adminId,
       direction: 'INTERNAL',
       OR: [{ content: { startsWith: PENDING } }, { content: { startsWith: RESOLVED } }],
     },
     orderBy: { timestamp: 'desc' },
+    take: 60,
     select: { content: true },
   });
-  if (!last?.content?.startsWith(PENDING)) return null;
-  return last.content.slice(PENDING.length).trim() || null;
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  const autoIds = new Set<string>();
+  for (const m of markers) {
+    const content = m.content || '';
+    const isPending = content.startsWith(PENDING);
+    const [id, flag] = content.slice(isPending ? PENDING.length : RESOLVED.length).trim().split(/\s+/);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    if (isPending) ids.push(id);
+    if (isPending && flag === 'auto') autoIds.add(id);
+  }
+  if (!ids.length) return [];
+  const quotes = await prisma.quote.findMany({
+    where: { id: { in: ids }, status: 'DRAFT', active: true },
+    select: { id: true, folio: true, project: true, total: true, contactId: true },
+  });
+  return ids.flatMap(id => quotes.filter(q => q.id === id).map(q => ({ ...q, auto: autoIds.has(id) })));
 }
 
 const norm = (s: string) =>
@@ -78,6 +108,9 @@ const norm = (s: string) =>
 // Solo frases completas y claras: "sí pero cámbiale el precio" NO autoriza.
 const AUTHORIZE = /^(si |ok |dale |va )?(autorizar|autorizo|autorizada|autorizado|mandala|mandalo|envia|enviala|enviarla|envialo|mandala al cliente|enviala al cliente|dale|ok|si|va)$/;
 const CANCEL = /^(cancelar|cancela|cancelala|descartar|descartala|no la mandes|no)$/;
+// Un "ok" o un "no" sueltos bastan para un borrador que el administrador acaba de dictar, pero no
+// para uno que armó el bot y llegó sin pedirlo: ahí podrían ser respuesta a otra cosa.
+const LOOSE = /^(si|ok|va|dale|no)$/;
 
 async function getBillingUserId(): Promise<string> {
   const user =
@@ -206,12 +239,8 @@ async function createDraft(admin: AdminContact, args: any) {
     return;
   }
 
-  // Un solo borrador pendiente a la vez: el nuevo sustituye al anterior.
-  const previous = await getPendingQuoteId(admin.id);
-  if (previous) {
-    await prisma.quote.updateMany({ where: { id: previous, status: 'DRAFT' }, data: { active: false } });
-    await setMarker(admin.id, RESOLVED, previous);
-  }
+  // Un solo borrador pendiente por cliente: el nuevo sustituye al anterior de ese mismo cliente.
+  await discardPendingFor(admin.id, contact.id);
 
   const gross = round2(qty * unit);
   const includesIva = args.precio_incluye_iva === true;
@@ -258,6 +287,98 @@ async function createDraft(admin: AdminContact, args: any) {
   );
 }
 
+/** Descarta los borradores pendientes de este administrador que sean del mismo cliente. */
+async function discardPendingFor(adminId: string, contactId: string) {
+  const previous = (await getPendingQuotes(adminId)).filter(q => q.contactId === contactId);
+  for (const q of previous) {
+    await prisma.quote.updateMany({ where: { id: q.id, status: 'DRAFT' }, data: { active: false } });
+    await setMarker(adminId, RESOLVED, q.id);
+  }
+}
+
+/** Contactos de WhatsApp de los administradores (ADMIN_ALERT_PHONE) que ya le han escrito al bot. */
+async function getAdminContacts() {
+  const tails = (process.env.ADMIN_ALERT_PHONE || '')
+    .split(',')
+    .map(p => p.replace(/\D/g, '').slice(-10))
+    .filter(p => p.length === 10);
+  if (!tails.length) return [];
+  return prisma.whatsAppContact.findMany({ where: { OR: tails.map(t => ({ phone: { endsWith: t } })) } });
+}
+
+/**
+ * Borrador automático: el bot de clientes ya tiene los datos y el Chalán calculó un precio
+ * confiable. Se crea la cotización como borrador y se manda el resumen a los administradores,
+ * que la envían al cliente respondiendo AUTORIZAR. Nunca se envía sola.
+ * Lanza si no se pudo crear, para que quien llama mande el aviso normal de solicitud.
+ */
+export async function proposeAutoDraft(params: {
+  contact: { id: string; name: string | null; phone: string; clientId?: string | null };
+  project: string;
+  description?: string;
+  designIncluded?: boolean;
+  pricing: ChalanPricing;
+  chatLink: string;
+  chatPath: string;
+}) {
+  const { contact, pricing } = params;
+  const qty = Math.max(1, Math.round(pricing.quantity));
+  const subtotal = round2(pricing.subtotal);
+  const tax = round2(subtotal * (pricing.ivaPct / 100));
+  const total = round2(subtotal + tax);
+  const unit = round2(subtotal / qty);
+  const marginPct = subtotal > 0 ? Math.max(0, round2((1 - pricing.realCost / subtotal) * 100)) : 0;
+  const clientName = contact.name || `+${contact.phone}`;
+  const work = `${pricing.tipo === 'GRABADO' ? 'Grabado' : 'Corte'} láser en ${pricing.materialName}, ${pricing.widthCm} × ${pricing.heightCm} cm`;
+  const detail = (params.description || '').trim();
+  const conceptDescription = detail ? `${detail} (${work})` : work;
+
+  const admins = await getAdminContacts();
+  for (const a of admins) await discardPendingFor(a.id, contact.id);
+
+  const userId = await getBillingUserId();
+  const quoteId = await createQuickQuoteService(userId, {
+    clientId: contact.clientId || null,
+    client: { name: clientName },
+    project: params.project || 'Cotización',
+    description: conceptDescription,
+    subtotal,
+    tax,
+    total,
+    concepts: [{ description: conceptDescription, quantity: qty, unitPrice: unit, totalAmount: subtotal, margin: marginPct }],
+  });
+  const quote = await prisma.quote.update({
+    where: { id: quoteId },
+    data: { contactId: contact.id, status: 'DRAFT' },
+    select: { folio: true },
+  });
+
+  const text = [
+    `📝 *Borrador ${quote.folio}* para ${clientName} (+${contact.phone})`,
+    `Proyecto: ${params.project}`,
+    `• ${conceptDescription}`,
+    `• ${qty} pzas × ${money(unit)} = ${money(subtotal)} + IVA ${money(tax)}`,
+    `*Total: ${money(total)}*`,
+    `Costo real: ${money(pricing.realCost)} · margen ${pricing.marginPct}% · ${pricing.timeMinPerPiece} min de máquina por pieza`,
+    `Diseño del cliente: ${params.designIncluded ? 'sí' : 'no'}`,
+    '',
+    `El precio lo calculó el bot, revísalo. Responde *AUTORIZAR ${quote.folio}* y se la mando al cliente, o *CANCELAR ${quote.folio}* para descartarla.`,
+    `Para cambiarla: ${quoteLink(quoteId)}`,
+    `Chat: ${params.chatLink}`,
+  ].join('\n');
+
+  // El marcador va antes del aviso: aunque el WhatsApp falle, el borrador queda autorizable.
+  for (const a of admins) {
+    await setMarker(a.id, PENDING, quoteId, true);
+    const saved = await prisma.whatsAppMessage.create({
+      data: { contactId: a.id, messageId: `admin_draft_${Date.now()}_${a.id.slice(-4)}`, direction: 'OUTBOUND', type: 'TEXT', content: text, status: 'SENT' },
+    });
+    await notificationEmitter.emit('whatsapp_message', { message: saved, contact: a }).catch(() => {});
+  }
+  await notifyAdmin(text, params.chatPath);
+  return { quoteId, folio: quote.folio };
+}
+
 async function authorizePending(admin: AdminContact, quoteId: string) {
   const quote = await prisma.quote.findUnique({ where: { id: quoteId }, select: { id: true, status: true, active: true, folio: true } });
   if (!quote || !quote.active || quote.status !== 'DRAFT') {
@@ -280,15 +401,43 @@ async function authorizePending(admin: AdminContact, quoteId: string) {
 /** Atiende un mensaje de texto de un administrador. Nunca lanza: cualquier falla se le avisa al propio administrador. */
 export async function handleAdminMessage(admin: AdminContact, text: string) {
   try {
-    const t = norm(text);
-    const pendingId = await getPendingQuoteId(admin.id);
+    const pending = await getPendingQuotes(admin.id);
 
-    if (pendingId && AUTHORIZE.test(t)) return await authorizePending(admin, pendingId);
+    // El folio es opcional con un solo borrador y obligatorio con varios: "autorizar LI-2026-0123" o "autorizar 123".
+    let command = norm(text);
+    let target: PendingQuote | undefined;
+    for (const q of pending) {
+      const full = norm(q.folio);
+      const digits = q.folio.match(/(\d+)$/)?.[1] || '';
+      const tail = [full, digits, digits.replace(/^0+/, '')].find(f => f && (command === f || command.endsWith(` ${f}`)));
+      if (!tail) continue;
+      target = q;
+      command = command.slice(0, command.length - tail.length).trim();
+      break;
+    }
+    const wantsAuthorize = AUTHORIZE.test(command);
+    const wantsCancel = CANCEL.test(command);
 
-    if (pendingId && CANCEL.test(t)) {
-      await prisma.quote.updateMany({ where: { id: pendingId, status: 'DRAFT' }, data: { active: false } });
-      await setMarker(admin.id, RESOLVED, pendingId);
-      return await replyToAdmin(admin, '🗑️ Borrador descartado. No se envió nada al cliente.');
+    if (pending.length && (wantsAuthorize || wantsCancel)) {
+      if (!target && pending.length === 1) target = pending[0];
+      if (!target) {
+        return await replyToAdmin(
+          admin,
+          [
+            `Tienes ${pending.length} borradores pendientes, ¿cuál?`,
+            ...pending.map(q => `• ${q.folio} · ${q.project || 'Cotización'} · ${money(q.total)}`),
+            '',
+            'Responde con el folio, por ejemplo: *AUTORIZAR ' + pending[0].folio + '*',
+          ].join('\n')
+        );
+      }
+      if (target.auto && LOOSE.test(command)) {
+        return await replyToAdmin(admin, `Para el borrador ${target.folio} respóndeme *AUTORIZAR* para enviarlo al cliente o *CANCELAR* para descartarlo.`);
+      }
+      if (wantsAuthorize) return await authorizePending(admin, target.id);
+      await prisma.quote.updateMany({ where: { id: target.id, status: 'DRAFT' }, data: { active: false } });
+      await setMarker(admin.id, RESOLVED, target.id);
+      return await replyToAdmin(admin, `🗑️ Borrador ${target.folio} descartado. No se envió nada al cliente.`);
     }
 
     await runAdminAgent(admin, text);
