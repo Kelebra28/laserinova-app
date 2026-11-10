@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import CalculateQuoteModal from './CalculateQuoteModal';
-import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator } from 'lucide-react';
+import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator, Download, ExternalLink } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 type Contact = any;
@@ -1088,10 +1088,19 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                               <a href={mediaSrc} target="_blank" rel="noreferrer" className="block rounded-xl overflow-hidden bg-black/25">
                                 <img src={mediaSrc} alt="Adjunto" className="w-full max-h-80 object-contain" />
                               </a>
+                              <div className="flex gap-1.5">
+                                <a href={mediaSrc} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
+                                  <ExternalLink size={14} /> Abrir
+                                </a>
+                                <a href={`/api/media/${msg.id}?download=1`} download className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
+                                  <Download size={14} /> Descargar
+                                </a>
+                              </div>
                               {msg.content && msg.content !== '📷 Imagen adjunta' && <span className="text-[14px] leading-snug whitespace-pre-wrap break-words px-0.5">{msg.content}</span>}
                             </div>
                           ) : msg.type === 'DOCUMENT' ? (
-                            <a href={mediaSrc} target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-black/20 hover:bg-black/30 transition-colors p-2.5 rounded-xl min-w-[220px]">
+                            <div className="flex flex-col gap-1.5 min-w-[220px]">
+                            <a href={mediaSrc} target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-black/20 hover:bg-black/30 transition-colors p-2.5 rounded-xl">
                               <div className="w-10 h-10 rounded-lg bg-red-500/20 text-red-300 flex items-center justify-center shrink-0">
                                 <FileText size={20} />
                               </div>
@@ -1100,6 +1109,15 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                                 <div className="text-[11px] text-white/50">{msg.mimeType === 'application/pdf' ? 'PDF · ' : ''}Toca para abrir</div>
                               </div>
                             </a>
+                            <div className="flex gap-1.5">
+                              <a href={mediaSrc} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
+                                <ExternalLink size={14} /> Abrir
+                              </a>
+                              <a href={`/api/media/${msg.id}?download=1`} download className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
+                                <Download size={14} /> Descargar
+                              </a>
+                            </div>
+                            </div>
                           ) : (
                             bodyText ? <p className="break-words whitespace-pre-wrap">{bodyText}<span className={cn("inline-block", alignRight ? "w-[6.2rem]" : "w-[4.6rem]")} /></p> : null
                           )}
