@@ -439,18 +439,19 @@ export async function approveQuoteVersionService(groupId: string, approvedQuoteI
 export async function generateNextFolioService(): Promise<string> {
   const year = new Date().getFullYear();
   // Evitamos prisma.quote.findFirst() por el bug de Collation (utf8mb4_bin) en MariaDB al usar LIKE/startsWith
-  const rawQuery = `SELECT folio FROM Quote WHERE folio LIKE 'LI-${year}-%' ORDER BY folio DESC LIMIT 1`;
-  const result: any[] = await prisma.$queryRawUnsafe(rawQuery);
-  const lastQuote = result.length > 0 ? result[0] : null;
-  
-  let nextNumber = 1;
-  if (lastQuote) {
-    const match = lastQuote.folio.match(/-(\d+)$/);
-    if (match) {
-      nextNumber = parseInt(match[1], 10) + 1;
-    }
+  const rawQuery = `SELECT folio FROM Quote WHERE folio LIKE 'LI-${year}-%'`;
+  const result: { folio: string }[] = await prisma.$queryRawUnsafe(rawQuery);
+
+  // Se toma el número base más alto (LI-2026-0192). Las versiones (LI-2026-0192-OP2) y los folios
+  // especiales (LI-2026-ESP-123) no cuentan: antes, si el último folio era una versión, el número
+  // no se encontraba, se reiniciaba en 0001 y la cotización no se podía guardar por folio repetido.
+  const baseFolio = new RegExp(`^LI-${year}-(\\d+)(?:-|$)`);
+  let maxNumber = 0;
+  for (const { folio } of result) {
+    const match = folio.match(baseFolio);
+    if (match) maxNumber = Math.max(maxNumber, parseInt(match[1], 10));
   }
-  return `LI-${year}-${String(nextNumber).padStart(4, "0")}`;
+  return `LI-${year}-${String(maxNumber + 1).padStart(4, "0")}`;
 }
 
 export async function createQuoteService(userId: string, data: any) {
