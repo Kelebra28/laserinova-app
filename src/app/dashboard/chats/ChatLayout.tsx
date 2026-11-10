@@ -76,7 +76,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [messages, setMessages] = useState<Message[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [listFilter, setListFilter] = useState<'all' | 'unread' | 'bot' | 'human'>('all');
+  const [listFilter, setListFilter] = useState<'all' | 'unread' | 'bot' | 'human' | 'admin'>('all');
   const [inputText, setInputText] = useState('');
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [simulatorMode, setSimulatorMode] = useState(false);
@@ -162,6 +162,16 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
       });
     }
   });
+
+  // Sube el chat al inicio de la lista con su último mensaje. Al enviar desde el CRM no se
+  // espera al evento de Pusher: si el websocket está dormido la lista se quedaba con el mensaje viejo.
+  const bumpContactPreview = (message: Message) => {
+    setContacts(prev => {
+      const existing = prev.find(c => c.id === message.contactId);
+      if (!existing) return prev;
+      return [{ ...existing, messages: [message] }, ...prev.filter(c => c.id !== message.contactId)];
+    });
+  };
 
   const loadMessages = async (contact: Contact) => {
     setActiveContact(contact);
@@ -421,6 +431,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
               if (prev.some(m => m.id === res.message.id)) return prev;
               return [...prev, res.message];
             });
+            bumpContactPreview(res.message);
           }
         }
 
@@ -443,6 +454,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
               if (prev.some(m => m.id === res.message.id)) return prev;
               return [...prev, res.message];
             });
+            bumpContactPreview(res.message);
           } else {
             toast.error(res.error || `Error al subir archivo ${i+1}`);
           }
@@ -492,6 +504,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
             if (filtered.some(m => m.id === res.message!.id)) return filtered;
             return [...filtered, res.message];
           });
+          bumpContactPreview(res.message);
         } else {
           setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id));
           toast.error(res.error || 'Error al simular mensaje');
@@ -504,6 +517,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
             if (filtered.some(m => m.id === res.message!.id)) return filtered;
             return [...filtered, res.message];
           });
+          bumpContactPreview(res.message);
           if (activeContact!.botMode) {
             const updatedContact = { ...activeContact!, botMode: false };
             setActiveContact(updatedContact);
@@ -664,6 +678,9 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
     const q = searchQuery.toLowerCase();
     const matches = !q || (c.name && c.name.toLowerCase().includes(q)) || (c.phone && c.phone.includes(searchQuery));
     if (!matches) return false;
+    // Los chats de administradores (bot de gestión) viven en su propia pestaña, no entre los clientes.
+    if (listFilter === 'admin') return !!c.isAdmin;
+    if (c.isAdmin && !q) return false;
     if (listFilter === 'unread') return (unreadCounts[c.id] || 0) > 0;
     if (listFilter === 'bot') return !!c.botMode;
     if (listFilter === 'human') return !c.botMode;
@@ -704,7 +721,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
         </div>
 
         <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto no-scrollbar">
-          {([['all', 'Todos'], ['unread', 'No leídos'], ['bot', 'Bot'], ['human', 'Humano']] as const).map(([key, label]) => (
+          {([['all', 'Todos'], ['unread', 'No leídos'], ['bot', 'Bot'], ['human', 'Humano'], ['admin', 'Admins']] as const).map(([key, label]) => (
             <button
               key={key}
               type="button"

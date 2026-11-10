@@ -1,6 +1,7 @@
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import ChatLayout from './ChatLayout';
+import { isAdminPhone } from '@/server/services/whatsapp.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +32,7 @@ export default async function ChatsPage({
 
   return (
     <div className="h-full w-full bg-[#111b21]">
-      <ChatLayout initialContacts={contacts} initialContactId={initialContactId} />
+      <ChatLayout initialContacts={contacts.map(c => ({ ...c, isAdmin: isAdminPhone(c.phone) }))} initialContactId={initialContactId} />
     </div>
   );
 }

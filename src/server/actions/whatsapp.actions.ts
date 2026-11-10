@@ -4,7 +4,7 @@ import path from 'path';
 
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sendMessageToMeta, processAIAgentResponse, retryBotReply, deleteConversationService, clearConversationMessagesService } from '@/server/services/whatsapp.service';
+import { sendMessageToMeta, isAdminPhone, processAIAgentResponse, retryBotReply, deleteConversationService, clearConversationMessagesService } from '@/server/services/whatsapp.service';
 import { notificationEmitter } from '@/lib/notification-emitter';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { revalidatePath } from 'next/cache';
@@ -386,5 +386,6 @@ export async function getContactsAction() {
     const bTime = b.messages[0]?.timestamp?.getTime() ?? b.updatedAt.getTime();
     return bTime - aTime;
   });
-  return { success: true, data: contacts };
+  // isAdmin: la lista de chats separa a los administradores de los clientes.
+  return { success: true, data: contacts.map(c => ({ ...c, isAdmin: isAdminPhone(c.phone) })) };
 }
