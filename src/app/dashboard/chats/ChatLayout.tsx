@@ -11,7 +11,8 @@ import { Input } from '@/components/ui/Input';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import CalculateQuoteModal from './CalculateQuoteModal';
 import ImageViewer, { type ViewerImage } from './ImageViewer';
-import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator, Download, ExternalLink } from 'lucide-react';
+import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator, Download, ExternalLink, Clock, AlertTriangle, AlertCircle } from 'lucide-react';
+import { windowState, formatDuration, formatDurationShort } from '@/lib/whatsapp-window';
 import { toast } from 'react-hot-toast';
 
 type Contact = any;
@@ -95,6 +96,13 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
   const [isDeletingContact, setIsDeletingContact] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Reloj para el aviso de la ventana de 24 h de WhatsApp (se refresca cada minuto).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -116,7 +124,11 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
       setContacts(prev => {
         const existing = prev.find(c => c.id === contact.id);
         const others = prev.filter(c => c.id !== contact.id);
-        const updatedContact = existing ? { ...existing, messages: [message] } : { ...contact, messages: [message] };
+        const base = existing ? { ...existing, messages: [message] } : { ...contact, messages: [message] };
+        // Un mensaje del cliente reabre la ventana de 24 h de WhatsApp.
+        const updatedContact = message.direction === 'INBOUND' && message.type !== 'REACTION'
+          ? { ...base, lastInboundAt: message.timestamp }
+          : base;
         return [updatedContact, ...others];
       });
 
@@ -691,6 +703,16 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
     return true;
   });
 
+
+  // Ventana de 24 h del chat abierto: se toma de los mensajes cargados (lo más fresco) y si no, de la lista.
+  const activeLastInbound = (() => {
+    if (!activeContact) return null;
+    const fromMsgs = [...messages].reverse().find(m => m.direction === 'INBOUND' && m.type !== 'REACTION')?.timestamp;
+    return fromMsgs ?? activeContact.lastInboundAt ?? null;
+  })();
+  const activeWindow = !activeContact || activeContact.isAdmin || simulatorMode || activeContact.name?.includes('Simulador')
+    ? null
+    : windowState(activeLastInbound, now);
   return (
     <div className="flex h-full bg-[#0b141a] text-[#e9edef] border-x border-[#222d34]">
       {/* ───────── Lista de chats ───────── */}
@@ -757,6 +779,27 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
               const last = contact.messages?.[0];
               const unread = unreadCounts[contact.id] || 0;
               const isActive = activeContact?.id === contact.id;
+              // Aviso de 24 h solo donde importa: el cliente escribió y nadie le ha contestado,
+              // o la ventana está por cerrarse.
+              const win = contact.isAdmin || contact.name?.includes('Simulador') ? null : windowState(contact.lastInboundAt, now);
+              const awaitingReply = last?.direction === 'INBOUND';
+              const winBadge = !win ? null
+                : win.kind === 'open' && (awaitingReply || win.expiring) ? (
+                  <span
+                    title={`Ventana de WhatsApp abierta: quedan ${formatDuration(win.remainingMs)} para contestar`}
+                    className={cn("flex items-center gap-0.5 text-[10px] font-semibold rounded-full px-1.5 h-5",
+                      win.expiring ? "bg-amber-500/15 text-amber-300" : "bg-[#00a884]/15 text-[#35d6b5]")}
+                  >
+                    <Clock size={11} />{formatDurationShort(win.remainingMs)}
+                  </span>
+                ) : win.kind === 'closed' && awaitingReply ? (
+                  <span
+                    title={`Pasaron más de 24 h desde que escribió el cliente (cerró hace ${formatDuration(win.sinceMs)}). WhatsApp no entregará texto libre.`}
+                    className="flex items-center gap-0.5 text-[10px] font-semibold rounded-full px-1.5 h-5 bg-red-500/15 text-red-300"
+                  >
+                    <AlertTriangle size={11} />+24h
+                  </span>
+                ) : null;
               return (
                 <div
                   key={contact.id}
@@ -791,12 +834,14 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                     </div>
                     <div className="flex justify-between items-center gap-2 mt-0.5">
                       <span className={cn("text-[13px] truncate flex items-center gap-1", unread > 0 ? "text-[#c7d0d5]" : "text-[#8696a0]", last?.direction === 'INTERNAL' && "italic")}>
-                        {last?.direction === 'OUTBOUND' && (
-                          <CheckCheck size={14} className={cn("shrink-0", last.status === 'READ' ? "text-[#53bdeb]" : "text-[#8696a0]")} />
+                        {last?.direction === 'OUTBOUND' && (last.status === 'FAILED'
+                          ? <AlertCircle size={14} className="shrink-0 text-red-400" />
+                          : <CheckCheck size={14} className={cn("shrink-0", last.status === 'READ' ? "text-[#53bdeb]" : "text-[#8696a0]")} />
                         )}
                         <span className="truncate">{previewOf(last)}</span>
                       </span>
                       <div className="flex items-center gap-1 shrink-0">
+                        {winBadge}
                         {unread > 0 && (
                           <span className="bg-[#00a884] text-[#06211b] text-[11px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
                             {unread}
@@ -1025,11 +1070,15 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                 const bodyText = quoted ? quoted[2] : msg.content;
                 const mediaSrc = msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `/api/media/${msg.id}`;
                 const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const ticks = alignRight && (
+                const ticks = alignRight && (msg.status === 'FAILED' ? (
+                  <span className="inline-flex text-red-400" title="WhatsApp no entregó este mensaje (posiblemente pasaron más de 24 h desde que escribió el cliente)">
+                    <AlertCircle size={15} />
+                  </span>
+                ) : (
                   <span className={cn("inline-flex", msg.status === 'READ' ? "text-[#53bdeb]" : "text-white/50")}>
                     {msg.status === 'SENT' ? <Check size={15} /> : <CheckCheck size={15} />}
                   </span>
-                );
+                ));
 
                 return (
                   <div key={msg.id}>
@@ -1163,6 +1212,28 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
             )}
             <div ref={messagesEndRef} />
           </div>
+
+          {/* Aviso de la ventana de 24 h de WhatsApp */}
+          {activeWindow && !loadingMessages && (
+            <div className={cn(
+              "z-20 shrink-0 flex items-center gap-2 px-4 py-1.5 text-xs border-t",
+              activeWindow.kind === 'closed' ? "bg-red-500/10 text-red-300 border-red-500/20"
+                : activeWindow.kind === 'unknown' ? "bg-[#202c33] text-[#8696a0] border-[#222d34]"
+                : activeWindow.expiring ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
+                : "bg-[#00a884]/10 text-[#35d6b5] border-[#00a884]/20"
+            )}>
+              {activeWindow.kind === 'closed' ? <AlertTriangle size={14} className="shrink-0" /> : <Clock size={14} className="shrink-0" />}
+              <span>
+                {activeWindow.kind === 'closed' ? (
+                  <>Pasaron más de 24 h desde el último mensaje del cliente ({new Date(activeLastInbound!).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}). WhatsApp <b>no va a entregar</b> texto libre hasta que el cliente vuelva a escribir.</>
+                ) : activeWindow.kind === 'unknown' ? (
+                  <>El cliente nunca ha escrito a este número: WhatsApp solo deja mandarle plantillas aprobadas.</>
+                ) : (
+                  <>Ventana de WhatsApp abierta: quedan <b>{formatDuration(activeWindow.remainingMs)}</b> para contestar (se cierra {activeWindow.closesAt.toLocaleString('es-MX', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}).</>
+                )}
+              </span>
+            </div>
+          )}
 
           {/* Barra de escribir */}
           <div className="bg-[#111b21] border-t border-[#222d34] px-3 md:px-4 py-2.5 flex flex-col z-20">

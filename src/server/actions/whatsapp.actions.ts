@@ -4,7 +4,7 @@ import path from 'path';
 
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sendMessageToMeta, isAdminPhone, processAIAgentResponse, retryBotReply, deleteConversationService, clearConversationMessagesService } from '@/server/services/whatsapp.service';
+import { sendMessageToMeta, isAdminPhone, lastInboundByContact, processAIAgentResponse, retryBotReply, deleteConversationService, clearConversationMessagesService } from '@/server/services/whatsapp.service';
 import { notificationEmitter } from '@/lib/notification-emitter';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { executeChalanEstimate } from '@/lib/agents/chalan';
@@ -559,14 +559,17 @@ export async function clearConversationMessagesAction(contactId: string) {
 
 /** Lista de contactos con su último mensaje, para resincronizar el chat al volver a la app. */
 export async function getContactsAction() {
-  const contacts = await prisma.whatsAppContact.findMany({
-    include: { messages: { orderBy: { timestamp: 'desc' }, take: 1 } },
-  });
+  const [contacts, lastInbound] = await Promise.all([
+    prisma.whatsAppContact.findMany({
+      include: { messages: { orderBy: { timestamp: 'desc' }, take: 1 } },
+    }),
+    lastInboundByContact(),
+  ]);
   contacts.sort((a, b) => {
     const aTime = a.messages[0]?.timestamp?.getTime() ?? a.updatedAt.getTime();
     const bTime = b.messages[0]?.timestamp?.getTime() ?? b.updatedAt.getTime();
     return bTime - aTime;
   });
   // isAdmin: la lista de chats separa a los administradores de los clientes.
-  return { success: true, data: contacts.map(c => ({ ...c, isAdmin: isAdminPhone(c.phone) })) };
+  return { success: true, data: contacts.map(c => ({ ...c, isAdmin: isAdminPhone(c.phone), lastInboundAt: lastInbound.get(c.id) ?? null })) };
 }

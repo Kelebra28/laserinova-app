@@ -1,7 +1,7 @@
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import ChatLayout from './ChatLayout';
-import { isAdminPhone } from '@/server/services/whatsapp.service';
+import { isAdminPhone, lastInboundByContact } from '@/server/services/whatsapp.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,14 +14,17 @@ export default async function ChatsPage({
   const { c: initialContactId } = await searchParams;
 
   // Obtener contactos con su último mensaje
-  const contacts = await prisma.whatsAppContact.findMany({
-    include: {
-      messages: {
-        orderBy: { timestamp: 'desc' },
-        take: 1
+  const [contacts, lastInbound] = await Promise.all([
+    prisma.whatsAppContact.findMany({
+      include: {
+        messages: {
+          orderBy: { timestamp: 'desc' },
+          take: 1
+        }
       }
-    }
-  });
+    }),
+    lastInboundByContact(),
+  ]);
 
   // Ordenar: el que tenga el mensaje más reciente va primero (como WhatsApp)
   contacts.sort((a, b) => {
@@ -32,7 +35,7 @@ export default async function ChatsPage({
 
   return (
     <div className="h-full w-full bg-[#111b21]">
-      <ChatLayout initialContacts={contacts.map(c => ({ ...c, isAdmin: isAdminPhone(c.phone) }))} initialContactId={initialContactId} />
+      <ChatLayout initialContacts={contacts.map(c => ({ ...c, isAdmin: isAdminPhone(c.phone), lastInboundAt: lastInbound.get(c.id) ?? null }))} initialContactId={initialContactId} />
     </div>
   );
 }

@@ -387,11 +387,12 @@ async function authorizePending(admin: AdminContact, quoteId: string) {
     return;
   }
   try {
-    const { contact, folio, total } = await sendQuotePdfToClient(quoteId);
+    const { contact, folio, total, viaTemplate } = await sendQuotePdfToClient(quoteId);
     await prisma.quote.update({ where: { id: quoteId }, data: { status: 'APPROVED', sentDate: new Date() } });
     await setMarker(admin.id, RESOLVED, quoteId);
-    await replyToAdmin(admin, `✅ Cotización ${folio} (${money(total)}) enviada a ${contact.name || `+${contact.phone}`}.`);
-    if (contact.botMode) await processAIAgentResponse(contact.id).catch(console.error);
+    await replyToAdmin(admin, `✅ Cotización ${folio} (${money(total)}) enviada a ${contact.name || `+${contact.phone}`}.`
+      + (viaTemplate ? '\nPasaron más de 24 h desde su último mensaje, así que se mandó con la plantilla de WhatsApp.' : ''));
+    if (contact.botMode && !viaTemplate) await processAIAgentResponse(contact.id).catch(console.error);
   } catch (e: any) {
     // El borrador sigue pendiente: se puede reintentar con AUTORIZAR.
     await replyToAdmin(admin, `⚠️ No se pudo enviar ${quote.folio}: ${e?.message || 'error desconocido'}\nSigue como borrador, puedes responder AUTORIZAR para reintentar.`);

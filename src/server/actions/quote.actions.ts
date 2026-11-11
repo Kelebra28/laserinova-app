@@ -27,7 +27,7 @@ import { prisma } from "@/lib/prisma";
 import { generateQuotePDF } from "@/lib/pdf";
 import fs from "fs";
 import path from "path";
-import { processAIAgentResponse, sendQuotePdfToClient } from "../services/whatsapp.service";
+import { processAIAgentResponse, sendQuotePdfToClient, getContactWindow, quoteTemplateConfigured } from "../services/whatsapp.service";
 import { notificationEmitter } from "@/lib/notification-emitter";
 import { after } from "next/server";
 import { pickProductPricing } from "@/lib/calculations";
@@ -369,22 +369,44 @@ export async function updateQuotePaymentAction(quoteId: string, type: 'unpaid' |
   revalidatePath(`/dashboard/quotes/${quoteId}`);
 }
 
+/**
+ * Antes de mandar una cotización por WhatsApp: ¿sigue abierta la ventana de 24 h del cliente?
+ * Si no, el botón avisa que se irá con la plantilla (o que no se puede enviar sin ella).
+ */
+export async function getQuoteWhatsAppWindowAction(quoteId: string) {
+  await requireAuth();
+  const quote = await prisma.quote.findUnique({ where: { id: quoteId }, select: { contactId: true, clientId: true } });
+  if (!quote || (!quote.contactId && !quote.clientId)) return { found: false as const };
+  const contact = await prisma.whatsAppContact.findFirst({
+    where: quote.contactId ? { id: quote.contactId } : { clientId: quote.clientId },
+    select: { id: true, name: true },
+  });
+  if (!contact) return { found: false as const };
+  const { open, lastInboundAt } = await getContactWindow(contact.id);
+  return {
+    found: true as const,
+    open: open || !!contact.name?.includes('Simulador'),
+    lastInboundAt: lastInboundAt?.toISOString() ?? null,
+    templateConfigured: await quoteTemplateConfigured(),
+  };
+}
+
 export async function sendQuoteViaWhatsAppAction(quoteId: string) {
   try {
     await requireAuth();
     
     // PDF + envío por WhatsApp + instrucción interna para la IA (lógica compartida con la autorización por WhatsApp)
-    const { contact } = await sendQuotePdfToClient(quoteId);
+    const { contact, viaTemplate } = await sendQuotePdfToClient(quoteId);
 
-    // Detonar la respuesta de la IA
-    if (contact.botMode) {
+    // Detonar la respuesta de la IA (con plantilla no: fuera de las 24 h su texto también rebotaría)
+    if (contact.botMode && !viaTemplate) {
       // after() mantiene viva la función en Vercel hasta que el bot termine de contestar.
       after(async () => {
         try { await processAIAgentResponse(contact.id); } catch (err) { console.error("Error AI in WhatsApp Action:", err); }
       });
     }
 
-    return { success: true };
+    return { success: true, viaTemplate };
   } catch (error: any) {
     console.error("Error enviando cotización por WA:", error);
     return { success: false, error: error.message || "Error interno al enviar por WhatsApp" };
