@@ -1,7 +1,6 @@
 import { requireAuth } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import ChatLayout from './ChatLayout';
-import { isAdminPhone } from '@/server/services/whatsapp.service';
+import { listChatContacts, listChatMessages } from '@/server/services/whatsapp.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,26 +12,16 @@ export default async function ChatsPage({
   await requireAuth();
   const { c: initialContactId } = await searchParams;
 
-  // Obtener contactos con su último mensaje
-  const contacts = await prisma.whatsAppContact.findMany({
-    include: {
-      messages: {
-        orderBy: { timestamp: 'desc' },
-        take: 1
-      }
-    }
-  });
-
-  // Ordenar: el que tenga el mensaje más reciente va primero (como WhatsApp)
-  contacts.sort((a, b) => {
-    const aTime = a.messages[0]?.timestamp?.getTime() ?? a.updatedAt.getTime();
-    const bTime = b.messages[0]?.timestamp?.getTime() ?? b.updatedAt.getTime();
-    return bTime - aTime;
-  });
+  // Si viene del link de una notificación (?c=<id>), el historial de ese chat se carga aquí mismo,
+  // en paralelo con la lista: la conversación aparece abierta desde el primer pintado.
+  const [contacts, initialMessages] = await Promise.all([
+    listChatContacts(),
+    initialContactId ? listChatMessages(initialContactId) : Promise.resolve(null),
+  ]);
 
   return (
     <div className="h-full w-full bg-[#111b21]">
-      <ChatLayout initialContacts={contacts.map(c => ({ ...c, isAdmin: isAdminPhone(c.phone) }))} initialContactId={initialContactId} />
+      <ChatLayout initialContacts={contacts} initialContactId={initialContactId} initialMessages={initialMessages} />
     </div>
   );
 }

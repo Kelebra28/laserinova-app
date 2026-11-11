@@ -23,7 +23,7 @@ export default function DashboardLayout({
       <div className="flex flex-col flex-1 w-full min-w-0">
         <Topbar onMenuClick={() => setIsSidebarOpen(true)} dark={isChatRoute} />
         <main className="flex-1 relative focus:outline-none">
-          <div className={isChatRoute ? "h-[calc(100vh-3.5rem)] w-full" : "py-4 px-4 sm:px-6 md:px-8"}>
+          <div className={isChatRoute ? "h-[calc(100dvh-3.5rem)] w-full" : "py-4 px-4 sm:px-6 md:px-8"}>
             {children}
           </div>
         </main>

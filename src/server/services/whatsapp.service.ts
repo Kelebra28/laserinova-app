@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { WINDOW_MS } from '@/lib/whatsapp-window';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
@@ -50,7 +51,8 @@ export async function sendMessageToMeta(to: string, messageData: any) {
 }
 
 /** Sube un documento (ej. PDF de cotización) a Meta y lo manda al número; devuelve el id del mensaje. */
-export async function sendDocumentToMeta(to: string, buffer: Buffer, filename: string, caption?: string, mimeType = 'application/pdf') {
+/** Sube un archivo a Meta y devuelve su media id (sirve para mensajes normales y para encabezados de plantilla). */
+async function uploadMediaToMeta(buffer: Buffer, filename: string, mimeType: string): Promise<string> {
   if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) throw new Error('Faltan variables de entorno para WhatsApp API');
 
   const form = new FormData();
@@ -65,12 +67,54 @@ export async function sendDocumentToMeta(to: string, buffer: Buffer, filename: s
   });
   const upload = await uploadRes.json();
   if (!uploadRes.ok) throw new Error(upload.error?.message || 'Error subiendo el PDF a Meta');
+  return upload.id as string;
+}
 
+export async function sendDocumentToMeta(to: string, buffer: Buffer, filename: string, caption?: string, mimeType = 'application/pdf') {
+  const mediaId = await uploadMediaToMeta(buffer, filename, mimeType);
   const sent = await sendMessageToMeta(to, {
     type: 'document',
-    document: { id: upload.id, filename, ...(caption ? { caption } : {}) },
+    document: { id: mediaId, filename, ...(caption ? { caption } : {}) },
   });
   return (sent?.messages?.[0]?.id as string | undefined) ?? null;
+}
+
+/**
+ * Cotización fuera de la ventana de 24 h: plantilla aprobada WHATSAPP_QUOTE_TEMPLATE con el PDF como
+ * encabezado (DOCUMENT) y dos variables en el cuerpo: {{1}} folio y {{2}} total.
+ */
+async function sendQuoteTemplateToMeta(to: string, buffer: Buffer, filename: string, folio: string, totalText: string) {
+  const template = process.env.WHATSAPP_QUOTE_TEMPLATE;
+  if (!template) throw new Error('No está configurada la plantilla de cotización (WHATSAPP_QUOTE_TEMPLATE).');
+  const mediaId = await uploadMediaToMeta(buffer, filename, 'application/pdf');
+  const sent = await sendMessageToMeta(to, {
+    type: 'template',
+    template: {
+      name: template,
+      language: { code: process.env.WHATSAPP_QUOTE_TEMPLATE_LANG || 'es_MX' },
+      components: [
+        { type: 'header', parameters: [{ type: 'document', document: { id: mediaId, filename } }] },
+        { type: 'body', parameters: [{ type: 'text', text: folio }, { type: 'text', text: totalText }] },
+      ],
+    },
+  });
+  return (sent?.messages?.[0]?.id as string | undefined) ?? null;
+}
+
+export async function quoteTemplateConfigured() {
+  return !!process.env.WHATSAPP_QUOTE_TEMPLATE;
+}
+
+/** Último mensaje del cliente y si sigue abierta la ventana de 24 h de WhatsApp. */
+export async function getContactWindow(contactId: string) {
+  const last = await prisma.whatsAppMessage.findFirst({
+    where: { contactId, direction: 'INBOUND', type: { not: 'REACTION' } },
+    orderBy: { timestamp: 'desc' },
+    select: { timestamp: true },
+  });
+  const lastInboundAt = last?.timestamp ?? null;
+  const open = !!lastInboundAt && Date.now() - lastInboundAt.getTime() < WINDOW_MS;
+  return { lastInboundAt, open };
 }
 
 /**
@@ -82,6 +126,105 @@ export function isAdminPhone(phone: string): boolean {
   const mine = last10(phone);
   if (mine.length < 10) return false;
   return (process.env.ADMIN_ALERT_PHONE || '').split(',').map(p => last10(p.trim())).some(p => p === mine);
+}
+
+/**
+ * Último mensaje del cliente (INBOUND) por contacto, para saber si sigue abierta la ventana
+ * de 24 h de WhatsApp. Las reacciones no cuentan como mensaje para Meta.
+ */
+export async function lastInboundByContact(): Promise<Map<string, Date>> {
+  const rows = await prisma.whatsAppMessage.groupBy({
+    by: ['contactId'],
+    where: { direction: 'INBOUND', type: { not: 'REACTION' } },
+    _max: { timestamp: true },
+  });
+  return new Map(rows.filter(r => r._max.timestamp).map(r => [r.contactId, r._max.timestamp as Date]));
+}
+
+/** Largo máximo del texto de vista previa en la lista de chats. */
+const PREVIEW_CHARS = 160;
+
+/**
+ * Contactos para la lista de chats, del más reciente al más viejo (como WhatsApp).
+ * Del último mensaje solo trae lo que pinta la lista: nada de mediaUrl (base64) ni aiTrace,
+ * que inflaban la página que abre el link de la notificación en el teléfono.
+ */
+export async function listChatContacts() {
+  const [contacts, lastInbound] = await Promise.all([
+    prisma.whatsAppContact.findMany({
+      include: {
+        messages: {
+          orderBy: { timestamp: 'desc' },
+          take: 1,
+          select: { id: true, contactId: true, direction: true, type: true, content: true, status: true, timestamp: true },
+        },
+      },
+    }),
+    lastInboundByContact(),
+  ]);
+  contacts.sort((a, b) => {
+    const aTime = a.messages[0]?.timestamp?.getTime() ?? a.updatedAt.getTime();
+    const bTime = b.messages[0]?.timestamp?.getTime() ?? b.updatedAt.getTime();
+    return bTime - aTime;
+  });
+  return contacts.map(c => ({
+    ...c,
+    messages: c.messages.map(m => ({ ...m, content: m.content && m.content.length > PREVIEW_CHARS ? m.content.slice(0, PREVIEW_CHARS) : m.content })),
+    // isAdmin: la lista de chats separa a los administradores de los clientes.
+    isAdmin: isAdminPhone(c.phone),
+    lastInboundAt: lastInbound.get(c.id) ?? null,
+  }));
+}
+
+/** Cuántos mensajes recientes se cargan al abrir un chat. */
+export const CHAT_HISTORY_LIMIT = 300;
+
+/**
+ * Historial reciente de un chat, en orden cronológico.
+ * El base64 de los adjuntos nunca sale de la base: los mensajes con archivo propio se marcan
+ * FETCH_REQUIRED y el cliente lo pide a /api/media/<id>; solo las URLs http se mandan tal cual.
+ */
+export async function listChatMessages(contactId: string, limit = CHAT_HISTORY_LIMIT) {
+  const [recent, httpMedia] = await Promise.all([
+    prisma.whatsAppMessage.findMany({
+      where: { contactId },
+      orderBy: { timestamp: 'desc' },
+      take: limit,
+      select: {
+        id: true, messageId: true, contactId: true, direction: true, type: true, content: true,
+        status: true, timestamp: true, mimeType: true, reaction: true, aiTrace: true,
+      },
+    }),
+    prisma.whatsAppMessage.findMany({
+      where: { contactId, mediaUrl: { startsWith: 'http' } },
+      orderBy: { timestamp: 'desc' },
+      take: limit,
+      select: { id: true, mediaUrl: true },
+    }),
+  ]);
+  const messages = recent.reverse();
+  const ids = messages.map(m => m.id);
+  const withMedia = new Set(
+    (await prisma.whatsAppMessage.findMany({ where: { id: { in: ids }, mediaUrl: { not: null } }, select: { id: true } })).map(m => m.id)
+  );
+  const httpUrl = new Map(httpMedia.map(m => [m.id, m.mediaUrl as string]));
+
+  // Reacciones antiguas que se guardaron como mensaje aparte («👍 reaccionó a «…»»): se pegan al mensaje original
+  // y se ocultan, para que se vean como en WhatsApp.
+  for (const r of messages.filter(m => m.type === 'REACTION')) {
+    const match = (r.content || '').match(/^(\S+) reaccionó a «([\s\S]*?)»?$/);
+    if (!match) continue;
+    const snippet = match[2].trim();
+    const target = [...messages].reverse().find(m =>
+      m.type !== 'REACTION' && m.timestamp < r.timestamp && !!m.content &&
+      m.content.replace(/\s*\n\s*/g, ' ').startsWith(snippet)
+    );
+    if (target && !target.reaction) target.reaction = match[1];
+  }
+
+  return messages
+    .filter(m => m.type !== 'REACTION')
+    .map(m => ({ ...m, mediaUrl: httpUrl.get(m.id) ?? (withMedia.has(m.id) ? 'FETCH_REQUIRED' : null) }));
 }
 
 /** Enlace que abre una cotización dentro del CRM. */
@@ -257,6 +400,7 @@ export async function processIncomingMessage(entry: any) {
       where: { messageId: statusObj.id },
       data: { status: statusObj.status.toUpperCase() }
     });
+    if (statusObj.status === 'failed') await reportFailedQuoteDelivery(statusObj).catch(e => console.error('Aviso de cotización fallida:', e));
     return { type: 'status', data: statusObj };
   }
 
@@ -565,10 +709,36 @@ async function reportBotFailure(contact: { id: string; name: string | null; phon
 }
 
 /**
+ * Meta acepta el envío y minutos después avisa que falló (p. ej. 131047 por la ventana de 24 h).
+ * Si lo que falló es el PDF de una cotización, se avisa a los administradores para que no quede
+ * como "enviada" sin que nadie se entere.
+ */
+async function reportFailedQuoteDelivery(statusObj: any) {
+  const msg = await prisma.whatsAppMessage.findUnique({
+    where: { messageId: statusObj.id },
+    include: { contact: true },
+  });
+  if (!msg || msg.direction !== 'OUTBOUND' || msg.type !== 'DOCUMENT' || !msg.content?.startsWith('Cotización ')) return;
+  const folio = msg.content.slice('Cotización '.length).trim();
+  const err = statusObj.errors?.[0];
+  const reason = err?.code === 131047
+    ? 'pasaron más de 24 h desde el último mensaje del cliente'
+    : err?.title || err?.message || 'WhatsApp no dio el motivo';
+  await notifyAdmin(
+    `⚠️ WhatsApp NO entregó la cotización ${folio}\nCliente: ${msg.contact.name || `+${msg.contact.phone}`}\nMotivo: ${reason}${err?.code ? ` (${err.code})` : ''}`,
+    `/dashboard/chats?c=${msg.contactId}`
+  );
+}
+
+/**
  * Genera el PDF de una cotización, se lo manda al cliente por WhatsApp y lo guarda en el chat.
  * No revisa sesión: quien lo llame (acción del CRM o el flujo de autorización por WhatsApp)
  * es responsable de haber autorizado el envío. Lanza Error con un mensaje legible si falla.
- * Devuelve el contacto y el folio; disparar la respuesta del bot queda a cargo de quien llama.
+ *
+ * Dentro de la ventana de 24 h va como documento normal. Fuera de ella Meta acepta el envío pero lo
+ * rechaza después (131047), así que se usa la plantilla WHATSAPP_QUOTE_TEMPLATE; sin plantilla se
+ * corta aquí con un error claro en vez de fingir que salió.
+ * Devuelve viaTemplate: cuando es true NO hay que disparar al bot (su texto libre también rebotaría).
  */
 export async function sendQuotePdfToClient(quoteId: string) {
   const quote = await prisma.quote.findUnique({
@@ -590,6 +760,18 @@ export async function sendQuotePdfToClient(quoteId: string) {
     throw new Error("El cliente no tiene un número de WhatsApp registrado en el sistema");
   }
 
+  const isSimulator = !!contact.name?.includes('Simulador');
+  const { open, lastInboundAt } = await getContactWindow(contact.id);
+  const viaTemplate = !isSimulator && !open;
+  if (viaTemplate && !(await quoteTemplateConfigured())) {
+    const when = lastInboundAt
+      ? `desde su último mensaje (${lastInboundAt.toLocaleString('es-MX', { timeZone: 'America/Mexico_City', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })})`
+      : 'y el cliente nunca ha escrito a este número';
+    throw new Error(`Pasaron más de 24 h ${when}: WhatsApp no entregaría el PDF. Configura la plantilla de cotización o espera a que el cliente escriba.`);
+  }
+
+  const totalText = `$${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+
   // Generar PDF y pasarlo a Base64 para Vercel
   const pdfBuffer = (await generateQuotePDF([quote])) as Buffer;
   const publicUrl = `data:application/pdf;base64,${pdfBuffer.toString('base64')}`;
@@ -597,9 +779,11 @@ export async function sendQuotePdfToClient(quoteId: string) {
 
   // Mandar el PDF de verdad por WhatsApp (el simulador no sale a Meta)
   let metaMessageId = `local_pdf_${Date.now()}`;
-  if (!contact.name?.includes('Simulador')) {
+  if (!isSimulator) {
     try {
-      const sentId = await sendDocumentToMeta(contact.phone, pdfBuffer, filename, `Cotización ${quote.folio}`);
+      const sentId = viaTemplate
+        ? await sendQuoteTemplateToMeta(contact.phone, pdfBuffer, filename, quote.folio, totalText)
+        : await sendDocumentToMeta(contact.phone, pdfBuffer, filename, `Cotización ${quote.folio}`);
       if (sentId) metaMessageId = sentId;
     } catch (e: any) {
       console.error('Error enviando PDF de cotización por WhatsApp:', e);
@@ -608,7 +792,9 @@ export async function sendQuotePdfToClient(quoteId: string) {
       throw new Error(
         outside24h
           ? 'Han pasado más de 24 h desde el último mensaje del cliente: WhatsApp no deja enviar el PDF hasta que él escriba (o se use una plantilla).'
-          : `WhatsApp rechazó el envío: ${msg}`
+          : viaTemplate
+            ? `WhatsApp rechazó la plantilla de cotización: ${msg}`
+            : `WhatsApp rechazó el envío: ${msg}`
       );
     }
   }
@@ -627,6 +813,21 @@ export async function sendQuotePdfToClient(quoteId: string) {
   });
   await notificationEmitter.emit('whatsapp_message', { message: { ...docMsg, mediaUrl: 'FETCH_REQUIRED' }, contact });
 
+  if (viaTemplate) {
+    // La plantilla ya trae el aviso al cliente; el bot no puede escribirle hasta que conteste.
+    await prisma.whatsAppMessage.create({
+      data: {
+        contactId: contact.id,
+        messageId: `internal_note_${Date.now()}`,
+        direction: 'INTERNAL',
+        type: 'TEXT',
+        content: `📝 La cotización ${quote.folio} (${totalText}) se envió con la plantilla de WhatsApp porque pasaron más de 24 h desde el último mensaje del cliente.`,
+        status: 'DELIVERED',
+      },
+    });
+    return { contact, folio: quote.folio, total: quote.total, viaTemplate };
+  }
+
   // Instrucción INTERNAL para que la IA le avise al cliente que ya tiene su cotización
   await prisma.whatsAppMessage.create({
     data: {
@@ -634,14 +835,14 @@ export async function sendQuotePdfToClient(quoteId: string) {
       messageId: `internal_instruction_${Date.now()}`,
       direction: 'INTERNAL',
       type: 'TEXT',
-      content: `${SYSTEM_INSTRUCTION_PREFIX}: Acabo de enviarle al cliente la Cotización Aprobada ${quote.folio} en formato PDF. El total es de $${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN.
+      content: `${SYSTEM_INSTRUCTION_PREFIX}: Acabo de enviarle al cliente la Cotización Aprobada ${quote.folio} en formato PDF. El total es de ${totalText}.
 Por favor, escríbele un mensaje corto y amigable avisándole que ya tiene la cotización oficial arriba y que cualquier duda me la escriba por aquí. No le preguntes qué le parece.
 REGLA CRÍTICA: Recuerda que tienes prohibido desglosar costos en materiales y horas. Solo menciona el precio final que acabo de darte.`,
       status: 'DELIVERED',
     },
   });
 
-  return { contact, folio: quote.folio, total: quote.total };
+  return { contact, folio: quote.folio, total: quote.total, viaTemplate };
 }
 
 /**

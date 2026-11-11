@@ -5,6 +5,22 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, AlertCircle, Loader2, Zap } from "lucide-react";
 
+/**
+ * A dónde volver tras iniciar sesión. El middleware manda ?callbackUrl=<url> (p. ej. el link
+ * del chat que llegó por notificación); solo se acepta si es del mismo sitio.
+ */
+function safeCallbackPath() {
+  const raw = new URLSearchParams(window.location.search).get("callbackUrl");
+  if (!raw) return "/dashboard";
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (url.origin !== window.location.origin || url.pathname.startsWith("/login")) return "/dashboard";
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return "/dashboard";
+  }
+}
+
 export default function LoginPage() {
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -28,7 +44,7 @@ export default function LoginPage() {
       setError("Correo o contraseña incorrectos");
       setLoading(false);
     } else {
-      router.push("/dashboard");
+      router.push(safeCallbackPath());
     }
   };
 

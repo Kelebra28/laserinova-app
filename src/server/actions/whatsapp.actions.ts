@@ -4,7 +4,7 @@ import path from 'path';
 
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sendMessageToMeta, isAdminPhone, processAIAgentResponse, retryBotReply, deleteConversationService, clearConversationMessagesService } from '@/server/services/whatsapp.service';
+import { sendMessageToMeta, listChatContacts, listChatMessages, processAIAgentResponse, retryBotReply, deleteConversationService, clearConversationMessagesService } from '@/server/services/whatsapp.service';
 import { notificationEmitter } from '@/lib/notification-emitter';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { executeChalanEstimate } from '@/lib/agents/chalan';
@@ -52,50 +52,8 @@ export async function simulateIncomingMessageAction(contactId: string, content: 
 
 export async function getMessagesAction(contactId: string) {
   await requireAuth();
-  
-  const messages = await prisma.whatsAppMessage.findMany({
-    where: { contactId },
-    orderBy: { timestamp: 'asc' },
-    select: {
-      id: true,
-      messageId: true,
-      contactId: true,
-      direction: true,
-      type: true,
-      content: true,
-      status: true,
-      timestamp: true,
-      mimeType: true,
-      mediaUrl: true,
-      reaction: true,
-      aiTrace: true,
-    }
-  });
-
-  // Reacciones antiguas que se guardaron como mensaje aparte («👍 reaccionó a «…»»): se pegan al mensaje original
-  // y se ocultan, para que se vean como en WhatsApp.
-  const legacy = messages.filter(m => m.type === 'REACTION');
-  for (const r of legacy) {
-    const match = (r.content || '').match(/^(\S+) reaccionó a «([\s\S]*?)»?$/);
-    if (!match) continue;
-    const snippet = match[2].trim();
-    const target = [...messages].reverse().find(m =>
-      m.type !== 'REACTION' && m.timestamp < r.timestamp && !!m.content &&
-      m.content.replace(/\s*\n\s*/g, ' ').startsWith(snippet)
-    );
-    if (target && !target.reaction) target.reaction = match[1];
-  }
-  const visible = messages.filter(m => m.type !== 'REACTION');
-
-  // Strip Base64 data to avoid massive JSON payloads, but keep external HTTP URLs
-  const cleanedData = visible.map(msg => ({
-    ...msg,
-    mediaUrl: msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : (msg.mediaUrl ? 'FETCH_REQUIRED' : null)
-  }));
-
-  return { success: true, data: cleanedData };
+  return { success: true, data: await listChatMessages(contactId) };
 }
-
 
 export async function sendManualMessageAction(contactId: string, content: string) {
   await requireAuth();
@@ -559,14 +517,7 @@ export async function clearConversationMessagesAction(contactId: string) {
 
 /** Lista de contactos con su último mensaje, para resincronizar el chat al volver a la app. */
 export async function getContactsAction() {
-  const contacts = await prisma.whatsAppContact.findMany({
-    include: { messages: { orderBy: { timestamp: 'desc' }, take: 1 } },
-  });
-  contacts.sort((a, b) => {
-    const aTime = a.messages[0]?.timestamp?.getTime() ?? a.updatedAt.getTime();
-    const bTime = b.messages[0]?.timestamp?.getTime() ?? b.updatedAt.getTime();
-    return bTime - aTime;
-  });
-  // isAdmin: la lista de chats separa a los administradores de los clientes.
-  return { success: true, data: contacts.map(c => ({ ...c, isAdmin: isAdminPhone(c.phone) })) };
+  await requireAuth();
+  return { success: true, data: await listChatContacts() };
 }
+
