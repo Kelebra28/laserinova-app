@@ -7,6 +7,10 @@ import MenuSelect from "@/components/ui/MenuSelect";
 import Link from "next/link";
 import { Package, CheckSquare } from "lucide-react";
 import { updateQuoteStatusAction } from "@/server/actions/quote.actions";
+import QuoteNoticeModal, { type QuoteNoticeRequest } from "@/components/whatsapp/QuoteNoticeModal";
+
+// Al mover a estas columnas se ofrece avisarle al cliente por WhatsApp (siempre con confirmación).
+const NOTICE_ON_STATUS = { IN_PRODUCTION: "production", DELIVERED: "ready" } as const;
 
 const statusLabels: Record<string, string> = {
   DRAFT: "Borrador",
@@ -37,6 +41,7 @@ export default function KanbanBoard({
   const [quotes, setQuotes] = useState(initialQuotes);
   const [pendingMove, setPendingMove] = useState<{ quoteId: string; newStatus: string } | null>(null);
   const [isMoving, setIsMoving] = useState(false);
+  const [notice, setNotice] = useState<QuoteNoticeRequest>(null);
 
   // Mantener el tablero sincronizado cuando llegan datos nuevos del servidor
   const [syncedFrom, setSyncedFrom] = useState(initialQuotes);
@@ -112,6 +117,8 @@ export default function KanbanBoard({
     try {
       await updateQuoteStatusAction(quoteId, newStatus);
       onChanged?.();
+      const kind = NOTICE_ON_STATUS[newStatus as keyof typeof NOTICE_ON_STATUS];
+      if (kind) setNotice({ quoteId, kind });
     } catch (err: any) {
       setQuotes(previous);
       toast.error(err?.message || "No se pudo cambiar el estatus");
@@ -137,6 +144,7 @@ export default function KanbanBoard({
 
   return (
     <div className="pb-4 overflow-x-auto">
+      <QuoteNoticeModal request={notice} onClose={() => setNotice(null)} />
       <ConfirmationModal
         isOpen={!!pendingMove}
         onClose={() => setPendingMove(null)}

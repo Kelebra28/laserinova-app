@@ -17,9 +17,11 @@ export default async function ChatsPage({
   const [contacts, lastInbound] = await Promise.all([
     prisma.whatsAppContact.findMany({
       include: {
+        // Sin mediaUrl/aiTrace: la lista solo muestra el texto del último mensaje y las fotos/PDFs en base64 la hacían tardar ~45 s.
         messages: {
           orderBy: { timestamp: 'desc' },
-          take: 1
+          take: 1,
+          omit: { mediaUrl: true, aiTrace: true },
         }
       }
     }),

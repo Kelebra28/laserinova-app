@@ -13,6 +13,7 @@ import CalculateQuoteModal from './CalculateQuoteModal';
 import ImageViewer, { type ViewerImage } from './ImageViewer';
 import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator, Download, ExternalLink, Clock, AlertTriangle, AlertCircle } from 'lucide-react';
 import { windowState, formatDuration, formatDurationShort } from '@/lib/whatsapp-window';
+import { sendReengageAction } from '@/server/actions/whatsapp-notify.actions';
 import { toast } from 'react-hot-toast';
 
 type Contact = any;
@@ -578,6 +579,19 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
       setActiveContact(activeContact);
       setContacts(prev => prev.map(c => c.id === activeContact.id ? activeContact : c));
     }
+  };
+
+  // Ventana de 24 h cerrada: plantilla "retomar_conversacion" para que el cliente vuelva a escribir.
+  const [reengaging, setReengaging] = useState(false);
+  const [confirmReengage, setConfirmReengage] = useState(false);
+  const reengage = async () => {
+    if (!activeContact) return;
+    setReengaging(true);
+    const res = await sendReengageAction(activeContact.id);
+    setReengaging(false);
+    setConfirmReengage(false);
+    if (res.success) toast.success('Mensaje enviado. Cuando el cliente conteste podrás escribirle normal.');
+    else toast.error(res.error, { duration: 8000 });
   };
 
   const [retryingBot, setRetryingBot] = useState(false);
@@ -1232,8 +1246,31 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                   <>Ventana de WhatsApp abierta: quedan <b>{formatDuration(activeWindow.remainingMs)}</b> para contestar (se cierra {activeWindow.closesAt.toLocaleString('es-MX', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}).</>
                 )}
               </span>
+              {activeWindow.kind !== 'open' && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmReengage(true)}
+                  disabled={reengaging}
+                  className="ml-auto shrink-0 flex items-center gap-1.5 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-100 px-3 py-1 font-semibold transition-colors disabled:opacity-50"
+                  title="Manda la plantilla aprobada para que el cliente conteste y se vuelva a abrir la ventana"
+                >
+                  {reengaging ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                  Retomar conversación
+                </button>
+              )}
             </div>
           )}
+
+          <ConfirmationModal
+            isOpen={confirmReengage}
+            onClose={() => setConfirmReengage(false)}
+            onConfirm={reengage}
+            isLoading={reengaging}
+            variant="info"
+            title="Retomar conversación"
+            message={`Se le mandará a ${activeContact.name || 'este cliente'} la plantilla aprobada: "Hola, te escribimos de Laser Inova para dar seguimiento a tu cotización… Responde a este mensaje para continuar con la atención." Trae un botón "Continuar"; cuando lo toque o conteste, podrás escribirle normal.`}
+            confirmText="Enviar"
+          />
 
           {/* Barra de escribir */}
           <div className="bg-[#111b21] border-t border-[#222d34] px-3 md:px-4 py-2.5 flex flex-col z-20">

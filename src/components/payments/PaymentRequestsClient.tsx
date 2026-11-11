@@ -14,6 +14,7 @@ import {
 } from "@/server/actions/payment.actions";
 import toast from "react-hot-toast";
 import { TableSkeleton } from "@/components/ui/Skeleton";
+import QuoteNoticeModal, { type QuoteNoticeRequest } from "@/components/whatsapp/QuoteNoticeModal";
 
 export default function PaymentRequestsClient() {
   const queryClient = useQueryClient();
@@ -45,12 +46,18 @@ export default function PaymentRequestsClient() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editAmount, setEditAmount] = useState<number | "">("");
   const [editNotes, setEditNotes] = useState("");
+  const [notice, setNotice] = useState<QuoteNoticeRequest>(null);
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     const res = await updatePaymentRequestStatus(id, newStatus);
     if (res.success) {
       queryClient.invalidateQueries({ queryKey: ["paymentRequests"] });
       toast.success("Estatus actualizado");
+      // Pago marcado como recibido: ofrecer avisarle al cliente
+      const req = requests.find((r: any) => r.id === id);
+      if (newStatus === "PAID" && req) {
+        setNotice({ quoteId: req.quoteId, kind: "paid", extra: { amount: String(req.amountRequested) } });
+      }
     } else {
       toast.error("Error: " + res.error);
     }
@@ -95,10 +102,11 @@ export default function PaymentRequestsClient() {
     }
   };
 
-  const handleFormSuccess = () => {
+  const handleFormSuccess = (created: { quoteId: string; amount: number }) => {
     setIsFormOpen(false);
     queryClient.invalidateQueries({ queryKey: ["paymentRequests"] });
     toast.success("Solicitud creada con éxito");
+    setNotice({ quoteId: created.quoteId, kind: "deposit", extra: { amount: String(created.amount) } });
   };
 
   if (isLoadingRequests || isLoadingClients) {
@@ -107,6 +115,7 @@ export default function PaymentRequestsClient() {
 
   return (
     <div className="space-y-6">
+      <QuoteNoticeModal request={notice} onClose={() => setNotice(null)} />
       <div className="sm:flex sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">

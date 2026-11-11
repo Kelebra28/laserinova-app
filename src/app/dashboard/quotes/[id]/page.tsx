@@ -12,6 +12,7 @@ import QuoteVersionTabs from "@/components/quotes/QuoteVersionTabs";
 import CloneQuoteButton from "@/components/quotes/CloneQuoteButton";
 import { SendQuoteMailButton } from "@/components/quotes/SendQuoteMailButton";
 import { SendQuoteWhatsAppButton } from "@/components/quotes/SendQuoteWhatsAppButton";
+import { QuoteNoticeButton } from "@/components/quotes/QuoteNoticeButton";
 import SurveyLinkButton from "@/components/quotes/SurveyLinkButton";
 import { getQuoteDetailService, getActiveClientsService } from "@/server/services/quote.service";
 
@@ -124,6 +125,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
             versions={versions}
           />
           <SendQuoteWhatsAppButton quoteId={quote.id} hasClientId={!!quote.clientId} hasContactId={!!quote.contactId} />
+          <QuoteNoticeButton quoteId={quote.id} disabled={!quote.clientId && !quote.contactId} />
         </div>
       </div>
 

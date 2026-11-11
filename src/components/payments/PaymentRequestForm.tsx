@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 import { Client } from "@prisma/client";
 import { getPendingQuotesByClient, createPaymentRequest } from "@/server/actions/payment.actions";
 
-export default function PaymentRequestForm({ clients, onSuccess, onCancel }: { clients: any[], onSuccess: () => void, onCancel: () => void }) {
+export default function PaymentRequestForm({ clients, onSuccess, onCancel }: { clients: any[], onSuccess: (created: { quoteId: string; amount: number }) => void, onCancel: () => void }) {
   const { data: session } = useSession();
   
   const [clientId, setClientId] = useState("");
@@ -99,7 +99,7 @@ export default function PaymentRequestForm({ clients, onSuccess, onCancel }: { c
     });
 
     if (res.success) {
-      onSuccess();
+      onSuccess({ quoteId, amount: Number(amountRequested) });
     } else {
       setError(res.error || "Ocurrió un error al crear la solicitud.");
     }

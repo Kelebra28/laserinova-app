@@ -561,7 +561,8 @@ export async function clearConversationMessagesAction(contactId: string) {
 export async function getContactsAction() {
   const [contacts, lastInbound] = await Promise.all([
     prisma.whatsAppContact.findMany({
-      include: { messages: { orderBy: { timestamp: 'desc' }, take: 1 } },
+      // Sin mediaUrl/aiTrace: la lista solo muestra el texto del último mensaje y las fotos/PDFs en base64 la hacían tardar ~45 s.
+      include: { messages: { orderBy: { timestamp: 'desc' }, take: 1, omit: { mediaUrl: true, aiTrace: true } } },
     }),
     lastInboundByContact(),
   ]);
