@@ -9,8 +9,8 @@ import { getRelevantRules } from '@/lib/agents/secretary/knowledge-base';
 import { executeChalanEstimate } from '@/lib/agents/chalan';
 import { sendPushToAdmins } from '@/lib/push';
 import { generateQuotePDF } from '@/lib/pdf';
-import { resolveProductUnitPrice, modelCostKey } from '@/lib/calculations';
-import { getProductPricingGlobals, getModelMaxCostMap } from '@/lib/product-pricing';
+import { resolveProductUnitPrice, modelCostKey } from '@/lib/pricing';
+import { getCostConfigMap, getModelMaxCostMap } from '@/lib/pricing/server';
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -1020,7 +1020,7 @@ async function runAIAgentResponse(contactId: string) {
             distinct: ['model'],
             select: { name: true, model: true, sku: true, unitPrice: true, unitCost: true, provider: true, color: true, image: true, images: true }
           });
-          const pricingGlobals = await getProductPricingGlobals();
+          const pricingGlobals = await getCostConfigMap();
           const modelMaxCosts = await getModelMaxCostMap();
 
           // 1. Enviar imágenes de WhatsApp si hay productos
@@ -1121,7 +1121,7 @@ async function runAIAgentResponse(contactId: string) {
                 select: { name: true, color: true, stockQuantity: true, unitPrice: true, unitCost: true, model: true, provider: true, image: true },
               })
             : [];
-          const pricingGlobals = await getProductPricingGlobals();
+          const pricingGlobals = await getCostConfigMap();
           const modelMaxCosts = await getModelMaxCostMap();
 
           // Foto del color pedido (misma regla que la ficha del producto en el CRM: Doble Vela tiene una foto por color).

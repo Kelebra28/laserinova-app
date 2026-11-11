@@ -3,8 +3,8 @@ import { timingSafeEqual } from "crypto";
 import { existsSync } from "fs";
 import { prisma } from "@/lib/prisma";
 import path from "path";
-import { resolveProductUnitPrice, maxCostOfModel } from "@/lib/calculations";
-import { getProductPricingGlobals } from "@/lib/product-pricing";
+import { resolveProductUnitPrice, maxCostOfModel } from "@/lib/pricing";
+import { getCostConfigMap } from "@/lib/pricing/server";
 
 /**
  * API pública de catálogo (solo lectura) para el sitio web.
@@ -201,7 +201,7 @@ export function getAllPublicProducts(categorySlugs: string[]): Promise<PublicPro
         select: productSelect,
         orderBy: [{ model: "asc" }, { color: "asc" }],
       }),
-      getProductPricingGlobals(),
+      getCostConfigMap(),
     ])
       .then(([rows, pricing]) => {
         const groups = new Map<string, typeof rows>();

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import NewQuoteForm from "@/components/quotes/NewQuoteForm";
-import { pickProductPricing } from "@/lib/calculations";
+import { getGlobalCosts } from "@/lib/pricing/server";
 
 export const dynamic = "force-dynamic";
 
@@ -29,27 +29,7 @@ export default async function NewQuotePage({
     orderBy: { name: "asc" },
   });
 
-  const costConfigs = await prisma.costConfiguration.findMany();
-  const globalCosts: Record<string, number> = {};
-  costConfigs.forEach(c => {
-    globalCosts[c.key] = c.value;
-  });
-
-  // Default fallbacks in case DB is not fully populated
-  const safeGlobals = {
-    costo_minuto_mayoreo: globalCosts["costo_minuto_mayoreo"] || 8.5,
-    costo_minuto_menudeo: globalCosts["costo_minuto_menudeo"] || 10,
-    porcentaje_iva: globalCosts["porcentaje_iva"] || 16,
-    factor_guarda_default: globalCosts["factor_guarda_default"] || 1.2,
-    margen_default: globalCosts["margen_default"] || 50,
-    factor_produccion_default: globalCosts["factor_produccion_default"] || 3,
-    precio_tubo: globalCosts["precio_tubo"] || 250000,
-    vida_util_tubo: globalCosts["vida_util_tubo"] || 6000,
-    factor_miedo: globalCosts["factor_miedo"] || 2,
-    porcentaje_transporte_material: globalCosts["porcentaje_transporte_material"] || 20,
-    porcentaje_merma_corte: globalCosts["porcentaje_merma_corte"] || 20,
-    ...pickProductPricing(globalCosts),
-  };
+  const safeGlobals = await getGlobalCosts();
 
   return (
     <div className="space-y-6">

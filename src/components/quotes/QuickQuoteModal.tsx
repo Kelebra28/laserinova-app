@@ -19,7 +19,7 @@ import {
   Sparkles
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { calculateConcept, resolveProductUnitPrice, maxCostOfModel, GlobalCosts } from "@/lib/calculations";
+import { calculateConcept, resolveProductUnitPrice, maxCostOfModel, buildGlobalCosts, GlobalCosts } from "@/lib/pricing";
 import { getQuickQuoteDataAction } from "@/server/actions/quote.actions";
 
 interface MaterialItem {
@@ -81,19 +81,7 @@ export function QuickQuoteModal({ isOpen, onClose }: Props) {
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [clients, setClients] = useState<ClientItem[]>([]);
-  const [globalCosts, setGlobalCosts] = useState<GlobalCosts>({
-    costo_minuto_mayoreo: 8.5,
-    costo_minuto_menudeo: 10,
-    porcentaje_iva: 16,
-    factor_guarda_default: 1.2,
-    margen_default: 50,
-    factor_produccion_default: 3,
-    precio_tubo: 250000,
-    vida_util_tubo: 6000,
-    factor_miedo: 2,
-    porcentaje_transporte_material: 20,
-    porcentaje_merma_corte: 20,
-  });
+  const [globalCosts, setGlobalCosts] = useState<GlobalCosts>(() => buildGlobalCosts());
 
   // Datos de contacto
   const [clientName, setClientName] = useState("");

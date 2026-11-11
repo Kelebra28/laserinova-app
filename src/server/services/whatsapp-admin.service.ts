@@ -11,6 +11,7 @@ import {
   notifyAdmin,
 } from '@/server/services/whatsapp.service';
 import type { ChalanPricing } from '@/lib/agents/chalan';
+import { GLOBAL_COST_DEFAULTS } from '@/lib/pricing';
 
 /**
  * Bot de gestión: los administradores (ADMIN_ALERT_PHONE) le escriben al número del bot para
@@ -29,7 +30,7 @@ import type { ChalanPricing } from '@/lib/agents/chalan';
 
 const PENDING = '[PENDIENTE]';
 const RESOLVED = '[RESUELTA]';
-const IVA = 0.16;
+const IVA = GLOBAL_COST_DEFAULTS.porcentaje_iva / 100;
 
 type AdminContact = { id: string; phone: string; name: string | null };
 

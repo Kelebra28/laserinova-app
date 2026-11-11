@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { ProductDetailClient } from "./ProductDetailClient";
-import { getProductPricingGlobals } from "@/lib/product-pricing";
+import { getCostConfigMap } from "@/lib/pricing/server";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +30,7 @@ export default async function ProductDetailPage({ params }: Props) {
     ? await prisma.product.findMany({ where: { model: product.model } })
     : [product];
 
-  const pricing = await getProductPricingGlobals();
+  const pricing = await getCostConfigMap();
 
   return (
     <ProductDetailClient 

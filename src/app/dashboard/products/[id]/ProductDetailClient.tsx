@@ -1,5 +1,5 @@
 "use client";
-import { resolveProductUnitPrice, pickProductPricing, calculateProductTierPrice, maxCostOfModel } from "@/lib/calculations";
+import { resolveProductUnitPrice, pickProductPricing, calculateProductTierPrice, maxCostOfModel, ivaPct } from "@/lib/pricing";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -89,7 +89,7 @@ export function ProductDetailClient({ initialProduct, variants, pricing = {} }: 
                 </span>
               </div>
               <p className="text-4xl font-black text-zinc-900">
-                {formatCurrency(displayPrice * 1.16)} <span className="text-sm font-medium text-zinc-500 ml-1">con IVA</span>
+                {formatCurrency(displayPrice * (1 + ivaPct(pricing) / 100))} <span className="text-sm font-medium text-zinc-500 ml-1">con IVA</span>
               </p>
               <p className="text-sm font-medium text-zinc-400 mt-1">
                 {formatCurrency(displayPrice)} sin IVA • Costo: <span className="font-bold text-red-600">{formatCurrency(catalogPrice.tiered ? modelMaxCost : activeVariant.unitCost)}</span>

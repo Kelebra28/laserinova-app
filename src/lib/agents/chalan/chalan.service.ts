@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
-import { calculateConcept, GlobalCosts, pickProductPricing, resolveProductUnitPrice, modelCostKey } from "@/lib/calculations";
-import { getModelMaxCostMap } from "@/lib/product-pricing";
+import { calculateConcept, GlobalCosts, buildGlobalCosts, resolveProductUnitPrice, modelCostKey } from "@/lib/pricing";
+import { getCostConfigMap, getModelMaxCostMap } from "@/lib/pricing/server";
 import { ChalanEstimateInput, ChalanContext, getChalanPrompt } from "./prompt";
 import { getWorkshopRulesFromPinecone } from "./knowledge-base";
 
@@ -34,26 +34,6 @@ export interface ChalanPricing {
 
 const money = (n: number) => `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-/** Mismos defaults que usa el CRM al cotizar (quote.service / página de nueva cotización). */
-function buildGlobals(configs: { key: string; value: number }[]): GlobalCosts {
-  const g: Record<string, number> = {};
-  configs.forEach((c) => { g[c.key] = c.value; });
-  return {
-    costo_minuto_mayoreo: g["costo_minuto_mayoreo"] || 8.5,
-    costo_minuto_menudeo: g["costo_minuto_menudeo"] || 10,
-    porcentaje_iva: g["porcentaje_iva"] || 16,
-    factor_guarda_default: g["factor_guarda_default"] || 1.2,
-    margen_default: g["margen_default"] || 50,
-    factor_produccion_default: g["factor_produccion_default"] || 3,
-    precio_tubo: g["precio_tubo"] || 250000,
-    vida_util_tubo: g["vida_util_tubo"] || 6000,
-    factor_miedo: g["factor_miedo"] || 2,
-    porcentaje_transporte_material: g["porcentaje_transporte_material"] || 20,
-    porcentaje_merma_corte: g["porcentaje_merma_corte"] || 20,
-    ...pickProductPricing(g),
-  };
-}
-
 export async function executeChalanEstimate(
   input: ChalanEstimateInput,
   contact: { id: string; name?: string | null; phone: string },
@@ -63,7 +43,7 @@ export async function executeChalanEstimate(
   let productListContext = "";
   let materialListContext = "";
   let materials: Awaited<ReturnType<typeof prisma.material.findMany>> = [];
-  let globals: GlobalCosts = buildGlobals([]);
+  let globals: GlobalCosts = buildGlobalCosts();
 
   try {
     const products = await prisma.product.findMany({
@@ -72,9 +52,7 @@ export async function executeChalanEstimate(
     });
     if (products.length > 0) {
       // Precio de catálogo (escala de pocas piezas) con los costos globales de la configuración.
-      const pricingConfigs = await prisma.costConfiguration.findMany({ where: { active: true } });
-      const pricingGlobals: Record<string, number> = {};
-      pricingConfigs.forEach((c) => { pricingGlobals[c.key] = c.value; });
+      const pricingGlobals = await getCostConfigMap();
       const modelMaxCosts = await getModelMaxCostMap();
       productListContext = products
         .map((p) => `- ${p.name}: $${resolveProductUnitPrice(p, 1, pricingGlobals, modelMaxCosts[modelCostKey(p)]).unitPrice} MXN`)
@@ -87,8 +65,7 @@ export async function executeChalanEstimate(
       .map((m, i) => `${i} | ${m.name.trim()} | ${m.thickness ? `${m.thickness} mm` : "s/e"}`)
       .join("\n");
 
-    const costConfigs = await prisma.costConfiguration.findMany({ where: { active: true } });
-    globals = buildGlobals(costConfigs);
+    globals = buildGlobalCosts(await getCostConfigMap());
   } catch (err) {
     console.error("[El Chalán] Error obteniendo catálogos de base de datos:", err);
   }

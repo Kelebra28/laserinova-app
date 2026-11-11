@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ivaOf } from "@/lib/pricing";
 import { FileText, Plus, Trash2, Download, RefreshCw, Save, Check } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { saveQuickQuoteAction } from "@/server/actions/quote.actions";
@@ -57,7 +58,7 @@ export default function QuickQuoteForm({ defaultMargin, clients }: QuickQuoteFor
   };
 
   const subtotal = concepts.reduce((sum, c) => sum + ((Number(c.quantity) || 0) * (Number(c.unitPrice) || 0)), 0);
-  const tax = subtotal * 0.16;
+  const tax = ivaOf(subtotal);
   const total = subtotal + tax;
 
   const handleDownload = async () => {

@@ -1,15 +1,19 @@
 import { prisma } from "@/lib/prisma";
-import { modelCostKey } from "@/lib/calculations";
+import { buildGlobalCosts, toConfigMap, type GlobalCosts } from "./config";
+import { modelCostKey } from "./product";
 
-/** Lee de la configuración los costos globales que intervienen en el precio de productos (IVA, escalas, márgenes). */
-export async function getProductPricingGlobals(): Promise<Record<string, number>> {
+/** Mapa key→valor de la configuración de costos activa, tal como está en la base (sin valores por defecto). */
+export async function getCostConfigMap(): Promise<Record<string, number>> {
   const rows = await prisma.costConfiguration.findMany({
     where: { active: true },
     select: { key: true, value: true },
   });
-  const g: Record<string, number> = {};
-  rows.forEach((r) => { g[r.key] = r.value; });
-  return g;
+  return toConfigMap(rows);
+}
+
+/** Costos globales listos para las fórmulas: configuración activa + valores por defecto. */
+export async function getGlobalCosts(): Promise<GlobalCosts> {
+  return buildGlobalCosts(await getCostConfigMap());
 }
 
 /** Costo más alto por proveedor+modelo (clave de modelCostKey): todos los colores se cotizan con el más caro. */

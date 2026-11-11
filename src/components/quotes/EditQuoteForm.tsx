@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { Calculator, Save, Plus, Trash2, Info, DollarSign, Check, Loader2 } from "lucide-react";
 import Link from "next/link";
 import SubmitButton from "@/components/ui/SubmitButton";
-import { calculateConcept, CalculationInput, GlobalCosts, MaterialData, resolveProductUnitPrice, maxCostOfModel } from "@/lib/calculations";
+import { calculateConcept, calculateQuoteTotals, ivaPct, FORMULA_CONCEPT_TYPES, CalculationInput, GlobalCosts, MaterialData, resolveProductUnitPrice, maxCostOfModel } from "@/lib/pricing";
 import { updateQuoteAction } from "@/server/actions/quote.actions";
 import MaterialSelector from "@/components/quotes/MaterialSelector";
 import ClientSelector from "@/components/quotes/ClientSelector";
@@ -221,7 +221,7 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
       );
       const suggestedUnit = result.suggestedPrice / (Number(c.quantity) || 1);
       // Si cambia el margen global o mayoreo, actualizamos el precio final unitario de los conceptos de fórmula
-      const isFormulaType = ["CORTE", "GRABADO", "SERVICIO_SITIO"].includes(c.type);
+      const isFormulaType = FORMULA_CONCEPT_TYPES.includes(c.type);
       const finalUnit = (isFormulaType || !c.finalUnitPrice || Number(c.finalUnitPrice) <= 0) ? suggestedUnit : c.finalUnitPrice;
       const finalUnitNum = Number(finalUnit) || 0;
       const totalAmount = finalUnitNum * (Number(c.quantity) || 1);
@@ -373,22 +373,9 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
   };
 
   const { subtotal, iva, total, costoReal, utilidad } = useMemo(() => {
-    const totalFinal = concepts.reduce((sum, c) => sum + (Number(c.totalAmount) || 0), 0);
-    const real = concepts.reduce((sum, c) => sum + (Number(c.calculated?.realCost) || 0), 0);
-    
-    const ivaPercentage = Number(globalCosts?.porcentaje_iva) || 16;
-
-    if (!taxable) {
-      return { subtotal: totalFinal, iva: 0, total: totalFinal, costoReal: real, utilidad: totalFinal - real };
-    }
-
-    const subtotalVal = totalFinal;
-    const taxVal = subtotalVal * (ivaPercentage / 100);
-    const totalVal = subtotalVal + taxVal;
-    const util = subtotalVal - real;
-
-    return { subtotal: subtotalVal, iva: taxVal, total: totalVal, costoReal: real, utilidad: util };
-
+    const conceptsTotal = concepts.reduce((sum, c) => sum + (Number(c.totalAmount) || 0), 0);
+    const realCost = concepts.reduce((sum, c) => sum + (Number(c.calculated?.realCost) || 0), 0);
+    return calculateQuoteTotals(conceptsTotal, realCost, { taxable, ivaPct: ivaPct(globalCosts) });
   }, [concepts, globalCosts, isWholesale, margin, taxable]);
 
 

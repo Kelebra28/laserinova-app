@@ -1,7 +1,7 @@
 "use client";
 
 import { Info, Calculator, Zap, Scissors, TrendingUp, Box } from "lucide-react";
-import { pickProductPricing, calculateProductTierPrice } from "@/lib/calculations";
+import { pickProductPricing, calculateProductTierPrice, GLOBAL_COST_DEFAULTS } from "@/lib/pricing";
 
 interface CalculationAuditProps {
   concepts: any[];
@@ -12,9 +12,9 @@ interface CalculationAuditProps {
 export default function CalculationAudit({ concepts, margin, globals = {} }: CalculationAuditProps) {
   const divisor = (100 - margin) / 100;
   const pp = pickProductPricing(globals);
-  const iva = globals.porcentaje_iva ?? 16;
-  const fearFactor = globals.factor_miedo ?? 2;
-  const prodFactor = globals.factor_produccion_default ?? 3;
+  const iva = globals.porcentaje_iva ?? GLOBAL_COST_DEFAULTS.porcentaje_iva;
+  const fearFactor = globals.factor_miedo ?? GLOBAL_COST_DEFAULTS.factor_miedo;
+  const prodFactor = globals.factor_produccion_default ?? GLOBAL_COST_DEFAULTS.factor_produccion_default;
   const EXAMPLE_COST = 100;
   const tiers = [
     { label: `1 a ${pp.producto_escala_2 - 1} pzs`, qty: 1 },

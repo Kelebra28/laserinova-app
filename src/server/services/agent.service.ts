@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { calculateConcept } from "@/lib/calculations";
+import { calculateConcept } from "@/lib/pricing";
+import { getGlobalCosts } from "@/lib/pricing/server";
 
 export async function createClientService(nombre: string, telefono?: string) {
   return await prisma.client.create({ 
@@ -31,11 +32,7 @@ export async function createQuoteService(nombre_cliente: string, userId: string,
   if (!client) throw new Error(`No se encontró un cliente con el nombre "${nombre_cliente}".`);
 
   // Traer configuración global para los cálculos
-  const configs = await prisma.costConfiguration.findMany();
-  const globals = configs.reduce((acc: any, curr) => {
-    acc[curr.key] = curr.value;
-    return acc;
-  }, {});
+  const globals = await getGlobalCosts();
 
   let granTotal = 0;
   let conceptosAInsertar = [];
@@ -120,11 +117,7 @@ export async function calculateCutPriceService(material_nombre: string, ancho_cm
     }
   });
 
-  const configs = await prisma.costConfiguration.findMany();
-  const globals = configs.reduce((acc: any, curr) => {
-    acc[curr.key] = curr.value;
-    return acc;
-  }, {});
+  const globals = await getGlobalCosts();
 
   const inputData = {
     type: "CORTE" as const,
