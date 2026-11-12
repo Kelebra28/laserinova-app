@@ -22,6 +22,9 @@ import { toast } from "react-hot-toast";
 import { calculateConcept, resolveProductUnitPrice, maxCostOfModel, buildGlobalCosts, GlobalCosts } from "@/lib/pricing";
 import { getQuickQuoteDataAction } from "@/server/actions/quote.actions";
 import { waLink } from "@/lib/phone";
+import { ProductCombobox } from "@/components/quotes/ProductCombobox";
+import MaterialSelector from "@/components/quotes/MaterialSelector";
+import ClientSelector from "@/components/quotes/ClientSelector";
 
 interface MaterialItem {
   id: string;
@@ -85,6 +88,7 @@ export function QuickQuoteModal({ isOpen, onClose }: Props) {
   const [globalCosts, setGlobalCosts] = useState<GlobalCosts>(() => buildGlobalCosts());
 
   // Datos de contacto
+  const [clientId, setClientId] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [includeIvaNote, setIncludeIvaNote] = useState(true);
@@ -268,6 +272,7 @@ export function QuickQuoteModal({ isOpen, onClose }: Props) {
   };
 
   const handleReset = () => {
+    setClientId("");
     setClientName("");
     setClientPhone("");
     setItems([createEmptyItem(globalCosts.margen_default || 50)]);
@@ -318,13 +323,25 @@ export function QuickQuoteModal({ isOpen, onClose }: Props) {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Nombre</label>
-                <input
-                  type="text"
-                  placeholder="Ej. Lic. Carlos Gómez"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none"
+                <ClientSelector
+                  clients={clients}
+                  value={clientId}
+                  onChange={(id) => {
+                    setClientId(id);
+                    const c = clients.find((x) => x.id === id);
+                    if (c) {
+                      setClientName(c.name);
+                      if (c.phone) setClientPhone(c.phone);
+                    } else {
+                      setClientName("");
+                    }
+                  }}
+                  onProspectNameChange={(name) => {
+                    setClientName(name);
+                    setClientId("");
+                  }}
+                  prospectName={clientName}
+                  hideSaveAsClient
                 />
               </div>
               <div>
@@ -419,25 +436,20 @@ export function QuickQuoteModal({ isOpen, onClose }: Props) {
                       <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
                         Buscar Producto de Catálogo
                       </label>
-                      <select
-                        value={item.productId || ""}
-                        onChange={(e) => {
-                          const prod = products.find((p) => p.id === e.target.value);
+                      <ProductCombobox
+                        products={products as any[]}
+                        selectedProductId={item.productId}
+                        onSelectProduct={(prod) =>
                           updateItem(item.id, {
-                            productId: e.target.value,
-                            productName: prod?.name || "",
-                            description: prod?.name || item.description,
-                          });
-                        }}
-                        className="w-full px-3 py-2 text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none"
-                      >
-                        <option value="">-- Seleccionar producto --</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.sku ? `[${p.sku}] ` : ""}{p.name} (${Number(p.unitCost) > 0 ? `$${p.unitCost} costo` : "Sin costo"})
-                          </option>
-                        ))}
-                      </select>
+                            productId: prod.id,
+                            productName: prod.name,
+                            description: prod.name,
+                          })
+                        }
+                        onClear={() =>
+                          updateItem(item.id, { productId: "", productName: "", unitCost: 0, suggestedUnitPrice: 0, finalUnitPrice: 0 })
+                        }
+                      />
                     </div>
                     <div className="sm:col-span-6">
                       <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
@@ -458,23 +470,18 @@ export function QuickQuoteModal({ isOpen, onClose }: Props) {
                       <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
                         Material
                       </label>
-                      <select
+                      <MaterialSelector
+                        materials={materials}
                         value={item.materialId || ""}
-                        onChange={(e) => {
-                          const mat = materials.find((m) => m.id === e.target.value);
+                        onChange={(id) => {
+                          const mat = materials.find((m) => m.id === id);
                           updateItem(item.id, {
-                            materialId: e.target.value,
+                            materialId: id,
                             materialName: mat?.name || "",
                             description: mat ? `Corte láser en ${mat.name}` : item.description,
                           });
                         }}
-                        className="w-full px-3 py-2 text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-                      >
-                        <option value="">-- Seleccionar material --</option>
-                        {materials.map((m) => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                      </select>
+                      />
                     </div>
                     <div className="sm:col-span-2">
                       <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Ancho (cm)</label>

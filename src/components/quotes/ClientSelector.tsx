@@ -12,6 +12,7 @@ interface ClientSelectorProps {
   disabled?: boolean;
   saveAsClient?: boolean;
   onSaveAsClientChange?: (save: boolean) => void;
+  hideSaveAsClient?: boolean;
 }
 
 export default function ClientSelector({
@@ -23,6 +24,7 @@ export default function ClientSelector({
   disabled,
   saveAsClient: externalSaveAsClient,
   onSaveAsClientChange,
+  hideSaveAsClient = false,
 }: ClientSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -114,7 +116,7 @@ export default function ClientSelector({
               Modo Prospecto
             </p>
           </div>
-          <label className="flex items-center gap-2 cursor-pointer group">
+          {!hideSaveAsClient && <label className="flex items-center gap-2 cursor-pointer group">
             <div className="relative flex items-center">
               <input
                 type="checkbox"
@@ -127,7 +129,7 @@ export default function ClientSelector({
             <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest group-hover:text-orange-700 transition-colors">
               ¿Guardar en catálogo?
             </span>
-          </label>
+          </label>}
         </div>
         <input type="hidden" name="clientId" value="" />
         <input type="hidden" name="prospectName" value={localProspect} />

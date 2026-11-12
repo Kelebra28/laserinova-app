@@ -429,6 +429,8 @@ export async function getQuickQuoteDataAction() {
           sheetPrice: true,
           guardPercentage: true,
           pricePerCm2: true,
+          brand: true,
+          category: { select: { name: true } },
         },
         orderBy: { name: "asc" }
       }),
@@ -443,6 +445,11 @@ export async function getQuickQuoteDataAction() {
           provider: true,
           model: true,
           image: true,
+          brand: true,
+          color: true,
+          stockQuantity: true,
+          description: true,
+          category: { select: { name: true } },
         },
         orderBy: { name: "asc" }
       }),

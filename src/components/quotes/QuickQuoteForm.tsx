@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ivaOf } from "@/lib/pricing";
 import { FileText, Plus, Trash2, Download, RefreshCw, Save, Check } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import StatusModal from "@/components/ui/StatusModal";
 import ConfirmSaveModal from "@/components/ui/ConfirmSaveModal";
 import ClientSelector from "@/components/quotes/ClientSelector";
+import { AutocompleteInput } from "@/components/ui/AutocompleteInput";
 
 interface QuickQuoteFormProps {
   defaultMargin: number;
@@ -28,6 +29,20 @@ export default function QuickQuoteForm({ defaultMargin, clients }: QuickQuoteFor
   const [concepts, setConcepts] = useState([
     { id: crypto.randomUUID(), description: "Activación especial / Evento", quantity: 1 as number | string, unitPrice: 0 as number | string, margin: defaultMargin as number | string, details: "" }
   ]);
+
+  const [suggestions, setSuggestions] = useState({
+    projects: [] as string[],
+    quoteDescriptions: [] as string[],
+    conceptDescriptions: [] as string[],
+    conceptDetails: [] as string[],
+  });
+
+  useEffect(() => {
+    fetch("/api/quotes/suggestions")
+      .then(res => res.json())
+      .then(data => { if (!data.error) setSuggestions(data); })
+      .catch(err => console.error("Error cargando sugerencias:", err));
+  }, []);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -218,22 +233,22 @@ export default function QuickQuoteForm({ defaultMargin, clients }: QuickQuoteFor
           </div>
           <div>
             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Proyecto *</label>
-            <input 
-              type="text" 
-              value={project} 
-              onChange={e => setProject(e.target.value)}
+            <AutocompleteInput
+              suggestions={suggestions.projects}
+              value={project}
+              onChange={setProject}
               placeholder="Ej. Proyecto Especial" 
               className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-red-600/10 focus:border-red-600 transition-all outline-none text-gray-900 shadow-sm"
             />
           </div>
           <div className="col-span-full">
             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Descripción General (Opcional)</label>
-            <textarea 
-              value={description} 
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Detalles generales que aparecerán en el encabezado del PDF..." 
-              className="w-full text-sm font-medium border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-red-600/20 focus:border-red-600 transition-all"
-              rows={2}
+            <AutocompleteInput
+              suggestions={suggestions.quoteDescriptions}
+              value={description}
+              onChange={setDescription}
+              placeholder="Detalles generales que aparecerán en el encabezado del PDF..."
+              className="w-full text-sm font-medium border border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-red-600/20 focus:border-red-600 transition-all outline-none"
             />
           </div>
         </div>
@@ -256,19 +271,19 @@ export default function QuickQuoteForm({ defaultMargin, clients }: QuickQuoteFor
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                   <div className="md:col-span-6">
                     <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Descripción del Concepto</label>
-                    <input 
-                      type="text" 
-                      value={concept.description} 
-                      onChange={e => updateConcept(concept.id, 'description', e.target.value)}
+                    <AutocompleteInput
+                      suggestions={suggestions.conceptDescriptions}
+                      value={concept.description}
+                      onChange={val => updateConcept(concept.id, 'description', val)}
                       placeholder="Ej. Servicio de Corte Laser" 
                       className="w-full text-sm font-bold border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:ring-2 focus:ring-red-600/10"
                     />
                     <div className="mt-2">
                       <label className="block text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Detalles para el PDF (Opcional)</label>
-                      <input 
-                        type="text" 
-                        value={concept.details || ""} 
-                        onChange={e => updateConcept(concept.id, 'details', e.target.value)}
+                      <AutocompleteInput
+                        suggestions={suggestions.conceptDetails}
+                        value={concept.details || ""}
+                        onChange={val => updateConcept(concept.id, 'details', val)}
                         placeholder="Ej. Acabado brillante, medidas especiales..." 
                         className="w-full text-[10px] border-gray-200 rounded-lg px-3 py-1.5 bg-gray-100/50 focus:bg-white focus:ring-1 focus:ring-red-600/20 transition-all outline-none"
                       />

@@ -1434,6 +1434,13 @@ async function runAIAgentResponse(contactId: string) {
         } else if (call.name === 'notificar_solicitud_cotizacion') {
           const args = call.args as any;
 
+          // ¿El cliente ya mandó su archivo (documento) en el chat? Sin archivo solo se cotiza el material.
+          // Se mira el chat real y no lo que dijo el modelo ("ahorita te lo mando" no cuenta). Una foto tampoco
+          // cuenta: puede ser del producto, y el error cae del lado seguro (borrador parcial que el admin completa).
+          const archivoRecibido = (await prisma.whatsAppMessage.count({
+            where: { contactId: contact.id, direction: 'INBOUND', type: 'DOCUMENT' },
+          })) > 0;
+
           // 1. Invocar a El Chalán de forma modular (con catálogos y Pinecone)
           const chalanResult = await executeChalanEstimate(
             {
@@ -1444,6 +1451,7 @@ async function runAIAgentResponse(contactId: string) {
               alto_cm: args.alto_cm,
               cantidad: args.cantidad,
               diseno_incluido: args.diseno_incluido,
+              archivo_recibido: archivoRecibido,
               // La cotización no espera al nombre: si el cliente no lo dio, va el de su perfil de WhatsApp.
               nombre_cliente: args.nombre_cliente || contact.name || '',
               correo_cliente: args.correo_cliente,

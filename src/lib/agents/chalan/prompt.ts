@@ -6,6 +6,8 @@ export interface ChalanEstimateInput {
   alto_cm: number;
   cantidad: number;
   diseno_incluido: boolean;
+  /** El cliente ya mandó su archivo (documento) en el chat. Sin archivo solo se cotiza el material. */
+  archivo_recibido?: boolean;
   nombre_cliente?: string;
   correo_cliente?: string;
   tipo_concepto?: string;

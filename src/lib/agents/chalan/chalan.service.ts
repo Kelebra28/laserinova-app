@@ -25,6 +25,8 @@ export interface ChalanPricing {
   widthCm: number;
   heightCm: number;
   timeMinPerPiece: number;
+  /** Sin archivo del cliente: solo material (rectángulo completo + merma) con margen; falta sumar corte/grabado. */
+  materialOnly?: boolean;
   /** Precio de venta sin IVA por todas las piezas. */
   subtotal: number;
   /** Costo real (material + máquina) de todas las piezas. */
@@ -128,7 +130,10 @@ export async function executeChalanEstimate(
 
   // 6. Costos con la fórmula del CRM (determinista), solo para corte/grabado
   const tipo = input.tipo_concepto === "REVENTA" ? "RESALE" : (input.tipo_concepto || "CORTE");
-  const canCalculate = (tipo === "CORTE" || tipo === "GRABADO") && !!material && !!estimatedTimeMin
+  // Sin archivo del cliente (o sin tiempo estimado) solo se cotiza el material: corte y grabado son por
+  // tiempo y dependen del archivo, así que el administrador los suma cuando llegue.
+  const materialOnly = !input.archivo_recibido || !estimatedTimeMin;
+  const canCalculate = (tipo === "CORTE" || tipo === "GRABADO") && !!material
     && input.ancho_cm > 0 && input.alto_cm > 0 && input.cantidad > 0;
 
   const lines: string[] = [];
@@ -148,7 +153,7 @@ export async function executeChalanEstimate(
       },
       partWidth: input.ancho_cm,
       partHeight: input.alto_cm,
-      timeMin: Number(estimatedTimeMin),
+      timeMin: materialOnly ? 0 : Number(estimatedTimeMin),
     }, globals);
 
     const sinPrecioMaterial = r.materialCost === 0;
@@ -159,7 +164,8 @@ export async function executeChalanEstimate(
         quantity: input.cantidad,
         widthCm: input.ancho_cm,
         heightCm: input.alto_cm,
-        timeMinPerPiece: Number(estimatedTimeMin),
+        timeMinPerPiece: materialOnly ? 0 : Number(estimatedTimeMin),
+        materialOnly,
         subtotal: r.suggestedPrice,
         realCost: r.realCost,
         marginPct: globals.margen_default,
@@ -168,13 +174,16 @@ export async function executeChalanEstimate(
     }
     lines.push(
       "",
+      materialOnly ? "⚠️ SOLO MATERIAL: sin archivo del cliente no se calculó corte/grabado (son por tiempo). Súmalo cuando llegue el archivo." : "",
       `Material: ${material.name.trim()}`,
-      `Área por pieza: ${(input.ancho_cm * input.alto_cm).toLocaleString("es-MX")} cm² x ${input.cantidad} pzas`,
-      `Tiempo de máquina: ${estimatedTimeMin} min por pieza (${(Number(estimatedTimeMin) * input.cantidad).toLocaleString("es-MX")} min en total)`,
-      `Costo de material (con transporte y merma): ${money(r.materialCost)}${sinPrecioMaterial ? " ⚠️ este material no tiene precio de lámina en el catálogo" : ""}`,
-      `Costo de producción (máquina): ${money(r.productionCost)}`,
+      `Rectángulo por pieza: ${input.ancho_cm} × ${input.alto_cm} cm = ${(input.ancho_cm * input.alto_cm).toLocaleString("es-MX")} cm² x ${input.cantidad} pzas`,
+      ...(materialOnly
+        ? [`Tiempo de máquina sugerido (no incluido): ${estimatedTimeMin || "sin estimar"} min por pieza`]
+        : [`Tiempo de máquina: ${estimatedTimeMin} min por pieza (${(Number(estimatedTimeMin) * input.cantidad).toLocaleString("es-MX")} min en total)`]),
+      `Costo de material (rectángulo con transporte y merma): ${money(r.materialCost)}${sinPrecioMaterial ? " ⚠️ este material no tiene precio de lámina en el catálogo" : ""}`,
+      ...(materialOnly ? [] : [`Costo de producción (máquina): ${money(r.productionCost)}`]),
       `Costo real total: ${money(r.realCost)}`,
-      `Precio de referencia menudeo (margen ${globals.margen_default}%, sin IVA): ${money(r.suggestedPrice)}`,
+      `Precio de referencia menudeo${materialOnly ? " (solo material)" : ""} (margen ${globals.margen_default}%, sin IVA): ${money(r.suggestedPrice)}`,
     );
   } else {
     lines.push(
@@ -183,7 +192,7 @@ export async function executeChalanEstimate(
         ? `Concepto tipo ${tipo}: no hay cálculo automático, hay que cotizarlo a mano.`
         : !material
           ? "No pude identificar el material en el catálogo: hay que elegirlo y cotizar a mano."
-          : "No pude estimar el tiempo de máquina: hay que cotizar a mano.",
+          : "No pude calcular el material: hay que cotizar a mano.",
     );
     if (estimatedTimeMin) lines.push(`Tiempo de máquina estimado: ${estimatedTimeMin} min por pieza`);
   }
