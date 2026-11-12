@@ -10,6 +10,8 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { decrypt } from '@/lib/encryption';
 import { saveEmailToDisk } from '@/lib/emailStorage';
+import { waLink } from '@/lib/phone';
+import { DEFAULT_EMAIL_SIGNATURE } from '@/constants/company';
 
 export async function POST(req: Request) {
   try {
@@ -57,11 +59,11 @@ export async function POST(req: Request) {
     const text = data.get('text') as string;
 
     // Read customized signature inputs from frontend request BEFORE creating smtpFrom
-    const sigName = data.get('sigName') as string || 'Ricardo Basurto';
-    const sigTitle = data.get('sigTitle') as string || 'Director General';
-    const sigPhone = data.get('sigPhone') as string || '+52 1 55 1234 5678';
-    const sigEmail = data.get('sigEmail') as string || smtpUser;
-    const sigWeb = data.get('sigWeb') as string || 'www.laserinova.com';
+    const sigName = data.get('sigName') as string || DEFAULT_EMAIL_SIGNATURE.name;
+    const sigTitle = data.get('sigTitle') as string || DEFAULT_EMAIL_SIGNATURE.title;
+    const sigPhone = data.get('sigPhone') as string || DEFAULT_EMAIL_SIGNATURE.phone;
+    const sigEmail = data.get('sigEmail') as string || DEFAULT_EMAIL_SIGNATURE.email;
+    const sigWeb = data.get('sigWeb') as string || DEFAULT_EMAIL_SIGNATURE.web;
 
     const smtpFrom = `"${sigName}" <${smtpUser}>`;
 
@@ -104,7 +106,6 @@ export async function POST(req: Request) {
       }
     }
 
-    const cleanPhone = sigPhone.replace(/\D/g, ''); // Extract only digits for whatsapp deep-link
 
     const signatureHtml = `
       <br><br>
@@ -123,7 +124,7 @@ export async function POST(req: Request) {
           <td style="vertical-align: middle; padding-left: 15px;">
             <div style="margin-bottom: 4px;">
               <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">WhatsApp:</span> 
-              <a href="https://wa.me/${cleanPhone}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${sigPhone}</a>
+              <a href="${waLink(sigPhone)}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${sigPhone}</a>
             </div>
             <div style="margin-bottom: 4px;">
               <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">Email:</span> 

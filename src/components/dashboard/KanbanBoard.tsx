@@ -7,23 +7,7 @@ import MenuSelect from "@/components/ui/MenuSelect";
 import Link from "next/link";
 import { Package, CheckSquare } from "lucide-react";
 import { updateQuoteStatusAction } from "@/server/actions/quote.actions";
-
-const statusLabels: Record<string, string> = {
-  DRAFT: "Borrador",
-  CALCULATED: "Calculada",
-  SENT: "Enviada",
-  APPROVED: "Aprobada",
-  REJECTED: "Rechazada",
-  IN_PRODUCTION: "Producción",
-  DELIVERED: "Entregada",
-  CANCELLED: "Cancelada",
-};
-
-const paymentLabels: Record<string, string> = {
-  PENDING: "Por cobrar",
-  PARTIAL: "Adelanto",
-  PAID: "Pagado",
-};
+import { quoteStatusStyle, paymentStatusStyle } from "@/constants/quote-status";
 
 export default function KanbanBoard({ 
   initialQuotes, 
@@ -247,12 +231,12 @@ function TaskCard({ quote, columns, onMove }: { quote: any; columns: any[]; onMo
       
       <div className="flex flex-wrap gap-1.5 mb-4">
         <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">
-          {statusLabels[quote.status]}
+          {quoteStatusStyle(quote.status).label}
         </span>
         <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wide ${
           quote.paymentStatus === "PAID" ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-amber-50 text-amber-600 border border-amber-100"
         }`}>
-          {paymentLabels[quote.paymentStatus || "PENDING"]}
+          {paymentStatusStyle(quote.paymentStatus).label}
         </span>
       </div>
 

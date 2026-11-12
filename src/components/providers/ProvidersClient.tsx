@@ -9,6 +9,7 @@ import { ProviderInput, createProviderAction, updateProviderAction, deleteProvid
 import toast from "react-hot-toast";
 import ProviderDrawer from "./ProviderDrawer";
 import CredentialViewer from "./CredentialViewer";
+import { waLink } from "@/lib/phone";
 
 interface ProvidersClientProps {
   initialProviders: any[];
@@ -97,9 +98,8 @@ export default function ProvidersClient({ initialProviders }: ProvidersClientPro
 
   // Helper to format WhatsApp API links
   const getWhatsAppLink = (phone: string, contactName: string) => {
-    const cleanPhone = phone.replace(/\D/g, "");
     const message = `Hola ${contactName}, te escribo de parte de Laser Inova para consultar sobre un pedido / cotización.`;
-    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    return waLink(phone, message);
   };
 
   return (

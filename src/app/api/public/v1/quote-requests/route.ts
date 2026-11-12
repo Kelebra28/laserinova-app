@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { colorLabel, guardPublicApi, modelForSlug, publicCategorySlugs } from "@/lib/public-api";
+import { digitsOnly } from "@/lib/phone";
 
 /**
  * Solicitud de cotización desde la tienda web (carrito → "Solicitar cotización").
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
   const phone = str(body.phone, 30).replace(/[^\d+()\-\s.]/g, "");
   const notes = str(body.notes, 600);
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const phoneOk = phone.replace(/\D/g, "").length >= 8;
+  const phoneOk = digitsOnly(phone).length >= 8;
   const rawItems = Array.isArray(body.items) ? body.items : [];
   if (!name || (!emailOk && !phoneOk) || rawItems.length < 1 || rawItems.length > MAX_ITEMS) {
     return NextResponse.json({ error: "Datos inválidos" }, { status: 422 });
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
   }
 
   // Cliente (prospecto): se reutiliza si ya existe por correo o teléfono.
-  const digits = phone.replace(/\D/g, "");
+  const digits = digitsOnly(phone);
   let client = emailOk ? await prisma.client.findFirst({ where: { email, active: true } }) : null;
   if (!client && phoneOk) client = await prisma.client.findFirst({ where: { phone: { contains: digits.slice(-10) }, active: true } });
   if (!client) {

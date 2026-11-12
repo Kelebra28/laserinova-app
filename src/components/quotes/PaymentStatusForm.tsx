@@ -13,7 +13,7 @@ interface PaymentStatusFormProps {
   totalAmount: number;
 }
 
-import { PAYMENT_STATUS_LABELS } from "@/lib/constants";
+import { PAYMENT_STATUSES, PAYMENT_STATUS } from "@/constants/quote-status";
 
 export default function PaymentStatusForm({ quoteId, currentStatus, currentAmount, totalAmount }: PaymentStatusFormProps) {
   const [status, setStatus] = useState(currentStatus || "PENDING");
@@ -42,7 +42,7 @@ export default function PaymentStatusForm({ quoteId, currentStatus, currentAmoun
         <div>
           <Select
             label="Estatus de Cobro"
-            options={Object.entries(PAYMENT_STATUS_LABELS).map(([key, label]) => ({ value: key, label }))}
+            options={PAYMENT_STATUSES.map((key) => ({ value: key, label: PAYMENT_STATUS[key].label }))}
             value={status}
             onChange={handleStatusChange}
           />

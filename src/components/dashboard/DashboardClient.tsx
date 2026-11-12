@@ -27,9 +27,9 @@ import {
 import { getDashboardStats } from "@/server/actions/dashboard.actions";
 import { DashboardSkeleton } from "@/components/ui/Skeleton";
 import { formatDueDate, isDatePast } from "@/lib/dates";
+import { formatCurrency } from "@/lib/format";
 
-const money = (n: number, decimals = 0) =>
-  `$${n.toLocaleString("es-MX", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+const money = (n: number, decimals = 0) => formatCurrency(n, decimals);
 
 const compact = (n: number) =>
   Math.abs(n) >= 1000 ? `$${(n / 1000).toLocaleString("es-MX", { maximumFractionDigits: 1 })}k` : `$${n}`;

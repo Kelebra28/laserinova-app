@@ -6,7 +6,8 @@ import {
   CheckCircle2, AlertCircle, ShieldCheck, User, Trash2
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { ConfirmModal } from "@/components/tasks/ConfirmModal";
+import { UserAvatar } from "@/components/ui/UserAvatar";
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
 import { createUserAction, updateUserAction, toggleUserActiveAction, deleteUserAction } from "@/app/dashboard/settings/actions";
 
 interface AppUser {
@@ -20,24 +21,6 @@ interface AppUser {
 interface Props {
   users: AppUser[];
   currentUserId: string;
-}
-
-const AVATAR_GRADIENTS = [
-  "from-red-500 to-rose-600",
-  "from-blue-500 to-indigo-600",
-  "from-emerald-500 to-teal-600",
-  "from-violet-500 to-purple-600",
-  "from-amber-500 to-orange-600",
-];
-
-function avatarGradient(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
-}
-
-function avatarInitials(name: string) {
-  return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 }
 
 // ─── Edit User Modal ──────────────────────────────────────────────────────────
@@ -83,9 +66,7 @@ function EditUserModal({
 
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${avatarGradient(user.name)} text-white text-sm font-black flex items-center justify-center`}>
-              {avatarInitials(user.name)}
-            </div>
+            <UserAvatar name={user.name} size="md" />
             <div>
               <h2 className="text-base font-black text-gray-900">Editar usuario</h2>
               <p className="text-xs text-gray-400">{user.email}</p>
@@ -355,8 +336,6 @@ export function UsersPanel({ users: initialUsers, currentUserId }: Props) {
       <div className="space-y-3">
         {users.map((user) => {
           const isMe = user.id === currentUserId;
-          const gradient = avatarGradient(user.name);
-          const initials = avatarInitials(user.name);
 
           return (
             <div
@@ -366,9 +345,7 @@ export function UsersPanel({ users: initialUsers, currentUserId }: Props) {
               }`}
             >
               {/* Avatar */}
-              <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} text-white text-sm font-black flex items-center justify-center shadow-sm flex-shrink-0`}>
-                {initials}
-              </div>
+              <UserAvatar name={user.name} size="lg" />
 
               {/* Info */}
               <div className="flex-1 min-w-0">
@@ -435,13 +412,14 @@ export function UsersPanel({ users: initialUsers, currentUserId }: Props) {
 
       {/* Modals */}
       {userToDelete && (
-        <ConfirmModal
+        <ConfirmationModal
+          isOpen
           title={`¿Eliminar a ${userToDelete.name}?`}
           message="Sus cotizaciones, proveedores y recibos pasarán a tu usuario. Esta acción no se puede deshacer."
-          confirmLabel="Sí, eliminar"
-          loading={isPending}
+          confirmText="Sí, eliminar"
+          isLoading={isPending}
           onConfirm={handleDelete}
-          onCancel={() => setUserToDelete(null)}
+          onClose={() => setUserToDelete(null)}
         />
       )}
       {editingUser && (

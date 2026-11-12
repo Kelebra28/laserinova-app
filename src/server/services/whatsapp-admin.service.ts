@@ -12,6 +12,9 @@ import {
 } from '@/server/services/whatsapp.service';
 import type { ChalanPricing } from '@/lib/agents/chalan';
 import { GLOBAL_COST_DEFAULTS } from '@/lib/pricing';
+import { SIMULATOR_NAME_MARKER } from '@/constants/whatsapp';
+import { REALTIME_EVENTS } from '@/constants/realtime';
+import { digitsOnly, last10 } from '@/lib/phone';
 
 /**
  * Bot de gestión: los administradores (ADMIN_ALERT_PHONE) le escriben al número del bot para
@@ -48,7 +51,7 @@ async function replyToAdmin(admin: AdminContact, text: string) {
   const saved = await prisma.whatsAppMessage.create({
     data: { contactId: admin.id, messageId, direction: 'OUTBOUND', type: 'TEXT', content: text, status: 'SENT' },
   });
-  await notificationEmitter.emit('whatsapp_message', { message: saved, contact: admin }).catch(() => {});
+  await notificationEmitter.emit(REALTIME_EVENTS.whatsappMessage, { message: saved, contact: admin }).catch(() => {});
 }
 
 async function setMarker(adminId: string, kind: typeof PENDING | typeof RESOLVED, quoteId: string, auto = false) {
@@ -199,11 +202,11 @@ async function runAdminAgent(admin: AdminContact, text: string) {
 
     if (call.name === 'buscar_cliente') {
       const q = String((call.args as any).consulta || '').trim();
-      const digits = q.replace(/\D/g, '');
+      const digits = digitsOnly(q);
       const matches = await prisma.whatsAppContact.findMany({
         where: {
           id: { not: admin.id },
-          NOT: { name: { contains: 'Simulador' } },
+          NOT: { name: { contains: SIMULATOR_NAME_MARKER } },
           ...(q ? { OR: [{ name: { contains: q } }, ...(digits.length >= 4 ? [{ phone: { contains: digits } }] : [])] } : {}),
         },
         orderBy: { updatedAt: 'desc' },
@@ -301,7 +304,7 @@ async function discardPendingFor(adminId: string, contactId: string) {
 async function getAdminContacts() {
   const tails = (process.env.ADMIN_ALERT_PHONE || '')
     .split(',')
-    .map(p => p.replace(/\D/g, '').slice(-10))
+    .map(p => last10(p))
     .filter(p => p.length === 10);
   if (!tails.length) return [];
   return prisma.whatsAppContact.findMany({ where: { OR: tails.map(t => ({ phone: { endsWith: t } })) } });
@@ -374,7 +377,7 @@ export async function proposeAutoDraft(params: {
     const saved = await prisma.whatsAppMessage.create({
       data: { contactId: a.id, messageId: `admin_draft_${Date.now()}_${a.id.slice(-4)}`, direction: 'OUTBOUND', type: 'TEXT', content: text, status: 'SENT' },
     });
-    await notificationEmitter.emit('whatsapp_message', { message: saved, contact: a }).catch(() => {});
+    await notificationEmitter.emit(REALTIME_EVENTS.whatsappMessage, { message: saved, contact: a }).catch(() => {});
   }
   await notifyAdmin(text, params.chatPath);
   return { quoteId, folio: quote.folio };

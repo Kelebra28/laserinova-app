@@ -1,17 +1,5 @@
 /**
- * Funciones de formato de moneda y números para toda la aplicación
+ * Los formatos viven en src/lib/format.ts (son funciones, no constantes).
+ * Se re-exportan aquí para no romper los imports existentes de "@/constants" y "@/lib/constants".
  */
-
-export function formatNumber(val: number | string | null | undefined): string {
-  if (val === null || val === undefined || val === "") return "0";
-  const num = typeof val === "string" ? parseFloat(val) : val;
-  if (isNaN(num)) return "0";
-  return num.toLocaleString("es-MX");
-}
-
-export function formatCurrency(val: number | string | null | undefined): string {
-  if (val === null || val === undefined || val === "") return "$0.00";
-  const num = typeof val === "string" ? parseFloat(val) : val;
-  if (isNaN(num)) return "$0.00";
-  return `$${num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+export { formatNumber, formatCurrency } from "@/lib/format";

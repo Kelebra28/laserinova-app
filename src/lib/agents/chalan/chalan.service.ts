@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
 import { calculateConcept, GlobalCosts, buildGlobalCosts, resolveProductUnitPrice, modelCostKey } from "@/lib/pricing";
 import { getCostConfigMap, getModelMaxCostMap } from "@/lib/pricing/server";
+import { encodeQuoteDraft } from "@/lib/whatsapp/internal-message";
 import { ChalanEstimateInput, ChalanContext, getChalanPrompt } from "./prompt";
 import { getWorkshopRulesFromPinecone } from "./knowledge-base";
 
@@ -204,7 +205,7 @@ export async function executeChalanEstimate(
     type: tipo,
     description: input.descripcion_concepto || "",
   };
-  const quotePayload = `|||${encodeURIComponent(JSON.stringify(quoteData))}|||`;
+  const quotePayload = encodeQuoteDraft(quoteData);
 
   // 8. Alerta de WhatsApp para el administrador
   const adminAlertMsg = `🚨 *Nueva Solicitud de Cotización* 🚨

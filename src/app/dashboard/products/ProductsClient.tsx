@@ -13,6 +13,7 @@ import {
 } from "@/server/actions/promoopcion.actions";
 
 import { PRODUCT_PROVIDERS } from "@/constants";
+import { PRODUCT_IMAGE_PLACEHOLDER } from "@/constants/urls";
 
 interface ProductsClientProps {
   initialProducts: any[];
@@ -303,7 +304,7 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
                       <img 
                         src={mainProduct.image} 
                         alt={mainProduct.name} 
-                        onError={(e) => { e.currentTarget.src = "https://via.placeholder.com/400x300?text=Imagen+No+Disponible" }}
+                        onError={(e) => { e.currentTarget.src = PRODUCT_IMAGE_PLACEHOLDER }}
                         className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-700 ease-out"
                       />
                     ) : (

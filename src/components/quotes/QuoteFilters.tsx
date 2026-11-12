@@ -4,6 +4,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 import Select from "@/components/ui/Select";
 import SearchInput from "@/components/ui/SearchInput";
+import { QUOTE_STATUSES, QUOTE_STATUS } from "@/constants/quote-status";
 
 interface Client {
   id: string;
@@ -72,14 +73,7 @@ export default function QuoteFilters({ clients, defaultMonth, searchTerm, onSear
 
   const statusOptions = [
     { value: "all", label: "Todos los estatus" },
-    { value: "DRAFT", label: "Borrador" },
-    { value: "CALCULATED", label: "Calculada" },
-    { value: "SENT", label: "Enviada" },
-    { value: "APPROVED", label: "Aprobada" },
-    { value: "REJECTED", label: "Rechazada" },
-    { value: "IN_PRODUCTION", label: "En Producción" },
-    { value: "DELIVERED", label: "Entregada" },
-    { value: "CANCELLED", label: "Cancelada" },
+    ...QUOTE_STATUSES.map((value) => ({ value, label: QUOTE_STATUS[value].label })),
   ];
 
   const currentMonth = searchParams.get("month") ?? defaultMonth;

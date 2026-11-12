@@ -4,6 +4,9 @@ import { useState, useRef } from "react";
 import { Download, RefreshCw, Smartphone, Globe } from "lucide-react";
 import * as htmlToImage from "html-to-image";
 import toast from "react-hot-toast";
+import { COMPANY } from "@/constants/company";
+import { qrCodeUrl } from "@/constants/urls";
+import { waLink } from "@/lib/phone";
 
 export default function LabelGeneratorClient() {
   const [labelMode, setLabelMode] = useState<"digital" | "manual">("digital");
@@ -44,8 +47,8 @@ export default function LabelGeneratorClient() {
     setIncludeManualNotes(true);
   };
 
-  const webUrl = "https://www.laserinova.com/";
-  const whatsappUrl = "https://wa.me/525579398727";
+  const webUrl = COMPANY.website;
+  const whatsappUrl = waLink(COMPANY.whatsappNumber);
 
   return (
     <div className="flex flex-col lg:flex-row gap-8">
@@ -237,7 +240,7 @@ export default function LabelGeneratorClient() {
                 <div className="flex flex-col items-center gap-1">
                   <div className="bg-white p-1 rounded-lg shadow-sm w-16 h-16 flex items-center justify-center">
                     <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(webUrl)}&margin=0`} 
+                      src={qrCodeUrl(webUrl)} 
                       alt="Web QR" 
                       className="w-full h-full"
                       crossOrigin="anonymous"
@@ -251,7 +254,7 @@ export default function LabelGeneratorClient() {
                 <div className="flex flex-col items-center gap-1">
                   <div className="bg-white p-1 rounded-lg shadow-sm w-16 h-16 flex items-center justify-center">
                     <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(whatsappUrl)}&margin=0`} 
+                      src={qrCodeUrl(whatsappUrl)} 
                       alt="WhatsApp QR" 
                       className="w-full h-full"
                       crossOrigin="anonymous"

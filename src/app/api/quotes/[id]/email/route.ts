@@ -10,6 +10,8 @@ import path from "path";
 import fs from "fs";
 import { saveEmailToDisk } from '@/lib/emailStorage';
 import { revalidatePath } from "next/cache";
+import { waLink } from "@/lib/phone";
+import { DEFAULT_EMAIL_SIGNATURE } from "@/constants/company";
 
 export async function POST(
   request: Request,
@@ -128,13 +130,12 @@ export async function POST(
     ];
 
     // Signature logic
-    const signatureName = sigName || dbUser?.name || 'Ricardo Basurto';
+    const signatureName = sigName || dbUser?.name || DEFAULT_EMAIL_SIGNATURE.name;
     const smtpFrom = `"${signatureName}" <${smtpUser}>`;
-    const signatureTitle = sigTitle || 'Director General';
-    const signaturePhone = sigPhone || '+52 1 55 1234 5678';
-    const signatureWeb = sigWeb || 'www.laserinova.com';
-    const signatureEmail = sigEmail || smtpUser;
-    const cleanPhone = signaturePhone.replace(/\D/g, '');
+    const signatureTitle = sigTitle || DEFAULT_EMAIL_SIGNATURE.title;
+    const signaturePhone = sigPhone || DEFAULT_EMAIL_SIGNATURE.phone;
+    const signatureWeb = sigWeb || DEFAULT_EMAIL_SIGNATURE.web;
+    const signatureEmail = sigEmail || DEFAULT_EMAIL_SIGNATURE.email;
 
     // Attach signature image inline
     const isMock = process.env.EMAIL_MOCK === 'true';
@@ -170,7 +171,7 @@ export async function POST(
           <td style="vertical-align: middle; padding-left: 15px;">
             <div style="margin-bottom: 4px;">
               <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">WhatsApp:</span> 
-              <a href="https://wa.me/${cleanPhone}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${signaturePhone}</a>
+              <a href="${waLink(signaturePhone)}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${signaturePhone}</a>
             </div>
             <div style="margin-bottom: 4px;">
               <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">Email:</span> 

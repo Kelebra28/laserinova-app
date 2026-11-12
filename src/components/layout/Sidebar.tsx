@@ -23,34 +23,39 @@ import {
   Bot,
   MessageCircle,
   BrainCircuit,
-  Database
+  Database,
+  type LucideIcon,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
  
-const menuItems = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permKey: "dashboard" },
-  { name: "Chats", href: "/dashboard/chats", icon: MessageCircle, permKey: "chats" },
-  { name: "Agente IA", href: "/dashboard/agent", icon: Bot, permKey: "agent" },
-  { name: "Cerebro IA", href: "/dashboard/agent/knowledge", icon: BrainCircuit, permKey: "agent", adminOnly: true },
-  { name: "Correo", href: "/dashboard/email", icon: Mail, permKey: "email" },
-  { name: "Cotizaciones", href: "/dashboard/quotes", icon: FileText, permKey: "quotes" },
-  { name: "Recibos", href: "/dashboard/receipts", icon: Receipt, permKey: "receipts" },
-  { name: "Tareas", href: "/dashboard/tasks", icon: CheckSquare, permKey: "tasks" },
-  { name: "Clientes", href: "/dashboard/clients", icon: Users, permKey: "clients" },
-  { name: "Proveedores", href: "/dashboard/providers", icon: Building2, permKey: "providers" },
-  { name: "Cobranza", href: "/dashboard/payment-requests", icon: Banknote, permKey: "payment_requests" },
-  { name: "Finanzas", href: "/dashboard/finance", icon: DollarSign, permKey: "finance", adminOnly: true },
-  { name: "Inventario", href: "/dashboard/inventory", icon: Box, permKey: "inventory" },
-  { name: "Productos", href: "/dashboard/products", icon: Package, permKey: "products" },
-  { name: "Materiales", href: "/dashboard/materials", icon: Package, permKey: "materials" },
-  { name: "Procesos", href: "/dashboard/processes", icon: Cpu, permKey: "processes" },
-  { name: "Etiquetas", href: "/dashboard/labels", icon: Printer, permKey: "labels" },
-  { name: "Encuestas", href: "/dashboard/surveys", icon: Star, permKey: "surveys", adminOnly: true },
-  { name: "Reportes", href: "/dashboard/reports", icon: PieChart, permKey: "reports" },
-  { name: "Datos & Analytics", href: "/dashboard/data-analytics", icon: Database, permKey: "reports" },
-  { name: "Usuarios", href: "/dashboard/users", icon: Users, adminOnly: true },
-  { name: "Configuración", href: "/dashboard/settings", icon: Settings, adminOnly: true },
-];
+import { NAV_ROUTES, isNavActive } from "@/constants/navigation";
+import { canAccessRoute, isAdminRole, parsePermissions } from "@/lib/permissions";
+
+// Íconos del menú por ruta; rutas, etiquetas y permisos salen de constants/navigation.
+const NAV_ICONS: Record<string, LucideIcon> = {
+  "/dashboard": LayoutDashboard,
+  "/dashboard/chats": MessageCircle,
+  "/dashboard/agent": Bot,
+  "/dashboard/agent/knowledge": BrainCircuit,
+  "/dashboard/email": Mail,
+  "/dashboard/quotes": FileText,
+  "/dashboard/receipts": Receipt,
+  "/dashboard/tasks": CheckSquare,
+  "/dashboard/clients": Users,
+  "/dashboard/providers": Building2,
+  "/dashboard/payment-requests": Banknote,
+  "/dashboard/finance": DollarSign,
+  "/dashboard/inventory": Box,
+  "/dashboard/products": Package,
+  "/dashboard/materials": Package,
+  "/dashboard/processes": Cpu,
+  "/dashboard/labels": Printer,
+  "/dashboard/surveys": Star,
+  "/dashboard/reports": PieChart,
+  "/dashboard/data-analytics": Database,
+  "/dashboard/users": Users,
+  "/dashboard/settings": Settings,
+};
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -60,8 +65,9 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { data: session, status } = useSession();
-  const userRole = String((session?.user as any)?.role || "").toUpperCase();
-  const isAdmin = userRole === "ADMIN" || userRole === "SUPERADMIN";
+  const user = session?.user as { role?: string; permissions?: unknown } | undefined;
+  const isAdmin = isAdminRole(user?.role);
+  const permissions = parsePermissions(user?.permissions);
 
   return (
     <>
@@ -104,24 +110,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             paddingBottom: "120px"
           }}
         >
-          {status === "loading" ? null : menuItems.map((item) => {
-            if (item.adminOnly && !isAdmin) return null;
-            
-            if (!isAdmin && item.permKey) {
-              let permissions = (session?.user as any)?.permissions || {};
-              if (typeof permissions === 'string') {
-                try { permissions = JSON.parse(permissions); } catch(e) {}
-              }
-              if (permissions[item.permKey] === false) return null; // Ocultar si está explícitamente denegado
-            }
-            
-            const isActive = (item.href === "/dashboard" || item.href === "/dashboard/agent")
-              ? pathname === item.href 
-              : pathname === item.href || pathname.startsWith(item.href + "/");
+          {status === "loading" ? null : NAV_ROUTES.map((item) => {
+            if (!canAccessRoute(item, isAdmin, permissions)) return null;
+            const Icon = NAV_ICONS[item.href] ?? LayoutDashboard;
+            const isActive = isNavActive(item, pathname);
 
             return (
               <Link
-                key={item.name}
+                key={item.href}
                 href={item.href}
                 prefetch={false}
                 onClick={() => onClose?.()}
@@ -134,13 +130,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 `}
               >
                 {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-red-500" />}
-                <item.icon
+                <Icon
                   className={`mr-3 h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${
                     isActive ? "text-red-400" : "text-zinc-500 group-hover:text-zinc-300"
                   }`}
                   aria-hidden="true"
                 />
-                <span>{item.name}</span>
+                <span>{item.label}</span>
               </Link>
             );
           })}

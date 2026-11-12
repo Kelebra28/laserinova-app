@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
-import { Calculator, Save, Plus, Trash2, Info, DollarSign, Check, Loader2 } from "lucide-react";
-import { calculateConcept, calculateQuoteTotals, ivaPct, FORMULA_CONCEPT_TYPES, CalculationInput, GlobalCosts, MaterialData, resolveProductUnitPrice, maxCostOfModel } from "@/lib/pricing";
+import { useState, useRef, useEffect } from "react";
+import { Calculator, Save, Trash2, DollarSign, Check, Loader2 } from "lucide-react";
+import { calculateConcept, resolveProductUnitPrice, maxCostOfModel, type GlobalCosts } from "@/lib/pricing";
 import { createQuoteAction } from "@/server/actions/quote.actions";
 import MaterialSelector from "@/components/quotes/MaterialSelector";
 import ClientSelector from "@/components/quotes/ClientSelector";
@@ -13,6 +13,7 @@ import { AutocompleteInput } from "@/components/ui/AutocompleteInput";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import CalculationAudit from "@/components/quotes/CalculationAudit";
+import { useQuoteConcepts } from "@/components/quotes/quote-form/useQuoteConcepts";
 import { ProductCombobox } from "@/components/quotes/ProductCombobox";
 
 
@@ -69,7 +70,13 @@ export default function NewQuoteForm({ clients, materials, products = [], global
     }
   };
 
-  const [concepts, setConcepts] = useState<any[]>([]);
+  const {
+    concepts, setConcepts, addConcept, removeConcept, selectProductForConcept, clearProductForConcept, updateConcept, repriceAll,
+    totals: { subtotal, iva, total, costoReal, utilidad },
+  } = useQuoteConcepts({
+    initialConcepts: [],
+    materials, products, globalCosts, margin, isWholesale, taxable, setImages,
+  });
 
   useEffect(() => {
     if (initialData) {
@@ -213,293 +220,6 @@ export default function NewQuoteForm({ clients, materials, products = [], global
       }
     }
   }, [initialData]);
-
-  const addConcept = (type: "CORTE" | "GRABADO" | "IMPRESION" | "PRODUCTO" | "OTRO" | "RESALE" | "SERVICIO_SITIO") => {
-    setConcepts([
-      ...concepts,
-      {
-        id: crypto.randomUUID(),
-        type,
-        description: "",
-        quantity: 1,
-        materialId: "",
-        productId: null,
-        productImage: null,
-        clientProvidesMaterial: false,
-        partWidth: "",
-        partHeight: "",
-        timeMin: "",
-        manualUnitPrice: "",
-        manualUnitCost: "",
-        // Resultados calculados
-        materialCost: 0,
-        productionCost: 0,
-        realCost: 0,
-        suggestedPrice: 0,
-        totalAmount: 0,
-        details: "",
-        serviceDays: "",
-        serviceHours: "",
-        operatorCost: "",
-        transportCost: "",
-        installCost: "",
-        laserUseCost: "",
-        consumablesCost: "",
-        viaticsCost: "",
-        margin: "",
-      }
-    ]);
-  };
-
-  const removeConcept = (id: string) => {
-    const targetConcept = concepts.find(c => c.id === id);
-    const oldProductImage = targetConcept?.productImage;
-
-    if (oldProductImage) {
-      setImages(prev => {
-        const isUsedByOther = concepts.some(c => c.id !== id && c.productImage === oldProductImage);
-        if (!isUsedByOther) {
-          return prev.filter(img => img !== oldProductImage);
-        }
-        return prev;
-      });
-    }
-
-    setConcepts(concepts.filter(c => c.id !== id));
-  };
-
-  const selectProductForConcept = (conceptId: string, product: any) => {
-    // 1. Obtener imagen anterior del concepto antes de actualizarlo
-    const currentConcept = concepts.find(c => c.id === conceptId);
-    const oldProductImage = currentConcept?.productImage || null;
-    const newProductImage = product.image || null;
-
-    // 2. Gestionar imágenes sin duplicados y reemplazando la del producto anterior
-    setImages(prev => {
-      let next = [...prev];
-      const isUsedByOther = concepts.some(c => c.id !== conceptId && c.productImage === oldProductImage);
-      if (oldProductImage && !isUsedByOther) {
-        next = next.filter(img => img !== oldProductImage);
-      }
-      if (newProductImage && !next.includes(newProductImage)) {
-        next.push(newProductImage);
-      }
-      return next;
-    });
-
-    // 3. Actualizar el concepto con el nuevo producto
-    setConcepts(prevConcepts => prevConcepts.map(c => {
-      if (c.id === conceptId) {
-        const qty = Number(c.quantity) || 1;
-        // Precio por escalas de cantidad (o precio manual del producto si lo tiene)
-        const resolved = resolveProductUnitPrice(product, qty, globalCosts, maxCostOfModel(product, products));
-        const unitCost = resolved.unitCost;
-        const suggestedSalePrice = resolved.unitPrice;
-        const finalUnitPrice = suggestedSalePrice;
-        const totalAmount = finalUnitPrice * qty;
-        const realCost = unitCost * qty;
-        const suggestedPrice = suggestedSalePrice * qty;
-
-        const cleanDesc = product.model ? product.name.split(product.model)[0].trim() : product.name;
-
-        return {
-          ...c,
-          productId: product.id,
-          productImage: newProductImage,
-          description: cleanDesc,
-          manualUnitPrice: suggestedSalePrice,
-          manualUnitCost: unitCost,
-          finalUnitPrice: finalUnitPrice,
-          totalAmount: totalAmount,
-          calculated: {
-            materialBaseCost: realCost,
-            materialWastageCost: 0,
-            materialCost: realCost,
-            productionCost: 0,
-            realCost: realCost,
-            suggestedPrice: suggestedPrice,
-            finalUnitPrice: finalUnitPrice,
-            totalAmount: totalAmount,
-            utility: totalAmount - realCost
-          }
-        };
-      }
-      return c;
-    }));
-  };
-
-  const clearProductForConcept = (conceptId: string) => {
-    const currentConcept = concepts.find(c => c.id === conceptId);
-    const oldProductImage = currentConcept?.productImage || null;
-
-    if (oldProductImage) {
-      setImages(prev => {
-        const isUsedByOther = concepts.some(c => c.id !== conceptId && c.productImage === oldProductImage);
-        if (!isUsedByOther) {
-          return prev.filter(img => img !== oldProductImage);
-        }
-        return prev;
-      });
-    }
-
-    setConcepts(prevConcepts => prevConcepts.map(c => {
-      if (c.id === conceptId) {
-        return {
-          ...c,
-          productId: null,
-          productImage: null,
-          manualUnitPrice: "",
-          manualUnitCost: "",
-          finalUnitPrice: 0,
-          totalAmount: 0,
-          calculated: null
-        };
-      }
-      return c;
-    }));
-  };
-
-  const updateConcept = (id: string, field: string, value: any) => {
-    setConcepts(prevConcepts => prevConcepts.map(c => {
-      if (c.id === id) {
-        const updated = { ...c, [field]: value };
-
-        // Productos de catálogo: al cambiar la cantidad se re-aplica la escala de margen
-        // (solo si el precio no fue editado a mano).
-        if (field === "quantity" && updated.productId) {
-          const prod = products.find((p: any) => p.id === updated.productId);
-          if (prod) {
-            const prev = resolveProductUnitPrice(prod, Number(c.quantity) || 1, globalCosts, maxCostOfModel(prod, products));
-            const next = resolveProductUnitPrice(prod, Number(value) || 1, globalCosts, maxCostOfModel(prod, products));
-            if (next.tiered && Math.abs((Number(c.finalUnitPrice) || 0) - prev.unitPrice) < 0.01) {
-              updated.manualUnitPrice = String(next.unitPrice);
-              updated.manualUnitCost = String(next.unitCost);
-              updated.finalUnitPrice = next.unitPrice;
-            }
-          }
-        }
-        
-        // Al cambiar parámetros de la fórmula (tiempo, ancho, material, etc.), reseteamos el precio manual para forzar recálculo
-        if (["materialId", "partWidth", "partHeight", "timeMin", "clientProvidesMaterial", "serviceDays", "serviceHours", "transportCost", "operatorCost", "installCost", "laserUseCost", "consumablesCost", "viaticsCost"].includes(field)) {
-          updated.manualUnitPrice = "";
-          updated.manualUnitCost = "";
-        }
-
-        // Auto-calcular si cambia algún valor relevante a la fórmula
-        if (["quantity", "materialId", "partWidth", "partHeight", "timeMin", "clientProvidesMaterial", "manualUnitPrice", "manualUnitCost", "serviceDays", "serviceHours", "operatorCost", "transportCost", "installCost", "laserUseCost", "consumablesCost", "viaticsCost", "margin"].includes(field)) {
-          const mat = materials.find(m => m.id === (field === "materialId" ? value : updated.materialId));
-          const result = calculateConcept(
-            {
-              type: updated.type,
-              quantity: Number(updated.quantity),
-              material: mat ? {
-                length: mat.length,
-                width: mat.width,
-                sheetPrice: mat.sheetPrice,
-                guardPercentage: mat.guardPercentage,
-                pricePerCm2: mat.pricePerCm2,
-              } : undefined,
-              partWidth: Number(updated.partWidth),
-              partHeight: Number(updated.partHeight),
-              timeMin: Number(updated.timeMin),
-              clientProvidesMaterial: updated.clientProvidesMaterial,
-              isWholesale: isWholesale,
-              manualUnitPrice: Number(updated.manualUnitPrice) || 0,
-              manualCost: Number(updated.manualUnitCost) || 0,
-              serviceDays: Number(updated.serviceDays) || 0,
-              serviceHours: Number(updated.serviceHours) || 0,
-              operatorCost: updated.operatorCost !== undefined && updated.operatorCost !== "" ? Number(updated.operatorCost) : undefined,
-              transportCost: updated.transportCost !== undefined && updated.transportCost !== "" ? Number(updated.transportCost) : undefined,
-              installCost: updated.installCost !== undefined && updated.installCost !== "" ? Number(updated.installCost) : undefined,
-              laserUseCost: updated.laserUseCost !== undefined && updated.laserUseCost !== "" ? Number(updated.laserUseCost) : undefined,
-              consumablesCost: updated.consumablesCost !== undefined && updated.consumablesCost !== "" ? Number(updated.consumablesCost) : undefined,
-              viaticsCost: updated.viaticsCost !== undefined && updated.viaticsCost !== "" ? Number(updated.viaticsCost) : undefined,
-              margin: updated.margin !== undefined && updated.margin !== "" ? Number(updated.margin) : undefined,
-            },
-            { ...globalCosts, margen_default: Number(margin) || 35 } // Usar el margen actual
-          );
-
-          const suggestedUnit = result.suggestedPrice / (Number(updated.quantity) || 1);
-          // Si cambian parámetros de la fórmula (que no sean cantidad), forzamos a actualizar el precio final
-          const isParameterChange = field !== "quantity";
-          const finalUnit = (isParameterChange || !updated.finalUnitPrice || Number(updated.finalUnitPrice) <= 0)
-            ? suggestedUnit
-            : updated.finalUnitPrice;
-          const finalUnitNum = Number(finalUnit) || 0;
-          const totalAmount = finalUnitNum * (Number(updated.quantity) || 1);
-          return { ...updated, calculated: { ...result, utility: totalAmount - result.realCost }, finalUnitPrice: finalUnit, totalAmount: totalAmount };
-        }
-        
-        // Si se cambia el precio final manualmente
-        if (field === "finalUnitPrice") {
-          const finalPrice = Number(parseFloat(value)) || 0;
-          const totalAmount = finalPrice * Number(updated.quantity || 0);
-          const utility = totalAmount - (Number(updated.calculated?.realCost) || 0);
-          return { ...updated, finalUnitPrice: finalPrice, totalAmount, calculated: { ...updated.calculated, finalUnitPrice: finalPrice, totalAmount, utility } };
-        }
-
-        return updated;
-      }
-      return c;
-    }));
-  };
-
-  const calculateAll = () => {
-    // Ya no es necesario recalcular todo porque se autocalcula en updateConcept
-  };
-
-  // Recalcular todo si cambia el margen o el tipo de venta
-  useEffect(() => {
-    if (concepts.length === 0) return;
-    setConcepts(prev => prev.map(c => {
-      const mat = materials.find(m => m.id === c.materialId);
-      const result = calculateConcept(
-        {
-          type: c.type,
-          quantity: Number(c.quantity),
-          material: mat ? {
-            length: mat.length,
-            width: mat.width,
-            sheetPrice: mat.sheetPrice,
-            guardPercentage: mat.guardPercentage,
-            pricePerCm2: mat.pricePerCm2,
-          } : undefined,
-          partWidth: Number(c.partWidth),
-          partHeight: Number(c.partHeight),
-          timeMin: Number(c.timeMin),
-          clientProvidesMaterial: c.clientProvidesMaterial,
-          isWholesale: isWholesale,
-          manualUnitPrice: Number(c.manualUnitPrice) || 0,
-          manualCost: Number(c.manualUnitCost) || 0,
-          serviceDays: Number(c.serviceDays) || 0,
-          serviceHours: Number(c.serviceHours) || 0,
-          operatorCost: c.operatorCost !== undefined && c.operatorCost !== "" ? Number(c.operatorCost) : undefined,
-          transportCost: c.transportCost !== undefined && c.transportCost !== "" ? Number(c.transportCost) : undefined,
-          installCost: c.installCost !== undefined && c.installCost !== "" ? Number(c.installCost) : undefined,
-          laserUseCost: c.laserUseCost !== undefined && c.laserUseCost !== "" ? Number(c.laserUseCost) : undefined,
-          consumablesCost: c.consumablesCost !== undefined && c.consumablesCost !== "" ? Number(c.consumablesCost) : undefined,
-          viaticsCost: c.viaticsCost !== undefined && c.viaticsCost !== "" ? Number(c.viaticsCost) : undefined,
-          margin: c.margin !== undefined && c.margin !== "" ? Number(c.margin) : undefined,
-        },
-        { ...globalCosts, margen_default: Number(margin) || 35 }
-      );
-      const suggestedUnit = result.suggestedPrice / (Number(c.quantity) || 1);
-      // Si cambia el margen global o mayoreo, actualizamos el precio final unitario de los conceptos de fórmula
-      const isFormulaType = FORMULA_CONCEPT_TYPES.includes(c.type);
-      const finalUnit = (isFormulaType || !c.finalUnitPrice || Number(c.finalUnitPrice) <= 0) ? suggestedUnit : c.finalUnitPrice;
-      const finalUnitNum = Number(finalUnit) || 0;
-      const totalAmount = finalUnitNum * (Number(c.quantity) || 1);
-      return { ...c, calculated: { ...result, utility: totalAmount - result.realCost }, finalUnitPrice: finalUnit, totalAmount: totalAmount };
-    }));
-  }, [margin, isWholesale, globalCosts, materials]);
-  // Totales — respeta el toggle de IVA
-  const { subtotal, iva, total, costoReal, utilidad } = useMemo(() => {
-    const conceptsTotal = concepts.reduce((sum, c) => sum + (Number(c.totalAmount) || 0), 0);
-    const realCost = concepts.reduce((sum, c) => sum + (Number(c.calculated?.realCost) || 0), 0);
-    return calculateQuoteTotals(conceptsTotal, realCost, { taxable, ivaPct: ivaPct(globalCosts) });
-  }, [concepts, globalCosts, isWholesale, margin, taxable]);
-
-
 
   return (
     <>
@@ -921,7 +641,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
             <div className="flex justify-center mt-4">
               <button
                 type="button"
-                onClick={calculateAll}
+                onClick={repriceAll}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
               >
                 <Calculator className="-ml-1 mr-2 h-5 w-5 text-gray-500" />

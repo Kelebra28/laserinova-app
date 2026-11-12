@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, AlertCircle, Loader2, Zap } from "lucide-react";
 
 /**
- * A dónde volver tras iniciar sesión. El middleware manda ?callbackUrl=<url> (p. ej. el link
+ * A dónde volver tras iniciar sesión. El proxy (src/proxy.ts) manda ?callbackUrl=<url> (p. ej. el link
  * del chat que llegó por notificación); solo se acepta si es del mismo sitio.
  */
 function safeCallbackPath() {

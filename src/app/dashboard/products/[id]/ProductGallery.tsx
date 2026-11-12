@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Box, ImageOff } from "lucide-react";
+import { doblevelaColorSlug, doblevelaImageUrl } from "@/constants/urls";
 
 interface ProductGalleryProps {
   mainImage: string | null;
@@ -27,8 +28,7 @@ export function ProductGallery({ mainImage, imagesJson, productName, provider, m
   // Si es Doble Vela, armar la URL del color específico
   let specificImage = null;
   if (provider === "Doble Vela" && model && color) {
-    const colorName = color.replace(/^\d+\s*-\s*/, '').replace(/\s+/g, '').toLowerCase();
-    specificImage = `https://doblevela.com/images/large/${model}_${colorName}_lrg.jpg`;
+    specificImage = doblevelaImageUrl(model, doblevelaColorSlug(color));
   }
 
   // Combinar: Primero la específica de color (si hay), luego las demás variantes, luego la genérica (mainImage), luego extras

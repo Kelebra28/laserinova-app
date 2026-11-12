@@ -21,6 +21,7 @@ import {
 import { toast } from "react-hot-toast";
 import { calculateConcept, resolveProductUnitPrice, maxCostOfModel, buildGlobalCosts, GlobalCosts } from "@/lib/pricing";
 import { getQuickQuoteDataAction } from "@/server/actions/quote.actions";
+import { waLink } from "@/lib/phone";
 
 interface MaterialItem {
   id: string;
@@ -262,9 +263,7 @@ export function QuickQuoteModal({ isOpen, onClose }: Props) {
   };
 
   const handleOpenWhatsApp = () => {
-    const encoded = encodeURIComponent(customMessage);
-    const cleanPhone = clientPhone.replace(/\D/g, "");
-    const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+    const url = waLink(clientPhone, customMessage);
     window.open(url, "_blank");
   };
 

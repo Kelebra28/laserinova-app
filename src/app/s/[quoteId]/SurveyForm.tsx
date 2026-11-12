@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Star, MessageSquare, MapPin, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import { GOOGLE_REVIEW_URL } from '@/constants/urls';
 
 export default function SurveyForm({ 
   quoteId, 
@@ -81,13 +82,14 @@ export default function SurveyForm({
               <p className="text-slate-600 font-medium">
                 Nos alegra mucho saber que tuviste una excelente experiencia con nosotros. ¡Gracias por confiar en Laser Inova!
               </p>
-              {/* 
+              {/* Se muestra solo si está configurado NEXT_PUBLIC_GOOGLE_REVIEW_URL. */}
+              {GOOGLE_REVIEW_URL && (
               <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
                 <p className="text-sm text-slate-500 mb-4">
                   Copia tu comentario y pégalo en Google Maps. ¡Nos ayuda muchísimo a crecer!
                 </p>
                 <a 
-                  href="https://g.page/r/YOUR_GOOGLE_MAPS_LINK/review" 
+                  href={GOOGLE_REVIEW_URL}
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="w-full flex items-center justify-center gap-2 bg-slate-900 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95"
@@ -96,7 +98,7 @@ export default function SurveyForm({
                   Dejar reseña en Google Maps
                 </a>
               </div>
-              */}
+              )}
             </div>
           ) : (
             <div className="mt-8">

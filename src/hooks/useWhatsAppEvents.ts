@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 import { getPusherClient } from '@/lib/pusher';
+import { REALTIME_CHANNEL, REALTIME_EVENTS } from '@/constants/realtime';
+import { isSimulatorContact } from '@/constants/whatsapp';
 
 type UseWhatsAppEventsProps = {
   onNewMessage?: (message: any) => void;
@@ -26,10 +28,10 @@ export function useWhatsAppEvents({ onNewMessage, onStatusUpdate, onContactUpdat
 
   useEffect(() => {
     const pusher = getPusherClient();
-    const channel = pusher.subscribe('crm-channel');
+    const channel = pusher.subscribe(REALTIME_CHANNEL);
 
-    channel.bind('whatsapp_message', (data: any) => {
-      const isSimulator = data?.contact?.name?.includes('(Simulador)') || data?.contact?.phone?.includes('5211058132407');
+    channel.bind(REALTIME_EVENTS.whatsappMessage, (data: any) => {
+      const isSimulator = isSimulatorContact(data?.contact);
       const isIncoming = data?.message?.direction === 'INBOUND';
       const isOutbound = data?.message?.direction === 'OUTBOUND';
 
@@ -51,26 +53,26 @@ export function useWhatsAppEvents({ onNewMessage, onStatusUpdate, onContactUpdat
       }
     });
 
-    channel.bind('whatsapp_status_update', (data: any) => {
+    channel.bind(REALTIME_EVENTS.whatsappStatusUpdate, (data: any) => {
       if (onStatusUpdateRef.current) {
         onStatusUpdateRef.current(data);
       }
     });
 
-    channel.bind('whatsapp_contact_update', (data: any) => {
+    channel.bind(REALTIME_EVENTS.whatsappContactUpdate, (data: any) => {
       if (onContactUpdateRef.current) {
         onContactUpdateRef.current(data);
       }
     });
 
-    channel.bind('whatsapp_reaction', (data: any) => {
+    channel.bind(REALTIME_EVENTS.whatsappReaction, (data: any) => {
       if (onReactionRef.current) onReactionRef.current(data);
     });
 
     // Cleanup: desuscribirse al desmontar el componente
     return () => {
       channel.unbind_all();
-      pusher.unsubscribe('crm-channel');
+      pusher.unsubscribe(REALTIME_CHANNEL);
     };
   }, []);
 }

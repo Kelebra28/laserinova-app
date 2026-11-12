@@ -15,7 +15,7 @@ export default function DashboardLayout({
   const isChatRoute = pathname?.startsWith('/dashboard/chats');
 
   return (
-    <div className={`flex min-h-screen ${isChatRoute ? 'bg-[#111b21]' : 'bg-gray-50'}`}>
+    <div className={`flex min-h-screen ${isChatRoute ? 'bg-wa-panel' : 'bg-gray-50'}`}>
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 

@@ -16,7 +16,7 @@ import {
 } from "@/app/dashboard/tasks/actions";
 import { TaskModal } from "./TaskModal";
 import { TaskDetailModal } from "./TaskDetailModal";
-import { ConfirmModal } from "./ConfirmModal";
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import MenuSelect from "@/components/ui/MenuSelect";
 import { isDatePast, formatDueDate, todayYMD } from "@/lib/dates";
@@ -970,12 +970,13 @@ export function TaskBoard({ initialTasks, olderDoneCount, users, tags, currentUs
 
       {/* ── Confirm Delete ───────────────────────────────────────────────── */}
       {confirmId && (
-        <ConfirmModal
+        <ConfirmationModal
+          isOpen
           title="¿Eliminar tarea?"
           message="Esta acción no se puede deshacer. La tarea se eliminará permanentemente."
-          confirmLabel="Sí, eliminar"
+          confirmText="Sí, eliminar"
           onConfirm={handleDeleteConfirm}
-          onCancel={() => setConfirmId(null)}
+          onClose={() => setConfirmId(null)}
         />
       )}
 

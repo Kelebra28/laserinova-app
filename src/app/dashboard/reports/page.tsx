@@ -1,28 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { FileText, TrendingUp, DollarSign, Download, CheckCircle, ArrowLeft, Calendar, Users, Package, Settings, FileSpreadsheet } from "lucide-react";
 import Link from "next/link";
-
-const statusLabels: Record<string, string> = {
-  DRAFT: "Borrador",
-  CALCULATED: "Calculada",
-  SENT: "Enviada",
-  APPROVED: "Aprobada",
-  REJECTED: "Rechazada",
-  IN_PRODUCTION: "Producción",
-  DELIVERED: "Entregada",
-  CANCELLED: "Cancelada",
-};
-
-const statusColors: Record<string, string> = {
-  DRAFT: "bg-gray-100 text-gray-600",
-  CALCULATED: "bg-blue-100 text-blue-600",
-  SENT: "bg-purple-100 text-purple-600",
-  APPROVED: "bg-green-100 text-green-600",
-  REJECTED: "bg-red-100 text-red-600",
-  IN_PRODUCTION: "bg-orange-100 text-orange-600",
-  DELIVERED: "bg-teal-100 text-teal-600",
-  CANCELLED: "bg-black text-white",
-};
+import { QuoteStatusBadge } from "@/components/quotes/QuoteStatusBadge";
 
 export const dynamic = 'force-dynamic';
 
@@ -309,9 +288,7 @@ export default async function ReportsPage(props: { searchParams: Promise<{ month
                         <p className="text-[9px] font-medium text-gray-400 uppercase tracking-tighter truncate max-w-[150px]">{quote.project}</p>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-0.5 text-[8px] font-black uppercase rounded-md tracking-tighter shadow-sm border ${statusColors[quote.status]}`}>
-                          {statusLabels[quote.status]}
-                        </span>
+                        <QuoteStatusBadge status={quote.status} size="xs" />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-[11px] font-black text-gray-900 font-mono">
                         ${quote.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}

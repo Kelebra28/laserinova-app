@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, Box, DollarSign, Tag, Info, AlertCircle } from "lucide-react";
 import { ProductGallery } from "./ProductGallery";
 import { getHexForColor, formatNumber, formatCurrency } from "@/lib/constants";
+import { doblevelaColorSlug, doblevelaImageUrl } from "@/constants/urls";
 
 interface ProductDetailClientProps {
   initialProduct: any;
@@ -35,8 +36,7 @@ export function ProductDetailClient({ initialProduct, variants, pricing = {} }: 
   // Calcular las imágenes específicas de todas las variantes
   const allVariantImages = variants.map(v => {
     if (v.provider === "Doble Vela" && v.model && v.color) {
-      const colorName = v.color.replace(/^\d+\s*-\s*/, '').replace(/\s+/g, '').toLowerCase();
-      return `https://doblevela.com/images/large/${v.model}_${colorName}_lrg.jpg`;
+      return doblevelaImageUrl(v.model, doblevelaColorSlug(v.color));
     }
     if (v.image) {
       return v.image;

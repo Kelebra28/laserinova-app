@@ -8,6 +8,7 @@ import { processIncomingMessage, processAIAgentResponse } from '@/server/service
 import { handleAdminMessage } from '@/server/services/whatsapp-admin.service';
 import { notificationEmitter } from '@/lib/notification-emitter';
 import { prisma } from '@/lib/prisma';
+import { REALTIME_EVENTS } from '@/constants/realtime';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
             if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
               pusherMessage.mediaUrl = 'FETCH_REQUIRED';
             }
-            await notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact: result.contact });
+            await notificationEmitter.emit(REALTIME_EVENTS.whatsappMessage, { message: pusherMessage, contact: result.contact });
             
             // Mensajes de un administrador: los atiende el bot de gestión (cotizar con autorización), nunca el bot de clientes.
             if (result.isAdmin) {
@@ -99,7 +100,7 @@ export async function POST(request: Request) {
               });
             }
           } else if (result.type === 'status') {
-            await notificationEmitter.emit('whatsapp_status_update', result.data);
+            await notificationEmitter.emit(REALTIME_EVENTS.whatsappStatusUpdate, result.data);
           }
         }
       }

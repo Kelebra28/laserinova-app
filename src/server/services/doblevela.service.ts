@@ -1,4 +1,5 @@
 import { CDMX_WAREHOUSES } from "@/constants";
+import { doblevelaImageUrl } from "@/constants/urls";
 
 /**
  * Políticas de uso de Doble Vela (documentación del Web Service):
@@ -50,7 +51,7 @@ export async function getDobleVelaStock(modelo: string) {
         color: item.COLOR,
         stockReal: totalStock,
         precioCosto: item.Price || 0,
-        imageUrl: `https://doblevela.com/images/large/${item.MODELO}_lrg.jpg`
+        imageUrl: doblevelaImageUrl(item.MODELO)
       };
     });
 

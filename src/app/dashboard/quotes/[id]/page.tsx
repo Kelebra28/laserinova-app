@@ -15,12 +15,8 @@ import { SendQuoteWhatsAppButton } from "@/components/quotes/SendQuoteWhatsAppBu
 import SurveyLinkButton from "@/components/quotes/SurveyLinkButton";
 import { getQuoteDetailService, getActiveClientsService } from "@/server/services/quote.service";
 
-import { 
-  QUOTE_STATUS_LABELS, 
-  QUOTE_STATUS_COLORS, 
-  PAYMENT_STATUS_LABELS, 
-  PAYMENT_STATUS_COLORS 
-} from "@/lib/constants";
+import { QUOTE_STATUS, QUOTE_STATUSES } from "@/constants/quote-status";
+import { QuoteStatusBadge, PaymentStatusBadge } from "@/components/quotes/QuoteStatusBadge";
 
 export default async function QuoteDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -65,12 +61,8 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
                 {quote.folio}
               </h1>
               <div className="flex gap-2">
-                <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm ${QUOTE_STATUS_COLORS[quote.status]}`}>
-                  {QUOTE_STATUS_LABELS[quote.status]}
-                </span>
-                <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm ${PAYMENT_STATUS_COLORS[quote.paymentStatus || "PENDING"]}`}>
-                  {PAYMENT_STATUS_LABELS[quote.paymentStatus || "PENDING"]}
-                </span>
+                <QuoteStatusBadge status={quote.status} size="md" />
+                <PaymentStatusBadge status={quote.paymentStatus} size="md" />
               </div>
             </div>
             <p className="text-sm font-medium text-gray-400 mt-0.5">{quote.project}</p>
@@ -372,14 +364,14 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
               <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">Estado del Trabajo</h3>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              {Object.entries(QUOTE_STATUS_LABELS).map(([key, label]) => (
+              {QUOTE_STATUSES.map((key) => (
                 <form key={key} action={updateQuoteStatus} className="w-full">
                   <input type="hidden" name="quoteId" value={quote.id} />
                   <input type="hidden" name="status" value={key} />
                   <StatusGridButton
-                    label={label}
+                    label={QUOTE_STATUS[key].label}
                     isActive={quote.status === key}
-                    colorClass={QUOTE_STATUS_COLORS[key]}
+                    colorClass={QUOTE_STATUS[key].chip}
                   />
                 </form>
               ))}

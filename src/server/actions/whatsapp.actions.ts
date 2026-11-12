@@ -9,6 +9,9 @@ import { notificationEmitter } from '@/lib/notification-emitter';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { executeChalanEstimate } from '@/lib/agents/chalan';
 import { revalidatePath } from 'next/cache';
+import { META_GRAPH_URL } from '@/constants/urls';
+import { SIMULATOR_CONTACT_NAME, isSimulatorContact } from '@/constants/whatsapp';
+import { REALTIME_EVENTS } from '@/constants/realtime';
 
 export async function simulateIncomingMessageAction(contactId: string, content: string) {
   try {
@@ -38,7 +41,7 @@ export async function simulateIncomingMessageAction(contactId: string, content: 
     if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
       pusherMessage.mediaUrl = 'FETCH_REQUIRED';
     }
-    await notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
+    await notificationEmitter.emit(REALTIME_EVENTS.whatsappMessage, { message: pusherMessage, contact });
 
     // Procesar con IA (debemos hacer await para que Vercel/Next.js no mate el proceso antes de que Gemini responda)
     await processAIAgentResponse(contact.id).catch(console.error);
@@ -80,7 +83,7 @@ export async function sendManualMessageAction(contactId: string, content: string
 
   // Si falló por falta de token pero estamos en entorno de prueba/local, mockeamos la respuesta
   const messageIdToSave = metaResponse?.messages?.[0]?.id || `manual_sim_${Date.now()}`;
-  const isSimulationFallback = !metaResponse && (!process.env.WHATSAPP_TOKEN || contact.name?.includes("Simulador"));
+  const isSimulationFallback = !metaResponse && (!process.env.WHATSAPP_TOKEN || isSimulatorContact(contact));
 
   if (metaResponse || isSimulationFallback) {
     const savedMessage = await prisma.whatsAppMessage.create({
@@ -99,7 +102,7 @@ export async function sendManualMessageAction(contactId: string, content: string
     if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
       pusherMessage.mediaUrl = 'FETCH_REQUIRED';
     }
-    await notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
+    await notificationEmitter.emit(REALTIME_EVENTS.whatsappMessage, { message: pusherMessage, contact });
     
     return { success: true, message: savedMessage };
   }
@@ -121,7 +124,7 @@ export async function toggleBotModeAction(contactId: string, botMode: boolean) {
   });
 
   // Emit event to update UI across all browsers
-  await notificationEmitter.emit('whatsapp_contact_update', {
+  await notificationEmitter.emit(REALTIME_EVENTS.whatsappContactUpdate, {
     contactId,
     changes: { botMode }
   });
@@ -134,7 +137,7 @@ export async function createDummyContactAction() {
   
   const dummyContact = await prisma.whatsAppContact.create({
     data: {
-      name: "Cliente de Prueba (Simulador)",
+      name: SIMULATOR_CONTACT_NAME,
       phone: "521" + Math.floor(1000000000 + Math.random() * 9000000000).toString(),
       botMode: true,
     }
@@ -185,7 +188,7 @@ export async function sendMediaMessageAction(formData: FormData) {
         metaFormData.append('type', mimeType);
         metaFormData.append('messaging_product', 'whatsapp');
 
-        const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/media`, {
+        const uploadRes = await fetch(`${META_GRAPH_URL}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/media`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`
@@ -235,7 +238,7 @@ export async function sendMediaMessageAction(formData: FormData) {
     if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
       pusherMessage.mediaUrl = 'FETCH_REQUIRED';
     }
-    await notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
+    await notificationEmitter.emit(REALTIME_EVENTS.whatsappMessage, { message: pusherMessage, contact });
 
     // 4. Si es simulador (cliente envía), procesar con IA
     if (isSimulator) {
@@ -472,7 +475,7 @@ export async function runManualEstimateAction(contactId: string, input: ManualQu
         status: 'DELIVERED',
       },
     });
-    await notificationEmitter.emit('whatsapp_message', { message, contact });
+    await notificationEmitter.emit(REALTIME_EVENTS.whatsappMessage, { message, contact });
 
     return { success: true as const, message };
   } catch (error) {

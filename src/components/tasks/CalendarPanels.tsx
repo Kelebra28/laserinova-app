@@ -2,7 +2,8 @@
 
 import { AlertTriangle, CheckCircle2, Clock, Zap, Users, TrendingUp, Shield, Brain } from "lucide-react";
 import type { CalTask, TaskTag, TaskUser, HealthResult, Recommendation } from "./CalendarTypes";
-import { STATUS_META, PRIORITY_META, avatarInitials } from "./CalendarTypes";
+import { STATUS_META, PRIORITY_META } from "./CalendarTypes";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import type { WeekMetrics } from "./CalendarEngine";
 import { urgencyScore, CAPACITY_STYLE } from "./CalendarEngine";
 import { isDatePast, formatDueDate } from "@/lib/dates";
@@ -240,9 +241,7 @@ export function TaskPanel({ task, onClose }: { task: CalTask; onClose: () => voi
           <div className="flex flex-wrap gap-1.5">
             {task.assignees.map(({user}) => (
               <div key={user.id} className="flex items-center gap-1 px-2 py-1 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="w-5 h-5 rounded-md bg-gradient-to-br from-indigo-400 to-violet-500 text-white text-[9px] font-black flex items-center justify-center">
-                  {avatarInitials(user.name)}
-                </div>
+                <UserAvatar name={user.name} size="xs" />
                 <span className="text-[11px] font-bold text-gray-700">{user.name.split(" ")[0]}</span>
               </div>
             ))}

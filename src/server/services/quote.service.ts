@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getGlobalCosts } from "@/lib/pricing/server";
+import { isQuoteStatus } from "@/constants/quote-status";
 
 export interface GetQuotesParams {
   search?: string;
@@ -231,6 +232,8 @@ export async function getQuoteEditDataService(quoteId: string) {
 }
 
 export async function updateQuoteStatusService(quoteId: string, status: string) {
+  if (!isQuoteStatus(status)) throw new Error(`Estado de cotización inválido: ${status}`);
+
   const quote = await prisma.quote.findUnique({
     where: { id: quoteId },
     include: { concepts: true }

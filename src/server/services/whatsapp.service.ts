@@ -12,6 +12,10 @@ import { sendPushToAdmins } from '@/lib/push';
 import { generateQuotePDF } from '@/lib/pdf';
 import { resolveProductUnitPrice, modelCostKey } from '@/lib/pricing';
 import { getCostConfigMap, getModelMaxCostMap } from '@/lib/pricing/server';
+import { META_GRAPH_URL, appBaseUrl, doblevelaImageUrl } from '@/constants/urls';
+import { isSimulatorContact } from '@/constants/whatsapp';
+import { REALTIME_EVENTS } from '@/constants/realtime';
+import { last10 } from '@/lib/phone';
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -22,7 +26,7 @@ export async function sendMessageToMeta(to: string, messageData: any) {
     return null;
   }
 
-  const url = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
+  const url = `${META_GRAPH_URL}/${PHONE_NUMBER_ID}/messages`;
 
   // Meta entrega los números de México como 521XXXXXXXXXX, pero la lista de destinatarios
   // (y el formato oficial actual) usa 52XXXXXXXXXX. Sin esto responde #131030.
@@ -60,7 +64,7 @@ async function uploadMediaToMeta(buffer: Buffer, filename: string, mimeType: str
   form.append('type', mimeType);
   form.append('messaging_product', 'whatsapp');
 
-  const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/media`, {
+  const uploadRes = await fetch(`${META_GRAPH_URL}/${PHONE_NUMBER_ID}/media`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
     body: form,
@@ -122,7 +126,6 @@ export async function getContactWindow(contactId: string) {
  * porque Meta entrega los números de México como 521XXXXXXXXXX y la variable suele ir como 52XXXXXXXXXX.
  */
 export function isAdminPhone(phone: string): boolean {
-  const last10 = (p: string) => p.replace(/\D/g, '').slice(-10);
   const mine = last10(phone);
   if (mine.length < 10) return false;
   return (process.env.ADMIN_ALERT_PHONE || '').split(',').map(p => last10(p.trim())).some(p => p === mine);
@@ -229,8 +232,7 @@ export async function listChatMessages(contactId: string, limit = CHAT_HISTORY_L
 
 /** Enlace que abre una cotización dentro del CRM. */
 export function quoteLink(quoteId: string) {
-  const base = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://app.laserinova.com').replace(/\/$/, '');
-  return `${base}/dashboard/quotes/${quoteId}`;
+  return `${appBaseUrl()}/dashboard/quotes/${quoteId}`;
 }
 
 /** Ruta relativa del chat (para push: abre en el mismo origen de la PWA instalada). */
@@ -240,8 +242,7 @@ function conversationPath(contactId: string) {
 
 /** Enlace que abre la conversación dentro del CRM (la PWA instalada lo captura en Android). */
 function conversationLink(contactId: string) {
-  const base = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://app.laserinova.com').replace(/\/$/, '');
-  return `${base}/dashboard/chats?c=${contactId}`;
+  return `${appBaseUrl()}/dashboard/chats?c=${contactId}`;
 }
 
 /** Resumen corto de la conversación para el aviso al administrador; si falla devuelve null. */
@@ -322,7 +323,7 @@ export async function downloadAndCompressMedia(mediaId: string): Promise<string 
     const { join } = await import('path');
     
     // 1. Obtener la URL del media
-    const urlResponse = await fetch(`https://graph.facebook.com/v19.0/${mediaId}`, {
+    const urlResponse = await fetch(`${META_GRAPH_URL}/${mediaId}`, {
       headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
     });
     const urlData = await urlResponse.json();
@@ -469,9 +470,9 @@ export async function processIncomingMessage(entry: any) {
     if (!target) return null;
 
     await prisma.whatsAppMessage.update({ where: { id: target.id }, data: { reaction: emoji } });
-    await notificationEmitter.emit('whatsapp_reaction', { id: target.id, contactId: contact.id, reaction: emoji });
+    await notificationEmitter.emit(REALTIME_EVENTS.whatsappReaction, { id: target.id, contactId: contact.id, reaction: emoji });
 
-    if (emoji && !isAdminPhone(senderPhone) && !contact.name?.includes('Simulador')) {
+    if (emoji && !isAdminPhone(senderPhone) && !isSimulatorContact(contact)) {
       const preview = target.content?.replace(/\s*\n\s*/g, ' ').slice(0, 80);
       await sendPushToAdmins({
         title: `${emoji} ${contact.name || `+${contact.phone}`}`,
@@ -529,7 +530,7 @@ export async function processIncomingMessage(entry: any) {
   });
 
   // Push a los admins: quién escribe y qué dice (el simulador y los propios admins no avisan).
-  if (!isAdmin && !contact.name?.includes('Simulador')) {
+  if (!isAdmin && !isSimulatorContact(contact)) {
     const label = { IMAGE: skipBot ? '' : '📷 Foto', AUDIO: '🎤 Audio', DOCUMENT: '📄 Documento' }[type as string];
     const preview = messageContent.replace(/\s*\n\s*/g, ' ').slice(0, 160);
     const body = label ? (preview ? `${label}: ${preview}` : label) : preview || 'Nuevo mensaje';
@@ -669,7 +670,7 @@ const BOT_FAILURE_ALERT_COOLDOWN_MS = 10 * 60 * 1000;
  */
 async function reportBotFailure(contact: { id: string; name: string | null; phone: string }, error: unknown) {
   try {
-    if (contact.name?.includes('Simulador')) return;
+    if (isSimulatorContact(contact)) return;
 
     const recent = await prisma.whatsAppMessage.findFirst({
       where: {
@@ -760,7 +761,7 @@ export async function sendQuotePdfToClient(quoteId: string) {
     throw new Error("El cliente no tiene un número de WhatsApp registrado en el sistema");
   }
 
-  const isSimulator = !!contact.name?.includes('Simulador');
+  const isSimulator = !!isSimulatorContact(contact);
   const { open, lastInboundAt } = await getContactWindow(contact.id);
   const viaTemplate = !isSimulator && !open;
   if (viaTemplate && !(await quoteTemplateConfigured())) {
@@ -811,7 +812,7 @@ export async function sendQuotePdfToClient(quoteId: string) {
       status: 'SENT',
     },
   });
-  await notificationEmitter.emit('whatsapp_message', { message: { ...docMsg, mediaUrl: 'FETCH_REQUIRED' }, contact });
+  await notificationEmitter.emit(REALTIME_EVENTS.whatsappMessage, { message: { ...docMsg, mediaUrl: 'FETCH_REQUIRED' }, contact });
 
   if (viaTemplate) {
     // La plantilla ya trae el aviso al cliente; el bot no puede escribirle hasta que conteste.
@@ -1118,12 +1119,12 @@ async function runAIAgentResponse(contactId: string) {
             status: 'DELIVERED',
           },
         });
-        await notificationEmitter.emit('whatsapp_message', { message: dudaNote, contact });
+        await notificationEmitter.emit(REALTIME_EVENTS.whatsappMessage, { message: dudaNote, contact });
       } catch (e) {
         console.error('Error guardando la nota de duda avisada:', e);
       }
 
-      if (!contact.name?.includes("Simulador")) {
+      if (!isSimulatorContact(contact)) {
         const summary = await quickConversationSummary(contact.id);
         await notifyAdmin(
           [
@@ -1184,7 +1185,7 @@ async function runAIAgentResponse(contactId: string) {
           const args = call.args as any;
           // El bot NO se apaga: solo se avisa al equipo y el bot sigue contestando en el chat.
           // Si alguien del equipo escribe manualmente en el chat, ahí sí se pausa (sendManualMessageAction).
-          if (!contact.name?.includes("Simulador")) {
+          if (!isSimulatorContact(contact)) {
             const summary = await quickConversationSummary(contact.id);
             await notifyAdmin(
               [
@@ -1253,7 +1254,7 @@ async function runAIAgentResponse(contactId: string) {
                 
                 // Enviar a WhatsApp Real y conservar el id de Meta (sirve para palomitas y para ubicar la cita si el cliente responde a esta foto)
                 let imageMessageId = `bot_img_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-                if (!contact.name?.includes("Simulador")) {
+                if (!isSimulatorContact(contact)) {
                    const imgRes = await sendMessageToMeta(contact.phone, {
                       type: 'image',
                       image: { link: imageUrl, caption }
@@ -1273,7 +1274,7 @@ async function runAIAgentResponse(contactId: string) {
                     status: 'DELIVERED',
                   }
                 });
-                await notificationEmitter.emit('whatsapp_message', { message: sentImgMsg, contact });
+                await notificationEmitter.emit(REALTIME_EVENTS.whatsappMessage, { message: sentImgMsg, contact });
              }
           }
 
@@ -1335,21 +1336,21 @@ async function runAIAgentResponse(contactId: string) {
             if (match) {
               const colorLabel = stripCode(match.color!);
               const photoUrl = match.provider === 'Doble Vela' && match.model
-                ? `https://doblevela.com/images/large/${match.model}_${normalize(colorLabel)}_lrg.jpg`
+                ? doblevelaImageUrl(match.model, normalize(colorLabel))
                 : match.image;
               if (photoUrl) {
                 const baseName = match.name.replace(new RegExp(match.color!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').trim();
                 const caption = `🔥 ${baseName || match.name} · ${colorLabel}\n💰 Precio: $${resolveProductUnitPrice(match, 1, pricingGlobals, modelMaxCosts[modelCostKey(match)]).unitPrice.toFixed(2)} MXN`;
                 let photoMessageId = `bot_img_${Date.now()}_${Math.random().toString(36).substring(7)}`;
                 try {
-                  if (!contact.name?.includes("Simulador")) {
+                  if (!isSimulatorContact(contact)) {
                     const imgRes = await sendMessageToMeta(contact.phone, { type: 'image', image: { link: photoUrl, caption } });
                     if (imgRes?.messages?.[0]?.id) photoMessageId = imgRes.messages[0].id;
                   }
                   const sentPhoto = await prisma.whatsAppMessage.create({
                     data: { contactId: contact.id, messageId: photoMessageId, direction: 'OUTBOUND', type: 'IMAGE', mediaUrl: photoUrl, content: caption, status: 'DELIVERED' },
                   });
-                  await notificationEmitter.emit('whatsapp_message', { message: sentPhoto, contact });
+                  await notificationEmitter.emit(REALTIME_EVENTS.whatsappMessage, { message: sentPhoto, contact });
                   fotoColorEnviada = colorLabel;
                 } catch (e) {
                   console.error('No se pudo enviar la foto del color:', e);
@@ -1466,7 +1467,7 @@ async function runAIAgentResponse(contactId: string) {
               },
             });
             // Emitir evento para el UI
-            await notificationEmitter.emit('whatsapp_message', { message: internalMessage, contact });
+            await notificationEmitter.emit(REALTIME_EVENTS.whatsappMessage, { message: internalMessage, contact });
           } catch (e) {
             console.error("Error guardando mensaje interno de El Chalán:", e);
           }
@@ -1474,7 +1475,7 @@ async function runAIAgentResponse(contactId: string) {
           // 3. Avisar a los administradores (si falla, no rompas el flujo de la IA).
           // Con precio confiable se les manda el borrador ya armado para que solo autoricen;
           // si no hay precio (o el borrador falla) va el aviso de solicitud para cotizar a mano.
-          if (!contact.name?.includes("Simulador")) {
+          if (!isSimulatorContact(contact)) {
             let draftSent = false;
             if (chalanResult.pricing) {
               try {
@@ -1551,7 +1552,7 @@ async function runAIAgentResponse(contactId: string) {
     // Enviar el mensaje físico por WhatsApp
     let metaMessageId = `ai_sim_${Date.now()}`;
     try {
-      if (!contact.name?.includes("Simulador")) {
+      if (!isSimulatorContact(contact)) {
         const metaRes = await sendMessageToMeta(contact.phone, {
           type: 'text',
           text: { body: responseText }
@@ -1582,7 +1583,7 @@ async function runAIAgentResponse(contactId: string) {
     if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
       pusherMessage.mediaUrl = 'FETCH_REQUIRED';
     }
-    await notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact });
+    await notificationEmitter.emit(REALTIME_EVENTS.whatsappMessage, { message: pusherMessage, contact });
     
   } catch (error) {
     console.error("Error en processAIAgentResponse:", error);

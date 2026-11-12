@@ -38,3 +38,18 @@ export function formatDueDate(
   if (!iso) return "";
   return new Date(`${iso.slice(0, 10)}T12:00:00.000Z`).toLocaleDateString("es-MX", { ...options, timeZone: "UTC" });
 }
+
+/** Días completos desde una fecha (0 si es hoy o futura). */
+export function daysAgo(date: string | Date): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86400000));
+}
+
+/** Antigüedad corta: "hoy", "ayer", "hace 5 d", "hace 2 meses". */
+export function ageLabel(date: string | Date): string {
+  const d = daysAgo(date);
+  if (d === 0) return "hoy";
+  if (d === 1) return "ayer";
+  if (d < 30) return `hace ${d} d`;
+  const m = Math.floor(d / 30);
+  return `hace ${m} mes${m === 1 ? "" : "es"}`;
+}

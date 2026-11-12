@@ -31,6 +31,8 @@ import { processAIAgentResponse, sendQuotePdfToClient, getContactWindow, quoteTe
 import { notificationEmitter } from "@/lib/notification-emitter";
 import { after } from "next/server";
 import { buildGlobalCosts } from "@/lib/pricing";
+import { encodeQuoteLink } from "@/lib/whatsapp/internal-message";
+import { isSimulatorContact } from "@/constants/whatsapp";
 
 async function requireAuth(allowedRoles?: string[]) {
   const session = await getServerSession(authOptions);
@@ -246,7 +248,7 @@ export async function createQuoteAction(formData: FormData) {
             messageId: `internal_quote_${Date.now()}`,
             direction: 'INTERNAL',
             type: 'TEXT',
-            content: `Cotización Creada Exitosamente. Puedes verla dando clic en el botón.|||QUOTE:${quoteId}|||`,
+            content: `Cotización Creada Exitosamente. Puedes verla dando clic en el botón.${encodeQuoteLink(quoteId)}`,
             status: 'DELIVERED'
           }
         });
@@ -261,7 +263,7 @@ export async function createQuoteAction(formData: FormData) {
         await prisma.whatsAppMessage.update({
           where: { id: whatsappMessageId },
           data: {
-            content: `Cotización Creada Exitosamente. |||QUOTE:${quoteId}|||`
+            content: `Cotización Creada Exitosamente. ${encodeQuoteLink(quoteId)}`
           }
         });
       } catch (e) {
@@ -385,7 +387,7 @@ export async function getQuoteWhatsAppWindowAction(quoteId: string) {
   const { open, lastInboundAt } = await getContactWindow(contact.id);
   return {
     found: true as const,
-    open: open || !!contact.name?.includes('Simulador'),
+    open: open || isSimulatorContact(contact),
     lastInboundAt: lastInboundAt?.toISOString() ?? null,
     templateConfigured: await quoteTemplateConfigured(),
   };

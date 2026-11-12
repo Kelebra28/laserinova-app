@@ -20,18 +20,20 @@ import {
 } from "@/server/actions/quote.actions";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
 import { DashboardSkeleton } from "@/components/ui/Skeleton";
+import { QUOTE_STATUS, type QuoteStatus } from "@/constants/quote-status";
+import { formatCurrency } from "@/lib/format";
 
-const columns = [
-  { id: "SENT", label: "Enviada", colorClass: "bg-blue-500", dotClass: "bg-blue-500", shadowClass: "shadow-[0_0_8px_rgba(59,130,246,0.5)]" },
-  { id: "APPROVED", label: "Aprobada", colorClass: "bg-purple-500", dotClass: "bg-purple-500", shadowClass: "shadow-[0_0_8px_rgba(168,85,247,0.5)]" },
-  { id: "IN_PRODUCTION", label: "En Proceso", colorClass: "bg-orange-500", dotClass: "bg-orange-500", shadowClass: "shadow-[0_0_8px_rgba(249,115,22,0.5)]" },
-  { id: "DELIVERED", label: "Entregada", colorClass: "bg-emerald-500", dotClass: "bg-emerald-500", shadowClass: "shadow-[0_0_8px_rgba(16,185,129,0.5)]" },
-  { id: "CALCULATED", label: "Calculada", colorClass: "bg-cyan-500", dotClass: "bg-cyan-500", shadowClass: "shadow-[0_0_8px_rgba(6,182,212,0.5)]" },
-  { id: "DRAFT", label: "Borrador", colorClass: "bg-gray-500", dotClass: "bg-gray-500", shadowClass: "shadow-[0_0_8px_rgba(107,114,128,0.5)]" },
-  { id: "CANCELLED", label: "Cancelada / Rechazada", colorClass: "bg-red-500", dotClass: "bg-red-500", shadowClass: "shadow-[0_0_8px_rgba(239,68,68,0.5)]" },
-];
+// Orden de las columnas del tablero; etiquetas y colores salen de constants/quote-status.
+const KANBAN_STATUSES: QuoteStatus[] = ["SENT", "APPROVED", "IN_PRODUCTION", "DELIVERED", "CALCULATED", "DRAFT", "CANCELLED"];
+const columns = KANBAN_STATUSES.map((id) => ({
+  id,
+  label: id === "CANCELLED" ? "Cancelada / Rechazada" : QUOTE_STATUS[id].label,
+  colorClass: QUOTE_STATUS[id].dot,
+  dotClass: QUOTE_STATUS[id].dot,
+  shadowClass: QUOTE_STATUS[id].glow,
+}));
 
-const money = (n: number) => `$${n.toLocaleString("es-MX", { maximumFractionDigits: 0 })}`;
+const money = (n: number) => formatCurrency(n, 0);
 
 function SortableTh({
   k, sort, dir, onToggle, children, align = "left",

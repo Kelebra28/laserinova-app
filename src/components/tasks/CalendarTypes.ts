@@ -70,6 +70,3 @@ export const MAX_DAILY_HOURS = 8;
 export function toDateStr(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
 }
-export function avatarInitials(name: string) {
-  return name.split(" ").slice(0,2).map(n=>n[0]).join("").toUpperCase();
-}

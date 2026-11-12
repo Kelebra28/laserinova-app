@@ -12,6 +12,39 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/*
+ * Tema oscuro estilo WhatsApp del módulo de chats (y del Topbar en esa ruta).
+ * Uso: bg-wa-panel, text-wa-muted, border-wa-border, bg-wa-accent/15, etc.
+ */
+@theme {
+  /* Fondos */
+  --color-wa-chat: #0b141a;          /* fondo de la conversación */
+  --color-wa-panel: #111b21;         /* lista de chats, cabecera, fondo de la ruta */
+  --color-wa-day-chip: #182229;      /* separador de día */
+  --color-wa-row-hover: #1a262d;     /* hover de un chat en la lista */
+  --color-wa-surface: #1f2c34;       /* bandejas (adjuntos, respuesta) */
+  --color-wa-header: #202c33;        /* cabeceras, burbuja entrante, modales */
+  --color-wa-menu: #233138;          /* menús desplegables */
+  --color-wa-input: #2a3942;         /* campos y hover */
+  --color-wa-chip: #3b4a54;          /* chips y badges neutros */
+  /* Bordes */
+  --color-wa-border: #222d34;
+  --color-wa-border-strong: #313d45;
+  /* Texto */
+  --color-wa-text: #e9edef;
+  --color-wa-text-soft: #d1d7db;
+  --color-wa-text-alt: #cfd8dc;
+  --color-wa-text-dim: #c7d0d5;
+  --color-wa-muted: #8696a0;
+  /* Acento verde y burbujas */
+  --color-wa-accent: #00a884;
+  --color-wa-accent-hover: #00c298;
+  --color-wa-accent-light: #35d6b5;
+  --color-wa-on-accent: #06211b;     /* texto sobre el verde */
+  --color-wa-bubble-out: #005c4b;    /* burbuja saliente */
+  --color-wa-read: #53bdeb;          /* palomitas azules */
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;

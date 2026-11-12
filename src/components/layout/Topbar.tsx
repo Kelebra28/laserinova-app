@@ -29,7 +29,7 @@ export function Topbar({ onMenuClick, dark }: TopbarProps) {
   return (
     <header className={`sticky top-0 z-30 backdrop-blur-md border-b h-14 flex items-center justify-between px-4 sm:px-6 shrink-0 transition-colors duration-200 ${
       dark
-        ? "bg-[#111b21]/95 border-[#222d34] text-zinc-100"
+        ? "bg-wa-panel/95 border-wa-border text-zinc-100"
         : "bg-white/70 dark:bg-black/40 border-zinc-200/50 dark:border-zinc-800/50"
     }`}>
       {/* Left: hamburger (mobile) */}
@@ -49,7 +49,7 @@ export function Topbar({ onMenuClick, dark }: TopbarProps) {
       <div className="flex items-center gap-3">
         {isAdmin && <PushToggle />}
         {/* User identity pill */}
-        <div className={`flex items-center gap-2.5 pl-1.5 pr-3 py-1 backdrop-blur-sm rounded-full border transition-all ${dark ? "bg-[#202c33] border-[#2a3942]" : "bg-zinc-50/80 dark:bg-zinc-900/50 border-zinc-200/50 dark:border-zinc-800/50 shadow-sm hover:shadow-md"}`}>
+        <div className={`flex items-center gap-2.5 pl-1.5 pr-3 py-1 backdrop-blur-sm rounded-full border transition-all ${dark ? "bg-wa-header border-wa-input" : "bg-zinc-50/80 dark:bg-zinc-900/50 border-zinc-200/50 dark:border-zinc-800/50 shadow-sm hover:shadow-md"}`}>
           <UserAvatar name={name} size="sm" />
 
           {/* Name + role */}

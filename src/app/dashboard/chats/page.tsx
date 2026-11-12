@@ -20,7 +20,7 @@ export default async function ChatsPage({
   ]);
 
   return (
-    <div className="h-full w-full bg-[#111b21]">
+    <div className="h-full w-full bg-wa-panel">
       <ChatLayout initialContacts={contacts} initialContactId={initialContactId} initialMessages={initialMessages} />
     </div>
   );

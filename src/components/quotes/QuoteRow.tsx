@@ -4,21 +4,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Trash2 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
-import { STATUS_STYLES, PAYMENT_STYLES, ageLabel } from "@/components/quotes/statusStyles";
+import { QuoteStatusBadge, PaymentStatusBadge } from "@/components/quotes/QuoteStatusBadge";
+import { ageLabel } from "@/lib/dates";
+import { formatCurrency } from "@/lib/format";
 
 interface QuoteRowProps {
   quote: any;
   onDeleteRequest: (quote: any) => void;
 }
 
-const money = (n: number) =>
-  `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (n: number) => formatCurrency(n);
 
 export default function QuoteRow({ quote, onDeleteRequest }: QuoteRowProps) {
   const router = useRouter();
   const href = `/dashboard/quotes/${quote.id}`;
-  const status = STATUS_STYLES[quote.status] ?? { label: quote.status, badge: "bg-gray-100 text-gray-700" };
-  const payment = PAYMENT_STYLES[quote.paymentStatus || "PENDING"] ?? PAYMENT_STYLES.PENDING;
   const balance = Math.max(quote.total - (quote.realAmountCollected || 0), 0);
   const showBalance =
     quote.paymentStatus !== "PAID" &&
@@ -59,11 +58,11 @@ export default function QuoteRow({ quote, onDeleteRequest }: QuoteRowProps) {
       </td>
 
       <td className="px-4 py-3 whitespace-nowrap">
-        <span className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full ${status.badge}`}>{status.label}</span>
+        <QuoteStatusBadge status={quote.status} />
       </td>
 
       <td className="px-4 py-3 whitespace-nowrap">
-        <span className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full ${payment.badge}`}>{payment.label}</span>
+        <PaymentStatusBadge status={quote.paymentStatus} />
       </td>
 
       <td className="px-4 py-3 whitespace-nowrap">

@@ -5,6 +5,7 @@ import {
   X, CalendarDays, Flag, Users, Check, Zap, AlertTriangle, UserCheck, Plus, Trash2, CheckSquare
 } from "lucide-react";
 import { createTaskTag, type TaskPriority, type TaskStatus } from "@/app/dashboard/tasks/actions";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 interface TaskUser {
   id: string;
@@ -75,17 +76,6 @@ const PRIORITY_OPTIONS: {
   { value: "NORMAL", label: "Normal", icon: "🟡", activeBg: "bg-amber-500 border-amber-500",  activeText: "text-white", ring: "ring-amber-400/30"  },
   { value: "LOW",    label: "Baja",   icon: "🔵", activeBg: "bg-slate-700 border-slate-700",  activeText: "text-white", ring: "ring-slate-400/30"  },
 ];
-
-function avatarGradient(name: string) {
-  const g = ["from-red-500 to-rose-600","from-blue-500 to-indigo-600","from-emerald-500 to-teal-600","from-violet-500 to-purple-600","from-amber-500 to-orange-600"];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
-  return g[Math.abs(h) % g.length];
-}
-
-function avatarInitials(name: string) {
-  return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-}
 
 function getProgressColor(p: number) {
   if (p >= 80) return "from-emerald-400 to-emerald-600";
@@ -496,9 +486,7 @@ export function TaskModal({ task, initialStatus, users, tags, currentUserRole, o
                             : "border-gray-100 bg-gray-50/60 hover:border-gray-200"
                           }`}
                       >
-                        <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${avatarGradient(user.name)} text-white text-[10px] font-black flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform`}>
-                          {avatarInitials(user.name)}
-                        </div>
+                        <UserAvatar name={user.name} size="base" className="group-hover:scale-110 transition-transform" />
                         <div className="flex-1 min-w-0">
                           <p className={`text-[11px] font-bold truncate leading-tight ${selected ? "text-red-700" : "text-gray-800"}`}>{user.name.split(" ")[0]}</p>
                           <p className="text-[9px] text-gray-400 truncate">{user.role === "ADMIN" ? "Admin" : "Vendedor"}</p>

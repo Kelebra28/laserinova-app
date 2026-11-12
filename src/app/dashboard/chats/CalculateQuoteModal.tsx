@@ -20,12 +20,12 @@ type QuoteData = {
 };
 
 const fieldClass =
-  'w-full bg-[#202c33] border border-[#313d45] rounded-lg px-3 h-10 text-sm !text-[#e9edef] placeholder:text-[#8696a0] outline-none focus:border-[#00a884] transition-colors';
+  'w-full bg-wa-header border border-wa-border-strong rounded-lg px-3 h-10 text-sm !text-wa-text placeholder:text-wa-muted outline-none focus:border-wa-accent transition-colors';
 
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <label className={`flex flex-col gap-1 ${className || ''}`}>
-      <span className="text-xs font-medium text-[#8696a0]">{label}</span>
+      <span className="text-xs font-medium text-wa-muted">{label}</span>
       {children}
     </label>
   );
@@ -93,13 +93,13 @@ export default function CalculateQuoteModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#111b21] rounded-2xl w-full max-w-xl shadow-2xl border border-[#313d45] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
-        <div className="p-4 bg-[#202c33] border-b border-[#313d45] flex justify-between items-center">
-          <div className="flex items-center gap-2 text-[#e9edef] font-medium">
+      <div className="bg-wa-panel rounded-2xl w-full max-w-xl shadow-2xl border border-wa-border-strong overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+        <div className="p-4 bg-wa-header border-b border-wa-border-strong flex justify-between items-center">
+          <div className="flex items-center gap-2 text-wa-text font-medium">
             <Calculator className="text-amber-400" size={20} />
             <span>Calcular cotización</span>
           </div>
-          <button type="button" onClick={onClose} aria-label="Cerrar" className="text-[#8696a0] hover:text-[#e9edef] transition-colors p-1 rounded-full hover:bg-[#2a3942]">
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="text-wa-muted hover:text-wa-text transition-colors p-1 rounded-full hover:bg-wa-input">
             <X size={20} />
           </button>
         </div>
@@ -108,13 +108,13 @@ export default function CalculateQuoteModal({
           {loadError ? (
             <p className="py-8 text-center text-sm text-red-300">{loadError}</p>
           ) : !data ? (
-            <div className="flex flex-col items-center justify-center py-10 text-[#8696a0]">
+            <div className="flex flex-col items-center justify-center py-10 text-wa-muted">
               <Loader2 size={32} className="animate-spin mb-4 text-amber-400" />
               <p className="text-sm">Leyendo la conversación...</p>
             </div>
           ) : (
             <div className="space-y-4">
-              <p className="text-sm text-[#8696a0]">
+              <p className="text-sm text-wa-muted">
                 {missing.length > 0
                   ? <>Esto encontré en la conversación. <span className="text-amber-300">Falta: {missing.join(', ')}.</span></>
                   : 'Esto encontré en la conversación. Revísalo y corrige lo que haga falta.'}
@@ -161,16 +161,16 @@ export default function CalculateQuoteModal({
                 </Field>
               </div>
 
-              <label className="flex items-center gap-2 text-sm text-[#d1d7db] cursor-pointer">
-                <input type="checkbox" className="accent-[#00a884] w-4 h-4" checked={data.diseno_incluido} onChange={(e) => set('diseno_incluido', e.target.checked)} />
+              <label className="flex items-center gap-2 text-sm text-wa-text-soft cursor-pointer">
+                <input type="checkbox" className="accent-wa-accent w-4 h-4" checked={data.diseno_incluido} onChange={(e) => set('diseno_incluido', e.target.checked)} />
                 El cliente ya tiene su diseño
               </label>
             </div>
           )}
         </div>
 
-        <div className="p-4 bg-[#202c33] border-t border-[#313d45] flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-4 h-10 rounded-lg text-sm font-medium bg-[#2a3942] text-[#e9edef] hover:bg-[#313d45] transition-colors">
+        <div className="p-4 bg-wa-header border-t border-wa-border-strong flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-4 h-10 rounded-lg text-sm font-medium bg-wa-input text-wa-text hover:bg-wa-border-strong transition-colors">
             Cancelar
           </button>
           <button

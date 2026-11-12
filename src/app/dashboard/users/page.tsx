@@ -5,29 +5,14 @@ import { getUsers, createUser, updateUser } from "@/server/actions/user.actions"
 import { Users, UserPlus, Shield, Check, X, ShieldAlert, Loader2, Save, Trash2, ChevronDown } from "lucide-react";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
-import { ConfirmModal } from "@/components/tasks/ConfirmModal";
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
 import { deleteUserAction } from "@/app/dashboard/settings/actions";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { UserAvatar } from "@/components/ui/UserAvatar";
+import { PERMISSION_MODULES } from "@/constants/navigation";
+import { parsePermissions } from "@/lib/permissions";
 
-const PERMISSION_MODULES = [
-  { key: "dashboard", label: "Dashboard" },
-  { key: "chats", label: "Chats" },
-  { key: "agent", label: "Agente IA" },
-  { key: "email", label: "Correo" },
-  { key: "quotes", label: "Cotizaciones" },
-  { key: "receipts", label: "Recibos" },
-  { key: "tasks", label: "Tareas" },
-  { key: "clients", label: "Clientes" },
-  { key: "providers", label: "Proveedores" },
-  { key: "payment_requests", label: "Cobranza" },
-  { key: "finance", label: "Finanzas" },
-  { key: "inventory", label: "Inventario" },
-  { key: "materials", label: "Materiales" },
-  { key: "processes", label: "Procesos" },
-  { key: "labels", label: "Etiquetas" },
-  { key: "surveys", label: "Encuestas" },
-  { key: "reports", label: "Reportes" },
-];
+// Módulos con permiso: salen de constants/navigation (mismos que valida src/proxy.ts).
 
 const ROLE_OPTIONS = [
   { value: "SELLER", label: "EMPLEADO" },
@@ -238,16 +223,14 @@ export default function UsersPage() {
         <div className="grid gap-6">
           {users.map((user) => {
             const isAdmin = user.role === "ADMIN";
-            const perms = user.permissions || {};
+            const perms = parsePermissions(user.permissions);
 
             return (
               <div key={user.id} className="bg-white rounded-2xl shadow-sm border border-slate-200/60 overflow-hidden">
                 {/* User Header */}
                 <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center text-white font-bold text-xl shadow-inner">
-                      {user.name.charAt(0).toUpperCase()}
-                    </div>
+                    <UserAvatar name={user.name} size="lg" />
                     <div>
                       <h3 className="font-bold text-slate-900 text-lg">{user.name}</h3>
                       <p className="text-slate-500 text-sm">{user.email}</p>
@@ -341,13 +324,14 @@ export default function UsersPage() {
       )}
 
       {userToDelete && (
-        <ConfirmModal
+        <ConfirmationModal
+          isOpen
           title={`¿Eliminar a ${userToDelete.name}?`}
           message="Sus cotizaciones, proveedores y recibos pasarán a tu usuario. Esta acción no se puede deshacer."
-          confirmLabel="Sí, eliminar"
-          loading={savingId === userToDelete.id}
+          confirmText="Sí, eliminar"
+          isLoading={savingId === userToDelete.id}
           onConfirm={handleDeleteUser}
-          onCancel={() => setUserToDelete(null)}
+          onClose={() => setUserToDelete(null)}
         />
       )}
     </div>

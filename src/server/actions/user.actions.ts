@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import bcrypt from "bcryptjs";
+import { DEFAULT_PERMISSIONS } from "@/constants/navigation";
 
 export async function getUsers() {
   await requireAuth(); 
@@ -36,13 +37,8 @@ export async function createUser(data: { name: string; email: string; password?:
 
     const passwordHash = await bcrypt.hash(data.password || "123456", 10);
     
-    // By default, new sellers have all permissions enabled, they can be turned off later
-    const defaultPermissions = {
-      dashboard: true, chats: true, agent: true, email: true, quotes: true,
-      receipts: true, tasks: true, clients: true, providers: true,
-      payment_requests: true, finance: false, inventory: true, materials: true,
-      processes: true, labels: true, surveys: false, reports: true,
-    };
+    // Empleados nuevos: todos los módulos prendidos (se apagan después desde Usuarios).
+    const defaultPermissions = DEFAULT_PERMISSIONS;
 
     const user = await prisma.user.create({
       data: {
