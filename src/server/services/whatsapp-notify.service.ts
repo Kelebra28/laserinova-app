@@ -79,14 +79,22 @@ export async function sendQuoteNotice(quoteId: string, kind: QuoteNoticeKind, ex
   return sendClientTemplate(contact, kind, noticeParams(kind, noticeQuote(quote), extra));
 }
 
+/** Cotización activa más reciente del chat (por contacto o por su cliente). */
+export async function latestQuoteForContact(contactId: string, clientId?: string | null) {
+  if (clientId === undefined) {
+    clientId = (await prisma.whatsAppContact.findUnique({ where: { id: contactId }, select: { clientId: true } }))?.clientId ?? null;
+  }
+  return prisma.quote.findFirst({
+    where: { active: true, OR: [{ contactId }, ...(clientId ? [{ clientId }] : [])] },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, folio: true, total: true, project: true },
+  });
+}
+
 /** Retomar conversación: menciona la cotización más reciente del contacto si tiene una. */
 export async function sendReengage(contactId: string) {
   const contact = await prisma.whatsAppContact.findUnique({ where: { id: contactId }, select: { id: true, phone: true, name: true, clientId: true } });
   if (!contact) throw new Error('Contacto no encontrado.');
-  const quote = await prisma.quote.findFirst({
-    where: { active: true, OR: [{ contactId }, ...(contact.clientId ? [{ clientId: contact.clientId }] : [])] },
-    orderBy: { createdAt: 'desc' },
-    select: { folio: true },
-  });
+  const quote = await latestQuoteForContact(contactId, contact.clientId);
   return sendClientTemplate(contact, 'reengage', [quote ? `tu cotización ${quote.folio}` : 'tu solicitud']);
 }

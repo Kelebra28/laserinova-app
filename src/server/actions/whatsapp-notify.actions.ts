@@ -1,7 +1,7 @@
 'use server';
 
 import { requireAuth } from '@/lib/auth';
-import { getQuoteNoticeContext, sendQuoteNotice, sendReengage } from '@/server/services/whatsapp-notify.service';
+import { getQuoteNoticeContext, sendQuoteNotice, sendReengage, latestQuoteForContact } from '@/server/services/whatsapp-notify.service';
 import type { QuoteNoticeKind, NoticeExtra } from '@/lib/whatsapp-templates';
 
 const KINDS: QuoteNoticeKind[] = ['production', 'ready', 'deposit', 'paid'];
@@ -23,6 +23,16 @@ export async function sendQuoteNoticeAction(quoteId: string, kind: QuoteNoticeKi
     return { success: true as const };
   } catch (e) {
     return { success: false as const, error: (e instanceof Error && e.message) || 'No se pudo mandar el aviso.' };
+  }
+}
+
+/** Cotización más reciente del chat, para el botón "Enviar cotización" de la franja de 24 h. */
+export async function getChatLatestQuoteAction(contactId: string) {
+  await requireAuth();
+  try {
+    return { success: true as const, data: await latestQuoteForContact(contactId) };
+  } catch {
+    return { success: true as const, data: null };
   }
 }
 

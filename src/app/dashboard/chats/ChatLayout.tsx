@@ -13,7 +13,8 @@ import CalculateQuoteModal from './CalculateQuoteModal';
 import ImageViewer, { type ViewerImage } from './ImageViewer';
 import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator, Download, ExternalLink, Clock, AlertTriangle, AlertCircle } from 'lucide-react';
 import { windowState, formatDuration, formatDurationShort } from '@/lib/whatsapp-window';
-import { sendReengageAction } from '@/server/actions/whatsapp-notify.actions';
+import { sendReengageAction, getChatLatestQuoteAction } from '@/server/actions/whatsapp-notify.actions';
+import { sendQuoteViaWhatsAppAction } from '@/server/actions/quote.actions';
 import { toast } from 'react-hot-toast';
 
 type Contact = any;
@@ -592,6 +593,30 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
     setConfirmReengage(false);
     if (res.success) toast.success('Mensaje enviado. Cuando el cliente conteste podrás escribirle normal.');
     else toast.error(res.error, { duration: 8000 });
+  };
+
+  // Ventana cerrada: mandar la cotización más reciente del chat con la plantilla (PDF adjunto) sin salir del chat.
+  const [chatQuote, setChatQuote] = useState<{ contactId: string; quote: { id: string; folio: string; total: number; project: string | null } | null } | null>(null);
+  const [sendingQuote, setSendingQuote] = useState(false);
+  const [confirmSendQuote, setConfirmSendQuote] = useState(false);
+  const activeContactId = activeContact?.id as string | undefined;
+  useEffect(() => {
+    if (!activeContactId) return;
+    let cancelled = false;
+    getChatLatestQuoteAction(activeContactId).then(res => {
+      if (!cancelled) setChatQuote({ contactId: activeContactId, quote: res.data });
+    });
+    return () => { cancelled = true; };
+  }, [activeContactId]);
+  const latestQuote = chatQuote?.contactId === activeContactId ? chatQuote?.quote ?? null : null;
+  const sendLatestQuote = async () => {
+    if (!latestQuote) return;
+    setSendingQuote(true);
+    const res = await sendQuoteViaWhatsAppAction(latestQuote.id);
+    setSendingQuote(false);
+    setConfirmSendQuote(false);
+    if (res.success) toast.success(`Cotización ${latestQuote.folio} enviada${res.viaTemplate ? ' con la plantilla de WhatsApp' : ''}.`);
+    else toast.error(res.error || 'No se pudo enviar la cotización.', { duration: 8000 });
   };
 
   const [retryingBot, setRetryingBot] = useState(false);
@@ -1230,14 +1255,14 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
           {/* Aviso de la ventana de 24 h de WhatsApp */}
           {activeWindow && !loadingMessages && (
             <div className={cn(
-              "z-20 shrink-0 flex items-center gap-2 px-4 py-1.5 text-xs border-t",
+              "z-20 shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1.5 px-4 py-1.5 text-xs border-t",
               activeWindow.kind === 'closed' ? "bg-red-500/10 text-red-300 border-red-500/20"
                 : activeWindow.kind === 'unknown' ? "bg-[#202c33] text-[#8696a0] border-[#222d34]"
                 : activeWindow.expiring ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
                 : "bg-[#00a884]/10 text-[#35d6b5] border-[#00a884]/20"
             )}>
               {activeWindow.kind === 'closed' ? <AlertTriangle size={14} className="shrink-0" /> : <Clock size={14} className="shrink-0" />}
-              <span>
+              <span className="flex-1 min-w-[14rem]">
                 {activeWindow.kind === 'closed' ? (
                   <>Pasaron más de 24 h desde el último mensaje del cliente ({new Date(activeLastInbound!).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}). WhatsApp <b>no va a entregar</b> texto libre hasta que el cliente vuelva a escribir.</>
                 ) : activeWindow.kind === 'unknown' ? (
@@ -1247,19 +1272,44 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                 )}
               </span>
               {activeWindow.kind !== 'open' && (
+              <div className="flex flex-wrap items-center gap-2 ml-auto">
+              {latestQuote && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmSendQuote(true)}
+                  disabled={sendingQuote}
+                  className="shrink-0 flex items-center gap-1.5 rounded-full bg-[#25D366]/20 hover:bg-[#25D366]/30 text-[#d9fdd3] px-3 py-1 font-semibold transition-colors disabled:opacity-50"
+                  title={`Manda la cotización ${latestQuote.folio} con el PDF usando la plantilla aprobada`}
+                >
+                  {sendingQuote ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+                  Enviar cotización {latestQuote.folio}
+                </button>
+              )}
                 <button
                   type="button"
                   onClick={() => setConfirmReengage(true)}
                   disabled={reengaging}
-                  className="ml-auto shrink-0 flex items-center gap-1.5 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-100 px-3 py-1 font-semibold transition-colors disabled:opacity-50"
+                  className="shrink-0 flex items-center gap-1.5 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-100 px-3 py-1 font-semibold transition-colors disabled:opacity-50"
                   title="Manda la plantilla aprobada para que el cliente conteste y se vuelva a abrir la ventana"
                 >
                   {reengaging ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                   Retomar conversación
                 </button>
+              </div>
               )}
             </div>
           )}
+
+          <ConfirmationModal
+            isOpen={confirmSendQuote}
+            onClose={() => setConfirmSendQuote(false)}
+            onConfirm={sendLatestQuote}
+            isLoading={sendingQuote}
+            variant="info"
+            title={`Enviar cotización ${latestQuote?.folio ?? ''}`}
+            message={`Se le mandará a ${activeContact.name || 'este cliente'} el PDF de la cotización ${latestQuote?.folio ?? ''}${latestQuote ? ` (${latestQuote.total.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })})` : ''} con la plantilla aprobada: "Hola, te compartimos tu cotización … de Laser Inova por un total de … Si tienes dudas o quieres continuar con tu pedido, respóndenos por este medio." Como pasaron más de 24 h, el bot no le escribirá hasta que conteste.`}
+            confirmText="Enviar cotización"
+          />
 
           <ConfirmationModal
             isOpen={confirmReengage}
