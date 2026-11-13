@@ -2,6 +2,8 @@
 
 import { requireAuth } from '@/lib/auth';
 import { getQuoteNoticeContext, sendQuoteNotice, sendReengage, latestQuoteForContact } from '@/server/services/whatsapp-notify.service';
+import { resolveQuoteSuggestion } from '@/server/services/quote-suggestion.service';
+import { revalidatePath } from 'next/cache';
 import type { QuoteNoticeKind, NoticeExtra } from '@/lib/whatsapp-templates';
 
 const KINDS: QuoteNoticeKind[] = ['production', 'ready', 'deposit', 'paid'];
@@ -44,5 +46,18 @@ export async function sendReengageAction(contactId: string) {
     return { success: true as const, text };
   } catch (e) {
     return { success: false as const, error: (e instanceof Error && e.message) || 'No se pudo mandar el mensaje.' };
+  }
+}
+
+/** Confirma o descarta la sugerencia del bot de aceptar/rechazar una cotización. */
+export async function resolveQuoteSuggestionAction(messageId: string, action: 'CONFIRM' | 'DISMISS') {
+  await requireAuth();
+  try {
+    const r = await resolveQuoteSuggestion(messageId, action);
+    revalidatePath('/dashboard');
+    revalidatePath('/dashboard/quotes');
+    return { success: true as const, content: r.content, outcome: r.outcome };
+  } catch (e) {
+    return { success: false as const, error: (e instanceof Error && e.message) || 'No se pudo aplicar la sugerencia.' };
   }
 }

@@ -81,7 +81,14 @@ export default async function FinancePage({
 
   // ── Cobranza (quotes) ────────────────────────────────────
   const allPendingQuotes = await prisma.quote.findMany({
-    where: { active: true, status: { notIn: ["CANCELLED", "REJECTED", "DRAFT"] } },
+    // Cobranza: solo lo que el cliente ya aceptó, o cualquier cotización que ya tenga dinero cobrado.
+    where: {
+      active: true,
+      OR: [
+        { status: { in: ["APPROVED", "ACCEPTED", "IN_PRODUCTION", "DELIVERED", "DONE"] } },
+        { status: { notIn: ["CANCELLED", "REJECTED", "DRAFT"] }, realAmountCollected: { gt: 0 } },
+      ],
+    },
     include: { client: true },
   });
   const fullyPaidQuotes = allPendingQuotes.filter(

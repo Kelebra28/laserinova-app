@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Trash2 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
-import { STATUS_STYLES, PAYMENT_STYLES, ageLabel } from "@/components/quotes/statusStyles";
+import { STATUS_STYLES, ACCEPTED_STATUSES, paymentBadge, ageLabel } from "@/components/quotes/statusStyles";
 
 interface QuoteRowProps {
   quote: any;
@@ -18,11 +18,11 @@ export default function QuoteRow({ quote, onDeleteRequest }: QuoteRowProps) {
   const router = useRouter();
   const href = `/dashboard/quotes/${quote.id}`;
   const status = STATUS_STYLES[quote.status] ?? { label: quote.status, badge: "bg-gray-100 text-gray-700" };
-  const payment = PAYMENT_STYLES[quote.paymentStatus || "PENDING"] ?? PAYMENT_STYLES.PENDING;
+  const payment = paymentBadge(quote.status, quote.paymentStatus);
   const balance = Math.max(quote.total - (quote.realAmountCollected || 0), 0);
   const showBalance =
     quote.paymentStatus !== "PAID" &&
-    !["DRAFT", "CALCULATED", "CANCELLED", "REJECTED"].includes(quote.status) &&
+    ACCEPTED_STATUSES.includes(quote.status) &&
     balance > 0;
   const clientName = quote.client?.company || quote.client?.name || quote.prospectName || "Sin cliente";
 

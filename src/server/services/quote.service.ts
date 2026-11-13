@@ -21,9 +21,11 @@ const DEAD = ["CANCELLED", "REJECTED"];
 function quickFilter(quick?: string): Prisma.QuoteWhereInput {
   switch (quick) {
     case "open":
-      return { status: { in: ["SENT", "APPROVED", "IN_PRODUCTION"] } };
+      // En proceso = ya aceptadas y en marcha. Las enviadas aún no son un hecho: no suman aquí.
+      return { status: { in: ["APPROVED", "ACCEPTED", "IN_PRODUCTION"] } };
     case "unpaid":
-      return { paymentStatus: { in: ["PENDING", "PARTIAL"] }, status: { notIn: [...DEAD, "DRAFT", "CALCULATED"] } };
+      // Solo se debe lo que el cliente ya aceptó; enviada o calculada aún no es deuda.
+      return { paymentStatus: { in: ["PENDING", "PARTIAL"] }, status: { in: ["APPROVED", "ACCEPTED", "IN_PRODUCTION", "DELIVERED", "DONE"] } };
     case "stale":
       return { status: "SENT", updatedAt: { lt: new Date(Date.now() - 7 * DAY_MS) } };
     case "draft":

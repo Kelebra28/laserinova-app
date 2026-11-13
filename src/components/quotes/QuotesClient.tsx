@@ -208,9 +208,9 @@ export default function QuotesClient() {
   const currentPage = Math.min(urlPage, totalPages);
 
   const summaryCards: { key: QuickKey; label: string; value: string; hint: string; tone: string }[] = [
-    { key: "open", label: "En proceso", value: money(summary?.open.amount ?? 0), hint: `${summary?.open.count ?? 0} cotizaciones activas`, tone: "text-gray-900" },
+    { key: "open", label: "En proceso", value: money(summary?.open.amount ?? 0), hint: `${summary?.open.count ?? 0} aceptadas`, tone: "text-gray-900" },
     { key: "unpaid", label: "Por cobrar", value: money(summary?.unpaid.amount ?? 0), hint: `${summary?.unpaid.count ?? 0} con saldo`, tone: "text-amber-600" },
-    { key: "stale", label: "Sin respuesta (+7 d)", value: String(summary?.stale.count ?? 0), hint: summary?.stale.count ? `${money(summary.stale.amount)} en espera` : "Todo al día", tone: summary?.stale.count ? "text-red-600" : "text-emerald-600" },
+    { key: "stale", label: "Sin respuesta (+7 d)", value: String(summary?.stale.count ?? 0), hint: summary?.stale.count ? "enviadas sin respuesta" : "Todo al día", tone: summary?.stale.count ? "text-red-600" : "text-emerald-600" },
     { key: "draft", label: "Borradores", value: String(summary?.drafts.count ?? 0), hint: "Sin enviar", tone: "text-gray-900" },
   ];
 

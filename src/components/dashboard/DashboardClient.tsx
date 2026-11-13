@@ -218,8 +218,8 @@ function Legend({ color, label, value }: { color: string; label: string; value: 
 /* ───────────────────────── Embudo ───────────────────────── */
 
 function Pipeline({ pipeline, month }: { pipeline: Stats["pipeline"]; month: Stats["pipelineMonth"] }) {
-  const max = Math.max(...pipeline.map((p) => p.amount), 1);
-  const totalOpen = pipeline.reduce((s, p) => s + p.amount, 0);
+  const max = Math.max(...pipeline.filter((p) => p.counted).map((p) => p.amount), 1);
+  const totalOpen = pipeline.filter((p) => p.counted).reduce((s, p) => s + p.amount, 0);
   return (
     <Card title="Cotizaciones abiertas" subtitle={`${money(totalOpen)} en proceso`}>
       <div className="space-y-4 flex-1">
@@ -229,10 +229,14 @@ function Pipeline({ pipeline, month }: { pipeline: Stats["pipeline"]; month: Sta
               <span className="font-semibold text-gray-700">
                 {p.label} <span className="text-gray-400 font-medium">· {p.count}</span>
               </span>
-              <span className="font-bold text-gray-900 tabular-nums">{money(p.amount)}</span>
+              {p.counted ? (
+                <span className="font-bold text-gray-900 tabular-nums">{money(p.amount)}</span>
+              ) : (
+                <span className="text-gray-400 font-medium">sin aceptar · no suma</span>
+              )}
             </div>
             <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-              <div className="h-full rounded-full" style={{ width: `${(p.amount / max) * 100}%`, backgroundColor: p.color }} />
+              <div className="h-full rounded-full" style={{ width: p.counted ? `${(p.amount / max) * 100}%` : "0%", backgroundColor: p.color }} />
             </div>
           </div>
         ))}

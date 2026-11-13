@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 import { GoogleGenerativeAI, FunctionDeclaration, SchemaType } from '@google/generative-ai';
+import { suggestionTag, type SuggestionDecision } from '@/server/services/quote-suggestion.service';
 import { notificationEmitter } from '@/lib/notification-emitter';
 import { getSecretarySystemPrompt } from '@/lib/agents/secretary/prompt';
 import { getRelevantRules } from '@/lib/agents/secretary/knowledge-base';
@@ -933,6 +934,19 @@ async function runAIAgentResponse(contactId: string) {
       description: 'Busca productos reales en la base de datos (catálogo) para ofrecerle opciones al cliente. Úsalo cuando el cliente pregunte qué tipos de termos, tazas, libretas u otros artículos promocionales tienes.',
       parameters: {
         type: SchemaType.OBJECT,
+    const sugerir_cambio_cotizacion: FunctionDeclaration = {
+      name: 'sugerir_cambio_cotizacion',
+      description: 'Úsala cuando el cliente responda de forma CLARA y EXPLÍCITA a una cotización que ya le enviaron: ACEPTADA si dice que la acepta o que procedan ("sí, adelante", "va, la quiero", "hagámoslo"); RECHAZADA si dice claramente que no la quiere. Solo deja una sugerencia al equipo, que decide. NO la uses ante dudas, negociación, "déjame verlo", "te aviso", preguntas ni si no hay una cotización enviada.',
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {
+          decision: { type: SchemaType.STRING, description: 'ACEPTADA o RECHAZADA' },
+          motivo: { type: SchemaType.STRING, description: 'Lo que dijo el cliente, textual y breve, que justifica la sugerencia' },
+        },
+        required: ['decision', 'motivo'],
+      }
+    };
+
         properties: { 
           termino_busqueda: { type: SchemaType.STRING, description: 'Palabra o frase de búsqueda (ej. "termo", "taza azul", "cilindro acero")' },
           pagina: { type: SchemaType.INTEGER, description: 'Página de resultados (usa 1 la primera vez, y 2, 3... si el cliente pide ver "más opciones" o "otros modelos")' }
@@ -984,7 +998,7 @@ async function runAIAgentResponse(contactId: string) {
     const model = genAI.getGenerativeModel({ 
       model: "gemini-3.5-flash",
       systemInstruction,
-      tools: [{ functionDeclarations: [notificar_solicitud_cotizacion, transferir_a_humano, avisar_duda_al_equipo, buscar_productos_en_catalogo, consultar_colores_producto] }]
+      tools: [{ functionDeclarations: [notificar_solicitud_cotizacion, transferir_a_humano, avisar_duda_al_equipo, sugerir_cambio_cotizacion, buscar_productos_en_catalogo, consultar_colores_producto] }]
     });
 
 
@@ -1390,6 +1404,63 @@ async function runAIAgentResponse(contactId: string) {
                     }
                   : { mensaje: 'No encontré ese producto en el catálogo. Pídele al cliente que lo describa de otra forma.' },
               },
+        } else if (call.name === 'sugerir_cambio_cotizacion') {
+          const args = call.args as any;
+          const decision: SuggestionDecision = String(args.decision).toUpperCase().startsWith('RECHAZ') ? 'REJECT' : 'ACCEPT';
+
+          // Solo aplica a una cotización ya enviada de este cliente que siga esperando respuesta.
+          const pendingQuote = await prisma.quote.findFirst({
+            where: { active: true, status: 'SENT', OR: [{ contactId: contact.id }, ...(contact.clientId ? [{ clientId: contact.clientId }] : [])] },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, folio: true, total: true },
+          });
+
+          let feedback: Record<string, unknown>;
+          if (!pendingQuote) {
+            feedback = { registrado: false, instruccion: 'No hay ninguna cotización enviada esperando su respuesta; no se registró nada. Contesta con normalidad lo que el cliente dijo.' };
+          } else {
+            const tag = suggestionTag(decision, pendingQuote.id);
+            const repeated = await prisma.whatsAppMessage.findFirst({ where: { contactId: contact.id, direction: 'INTERNAL', content: { contains: tag } }, select: { id: true } });
+            if (!repeated) {
+              const label = decision === 'ACCEPT' ? 'ACEPTÓ' : 'RECHAZÓ';
+              const money = `$${pendingQuote.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+              const note = await prisma.whatsAppMessage.create({
+                data: {
+                  contactId: contact.id,
+                  messageId: `suggest_${Date.now()}`,
+                  direction: 'INTERNAL',
+                  type: 'TEXT',
+                  content: `💡 Sugerencia del bot: el cliente parece haber ${label} la cotización ${pendingQuote.folio} (${money} con IVA). Dijo: «${String(args.motivo || '').slice(0, 300)}». Confírmalo para cambiarle el estado.${tag}`,
+                  status: 'DELIVERED',
+                },
+              });
+              await notificationEmitter.emit('whatsapp_message', { message: note, contact });
+              if (!contact.name?.includes('Simulador')) {
+                await notifyAdmin(
+                  [`💡 ${contact.name || 'Un cliente'} parece haber ${label} la cotización ${pendingQuote.folio}`, `Dijo: «${String(args.motivo || '').slice(0, 200)}»`, `Confírmalo en el chat: ${conversationLink(contact.id)}`].join('\n'),
+                  conversationPath(contact.id)
+                ).catch((e) => console.error('Error avisando sugerencia de cotización:', e));
+              }
+            }
+            feedback = {
+              registrado: true,
+              instruccion: decision === 'ACCEPT'
+                ? 'Dile en una o dos frases cortas que qué gusto, que lo confirmas con el equipo y que ellos le avisan los siguientes pasos por este chat. NO prometas fechas, anticipos, cuentas ni inicio de producción.'
+                : 'Agradécele en una frase corta y dile que si más adelante lo necesita, aquí estamos. No insistas ni ofrezcas descuentos.',
+            };
+          }
+
+          if (result.response.candidates && result.response.candidates[0].content) {
+            contents.push(result.response.candidates[0].content);
+          }
+          contents.push({ role: 'user', parts: [{ functionResponse: { name: 'sugerir_cambio_cotizacion', response: feedback } }] });
+          try {
+            const followUp = await model.generateContent({ contents });
+            responseText = followUp.response.text();
+          } catch (e) {
+            console.error('Error redactando respuesta de sugerencia de cotización:', e);
+            responseText = decision === 'ACCEPT' ? 'Perfecto, lo confirmo con el equipo y te avisamos los siguientes pasos por aquí.' : 'Gracias por avisarnos. Si más adelante lo necesitas, aquí estamos.';
+          }
             }],
           });
 

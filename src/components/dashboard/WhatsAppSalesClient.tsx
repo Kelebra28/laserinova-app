@@ -182,7 +182,7 @@ export function WhatsAppSalesClient({ data }: { data: WhatsAppSalesData }) {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
         <Kpi label="Chats" value={String(f.chats)} hint={`${f.chatsWithQuote} con cotización`} />
-        <Kpi label="Cotizado" value={money(f.amountSent)} hint={`${f.quotesSent} enviadas`} />
+        <Kpi label="Cotizado" value={money(f.amountSent)} hint={`${f.quotesSent} enviadas · aún no es venta`} />
         <Kpi label="Aprobado" value={money(f.amountWon)} hint={`${f.quotesWon} ${f.quotesWon === 1 ? "cotización" : "cotizaciones"}`} />
         <Kpi label="% de cierre" value={pct(f.closeRate)} hint={`${f.quotesWon} ganadas / ${f.quotesLost} perdidas`} />
         <Kpi label="Por cobrar" value={money(rec.total)} hint={`${rec.count} aprobadas con saldo`} />

@@ -13,7 +13,7 @@ import CalculateQuoteModal from './CalculateQuoteModal';
 import ImageViewer, { type ViewerImage } from './ImageViewer';
 import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator, Download, ExternalLink, Clock, AlertTriangle, AlertCircle } from 'lucide-react';
 import { windowState, formatDuration, formatDurationShort } from '@/lib/whatsapp-window';
-import { sendReengageAction, getChatLatestQuoteAction } from '@/server/actions/whatsapp-notify.actions';
+import { sendReengageAction, getChatLatestQuoteAction, resolveQuoteSuggestionAction } from '@/server/actions/whatsapp-notify.actions';
 import { sendQuoteViaWhatsAppAction } from '@/server/actions/quote.actions';
 import { toast } from 'react-hot-toast';
 
@@ -706,7 +706,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
 
   let pendingQuoteUrl = '';
   if (activeContact && messages.length > 0) {
-    const quoteMsg = [...messages].reverse().find(m => m.direction === 'INTERNAL' && m.content.includes('|||'));
+    const quoteMsg = [...messages].reverse().find(m => m.direction === 'INTERNAL' && m.content.includes('|||') && !m.content.includes('|||SUGGEST'));
     if (quoteMsg) {
       const parts = quoteMsg.content.split('|||');
       if (parts[1] && !parts[1].startsWith('QUOTE:')) {
@@ -1050,7 +1050,10 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                   let buttonLink = null;
                   let buttonText = "";
 
-                  if (parts[1]) {
+                  const suggestion = parts[1]?.startsWith('SUGGEST:') ? parts[1] : null;
+                  const suggestionDone = parts[1]?.startsWith('SUGGEST_DONE:') ? parts[1].replace('SUGGEST_DONE:', '') : null;
+
+                  if (parts[1] && !suggestion && !suggestionDone) {
                     if (parts[1].startsWith('QUOTE:')) {
                       const quoteId = parts[1].replace('QUOTE:', '');
                       buttonLink = `/dashboard/quotes/${quoteId}`;
@@ -1085,6 +1088,31 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                             <Bot size={13} /> Nota interna · Sistema
                           </div>
                           <p className="whitespace-pre-wrap text-left break-words">{displayContent}</p>
+                          {suggestion && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <button
+                                onClick={async () => {
+                                  const r = await resolveQuoteSuggestionAction(msg.id, 'CONFIRM');
+                                  if (r.success) { setMessages(prev => prev.map(x => x.id === msg.id ? { ...x, content: r.content } : x)); toast.success(r.outcome); }
+                                  else toast.error(r.error);
+                                }}
+                                className="inline-flex items-center gap-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                              >
+                                <Check size={14} /> {suggestion.startsWith('SUGGEST:ACCEPT') ? 'Confirmar aceptada' : 'Confirmar rechazada'}
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const r = await resolveQuoteSuggestionAction(msg.id, 'DISMISS');
+                                  if (r.success) setMessages(prev => prev.map(x => x.id === msg.id ? { ...x, content: r.content } : x));
+                                  else toast.error(r.error);
+                                }}
+                                className="inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 text-amber-100/80 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                              >
+                                <X size={14} /> Ignorar
+                              </button>
+                            </div>
+                          )}
+                          {suggestionDone && <p className="mt-1.5 text-xs font-semibold text-amber-300/90">✔ {suggestionDone}</p>}
                           {buttonLink && buttonText !== "Generar Cotización" && (
                             <Link
                               href={buttonLink}

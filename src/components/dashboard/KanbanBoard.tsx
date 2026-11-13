@@ -260,7 +260,7 @@ function TaskCard({ quote, columns, onMove }: { quote: any; columns: any[]; onMo
         <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wide ${
           quote.paymentStatus === "PAID" ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-amber-50 text-amber-600 border border-amber-100"
         }`}>
-          {paymentLabels[quote.paymentStatus || "PENDING"]}
+          {(quote.paymentStatus || "PENDING") === "PENDING" && !["APPROVED", "ACCEPTED", "IN_PRODUCTION", "DELIVERED", "DONE"].includes(quote.status) ? "Pendiente" : paymentLabels[quote.paymentStatus || "PENDING"]}
         </span>
       </div>
 

@@ -81,10 +81,11 @@ export async function getDashboardStatsService() {
     select: { status: true, total: true },
   });
   const pipelineDef = [
-    { key: "DRAFT", label: "Borrador", color: "#94a3b8" },
-    { key: "SENT", label: "Enviadas", color: "#3b82f6" },
-    { key: "APPROVED", label: "Aprobadas", color: "#a855f7" },
-    { key: "IN_PRODUCTION", label: "En producción", color: "#f97316" },
+    // counted: solo lo que el cliente ya aceptó suma dinero; borrador y enviadas se muestran como cantidad.
+    { key: "DRAFT", label: "Borrador", color: "#94a3b8", counted: false },
+    { key: "SENT", label: "Enviadas", color: "#3b82f6", counted: false },
+    { key: "APPROVED", label: "Aprobadas", color: "#a855f7", counted: true },
+    { key: "IN_PRODUCTION", label: "En producción", color: "#f97316", counted: true },
   ];
   const pipeline = pipelineDef.map((p) => {
     const rows = openQuotes.filter((q) => q.status === p.key);

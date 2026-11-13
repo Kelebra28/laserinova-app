@@ -414,7 +414,8 @@ async function authorizePending(admin: AdminContact, quoteId: string) {
   }
   try {
     const { contact, folio, total, viaTemplate } = await sendQuotePdfToClient(quoteId);
-    await prisma.quote.update({ where: { id: quoteId }, data: { status: 'APPROVED', sentDate: new Date() } });
+    // sendQuotePdfToClient ya la dejó 'Enviada'. Autorizar y mandar NO es que el cliente la acepte:
+    // 'Aprobada' solo cuando el cliente acepta (es lo que cuenta como venta y por cobrar).
     await setMarker(admin.id, RESOLVED, quoteId);
     await replyToAdmin(admin, `✅ Cotización ${folio} (${money(total)}) enviada a ${contact.name || `+${contact.phone}`}.`
       + (viaTemplate ? '\nPasaron más de 24 h desde su último mensaje, así que se mandó con la plantilla de WhatsApp.' : ''));
