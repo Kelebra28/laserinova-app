@@ -15,6 +15,9 @@ import { draftEmailReply } from "@/lib/agents/email/reply";
  */
 
 export const DRAFTS_FOLDER = "DRAFTS";
+// Marca "ya lo contesté" (por WhatsApp, teléfono, otro programa…): una fila oculta con threadId = Message-ID del correo.
+// Vive en la base de datos (sobrevive a los despliegues) y vale para todos los buzones, porque el mismo correo comparte Message-ID.
+export const ANSWERED_MARK_FOLDER = "ANSWERED_MARK";
 
 const OWN_DOMAIN = /@laserinova\.com$/i;
 const WEB_FORM = /^no-reply@laserinova\.com$/i;
@@ -37,27 +40,30 @@ function addSkip(emailId: string, reason: string) {
 /** Correos de la bandeja que merecen que la IA los revise: recientes, de fuera, sin respuesta ni borrador. */
 export async function findPendingEmails(userId: string, days: number) {
   const since = new Date(Date.now() - days * 864e5);
-  const [inbox, sent, drafts] = await Promise.all([
+  const [inbox, sent, drafts, marks] = await Promise.all([
     prisma.email.findMany({
       // También Spam, pero SOLO lo que manda el propio formulario web: el filtro de Spam suele mandar ahí esos avisos
       where: { userId, folder: { in: ["INBOX", "SPAM"] }, receivedAt: { gte: since } },
       orderBy: { receivedAt: "desc" },
       select: { id: true, folder: true, messageId: true, from: true, subject: true, receivedAt: true },
     }),
-    prisma.email.findMany({ where: { userId, folder: "SENT", receivedAt: { gte: since } }, select: { to: true, threadId: true } }),
+    prisma.email.findMany({ where: { userId, folder: "SENT", receivedAt: { gte: since } }, select: { to: true, threadId: true, receivedAt: true } }),
     prisma.email.findMany({ where: { userId, folder: DRAFTS_FOLDER }, select: { threadId: true } }),
+    prisma.email.findMany({ where: { folder: ANSWERED_MARK_FOLDER }, select: { threadId: true } }),
   ]);
   const skips = readSkips();
   const sentThreads = new Set(sent.map((s) => s.threadId).filter(Boolean));
   const draftedFor = new Set(drafts.map((d) => d.threadId).filter(Boolean));
+  const marked = new Set(marks.map((m) => m.threadId).filter(Boolean));
 
   return inbox.filter((e) => {
     const addr = addrOf(e.from);
     if (e.folder === "SPAM" && !WEB_FORM.test(addr)) return false;
-    if (skips[e.id] || draftedFor.has(e.messageId) || sentThreads.has(e.messageId)) return false;
+    if (skips[e.id] || draftedFor.has(e.messageId) || sentThreads.has(e.messageId) || marked.has(e.messageId)) return false;
     if (OWN_DOMAIN.test(addr) && !WEB_FORM.test(addr)) return false;
     if (!WEB_FORM.test(addr) && (AUTOMATED.test(addr) || NOISE_DOMAINS.test(addr))) return false;
-    if (sent.some((s) => s.to.toLowerCase().includes(addr))) return false; // ya se le escribió a esa persona
+    // Ya se le contestó: solo cuenta lo enviado DESPUÉS de este correo (si escribió de nuevo tras nuestra respuesta, hay que contestar otra vez)
+    if (sent.some((s) => s.receivedAt >= e.receivedAt && s.to.toLowerCase().includes(addr))) return false;
     return true;
   });
 }
@@ -185,7 +191,7 @@ const QUOTE_WORDS = ["cotiz", "presupuesto", "precio", "quote", "pricing", "cuá
 export async function listQuoteEmails(userId: string, days: number) {
   const since = new Date(Date.now() - days * 864e5);
   const formFrom = { from: { contains: "no-reply@laserinova.com" } };
-  const [rows, sent, drafts] = await Promise.all([
+  const [rows, sent, drafts, marks] = await Promise.all([
     prisma.email.findMany({
       where: {
         userId,
@@ -199,12 +205,18 @@ export async function listQuoteEmails(userId: string, days: number) {
       take: 300,
       select: { id: true, messageId: true, uid: true, folder: true, from: true, to: true, cc: true, subject: true, snippet: true, receivedAt: true, isRead: true, isStarred: true, clientId: true },
     }),
-    prisma.email.findMany({ where: { userId, folder: "SENT", receivedAt: { gte: since } }, select: { to: true, threadId: true } }),
+    // Enviados de TODOS los buzones: el mismo correo suele llegar a varios y lo contesta uno solo
+    prisma.email.findMany({ where: { folder: "SENT", receivedAt: { gte: since } }, select: { to: true, threadId: true, receivedAt: true, userId: true } }),
     prisma.email.findMany({ where: { userId, folder: DRAFTS_FOLDER }, select: { threadId: true } }),
+    prisma.email.findMany({ where: { folder: ANSWERED_MARK_FOLDER }, select: { threadId: true, userId: true } }),
   ]);
   const skips = readSkips();
   const sentThreads = new Set(sent.map((s) => s.threadId).filter(Boolean));
   const draftThreads = new Set(drafts.map((d) => d.threadId).filter(Boolean));
+  const marked = new Map(marks.filter((m) => m.threadId).map((m) => [m.threadId as string, m.userId]));
+  // Quién contestó (nombre de pila): el dueño del buzón desde el que salió la respuesta, o quien lo marcó a mano
+  const people = await prisma.user.findMany({ select: { id: true, name: true } });
+  const firstName = (id?: string | null) => people.find((p) => p.id === id)?.name?.trim().split(/\s+/)[0] || "";
 
   const out = rows
     .filter((e) => {
@@ -216,9 +228,12 @@ export async function listQuoteEmails(userId: string, days: number) {
     })
     .map((e) => {
       const addr = addrOf(e.from);
-      const answered = sentThreads.has(e.messageId) || (!WEB_FORM.test(addr) && sent.some((s) => s.to.toLowerCase().includes(addr)));
+      const byThread = sent.find((s) => s.threadId === e.messageId);
+      const byAddr = WEB_FORM.test(addr) ? undefined : sent.find((s) => s.receivedAt >= e.receivedAt && s.to.toLowerCase().includes(addr));
+      const answeredBy = byThread ? firstName(byThread.userId) : marked.has(e.messageId) ? firstName(marked.get(e.messageId)) : byAddr ? firstName(byAddr.userId) : "";
+      const answered = !!byThread || marked.has(e.messageId) || !!byAddr;
       const quoteStatus: QuoteStatus = answered ? "ANSWERED" : draftThreads.has(e.messageId) ? "DRAFT" : "PENDING";
-      return { ...e, attachments: [] as { filename: string; size: number }[], quoteStatus };
+      return { ...e, attachments: [] as { filename: string; size: number }[], quoteStatus, answeredBy };
     });
 
   const rank: Record<QuoteStatus, number> = { PENDING: 0, DRAFT: 1, ANSWERED: 2 };
@@ -231,6 +246,22 @@ export async function dismissEmails(userId: string, ids: string[], reason = "Dad
   const rows = await prisma.email.findMany({ where: { userId, id: { in: ids } }, select: { id: true } });
   for (const r of rows) addSkip(r.id, `perdida: ${reason}`);
   return rows.length;
+}
+
+/** "Ya lo contesté": el correo pasa a "Contestado" (y deja de recibir borrador) aunque la respuesta no haya salido por el CRM. */
+export async function markAnswered(userId: string, ids: string[]) {
+  const rows = await prisma.email.findMany({ where: { userId, id: { in: ids }, folder: { in: ["INBOX", "SPAM"] } }, select: { id: true, messageId: true, subject: true, from: true } });
+  const existing = new Set((await prisma.email.findMany({ where: { folder: ANSWERED_MARK_FOLDER, threadId: { in: rows.map((r) => r.messageId) } }, select: { threadId: true } })).map((m) => m.threadId));
+  let n = 0;
+  for (const r of rows) {
+    n++;
+    if (existing.has(r.messageId)) continue;
+    const id = randomUUID();
+    await prisma.email.create({
+      data: { id, userId, folder: ANSWERED_MARK_FOLDER, messageId: `answered-${id}@local`, threadId: r.messageId, subject: r.subject, from: r.from, to: "", isRead: true, receivedAt: new Date() },
+    });
+  }
+  return n;
 }
 
 // ── Borrador automático al llegar el correo (lo dispara el cron y la revisión rápida de la pantalla) ──

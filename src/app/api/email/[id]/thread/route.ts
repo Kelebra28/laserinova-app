@@ -27,7 +27,7 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
     keys.forEach((k) => seen.add(k));
     if (!keys.length) break;
     const rows = await prisma.email.findMany({
-      where: { userId, OR: [{ messageId: { in: keys } }, { threadId: { in: keys } }] },
+      where: { userId, folder: { not: "ANSWERED_MARK" }, OR: [{ messageId: { in: keys } }, { threadId: { in: keys } }] },
       select: { id: true, messageId: true, threadId: true, receivedAt: true },
       take: 40,
     });

@@ -16,6 +16,7 @@ export interface Email {
   bcc?: string;
   receivedAt: string;
   quoteStatus?: 'PENDING' | 'DRAFT' | 'ANSWERED';
+  answeredBy?: string;
   storagePath?: string;
   attachments: { filename: string, size: number }[];
 }

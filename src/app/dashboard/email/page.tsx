@@ -9,7 +9,7 @@ import { useSession } from 'next-auth/react';
 import { 
   Trash2, AlertOctagon, MailOpen, ArrowLeft, Download, X, Reply, ReplyAll, Forward, Loader2, 
   Paperclip, ChevronDown, ChevronRight, Inbox, Send, Star, StarOff,
-  RefreshCw, PenSquare, Search, Archive, ChevronLeft, Mail, Menu, Sparkles, FileText
+  RefreshCw, PenSquare, Search, Archive, ChevronLeft, Mail, Menu, Sparkles, FileText, CheckCircle2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getPusherClient } from '@/lib/pusher';
@@ -28,10 +28,10 @@ const QUOTE_CHIP: Record<string, { label: string; cls: string }> = {
   DRAFT: { label: 'Borrador listo', cls: 'bg-amber-100 text-amber-700' },
   ANSWERED: { label: 'Contestado', cls: 'bg-emerald-100 text-emerald-700' },
 };
-function QuoteChip({ status }: { status?: string }) {
+function QuoteChip({ status, by }: { status?: string; by?: string }) {
   const c = status ? QUOTE_CHIP[status] : null;
   if (!c) return null;
-  return <span className={`inline-block flex-shrink-0 mr-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none align-middle ${c.cls}`}>{c.label}</span>;
+  return <span className={`inline-block flex-shrink-0 mr-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none align-middle ${c.cls}`}>{c.label}{status === 'ANSWERED' && by ? ` · ${by}` : ''}</span>;
 }
 
 function getInitials(from: string) {
@@ -162,6 +162,17 @@ export default function EmailPage() {
     const r = await fetch('/api/email/quotes/dismiss', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emailIds: [email.id] }) }).then(x => x.json()).catch(() => null);
     if (r?.success) {
       toast.success('Dada por perdida: ya no cuenta como pendiente');
+      setSelectedEmail(null);
+      fetchEmails(currentFolder, page);
+      refreshAiCounts();
+    } else toast.error('No se pudo marcar');
+  };
+
+  // "Ya lo contesté" (WhatsApp, teléfono, otro programa…): pasa a Contestado y ya no pide borrador
+  const markQuoteAnswered = async (email: Email) => {
+    const r = await fetch('/api/email/quotes/answered', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emailIds: [email.id] }) }).then(x => x.json()).catch(() => null);
+    if (r?.success) {
+      toast.success('Marcada como contestada');
       setSelectedEmail(null);
       fetchEmails(currentFolder, page);
       refreshAiCounts();
@@ -510,7 +521,7 @@ export default function EmailPage() {
                         
                         {/* Subject & Snippet Container */}
                         <div className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden">
-                          <QuoteChip status={email.quoteStatus} />
+                          <QuoteChip status={email.quoteStatus} by={email.answeredBy} />
                           <span className={`flex-shrink-0 max-w-[40%] md:max-w-[50%] truncate text-sm ${!email.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>
                             {email.subject || '(Sin asunto)'}
                           </span>
@@ -546,7 +557,7 @@ export default function EmailPage() {
                         </p>
 
                         <p className="text-[11px] text-slate-500 truncate mt-0.5 leading-relaxed">
-                          <QuoteChip status={email.quoteStatus} />{email.snippet}
+                          <QuoteChip status={email.quoteStatus} by={email.answeredBy} />{email.snippet}
                         </p>
                       </div>
                       </>
@@ -569,7 +580,7 @@ export default function EmailPage() {
                         </p>
 
                         <p className="text-[11px] text-slate-500 truncate mt-0.5 leading-relaxed">
-                          <QuoteChip status={email.quoteStatus} />{email.snippet}
+                          <QuoteChip status={email.quoteStatus} by={email.answeredBy} />{email.snippet}
                         </p>
                       </div>
                     )}
@@ -636,6 +647,15 @@ export default function EmailPage() {
                 >
                   <Forward className="w-4 h-4" />
                 </button>
+                {currentFolder === 'QUOTES' && selectedEmail.quoteStatus !== 'ANSWERED' && (
+                  <button
+                    onClick={() => markQuoteAnswered(selectedEmail)}
+                    className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-all"
+                    title="Ya lo contesté (pasa a Contestado)"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                  </button>
+                )}
                 {currentFolder === 'QUOTES' && selectedEmail.quoteStatus === 'PENDING' && (
                   <button
                     onClick={() => dismissQuote(selectedEmail)}
