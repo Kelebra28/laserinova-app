@@ -18,7 +18,7 @@ export const DRAFTS_FOLDER = "DRAFTS";
 
 const OWN_DOMAIN = /@laserinova\.com$/i;
 const WEB_FORM = /^no-reply@laserinova\.com$/i;
-const AUTOMATED = /(^|[._-])(no-?reply|donotreply|do-not-reply|mailer-daemon|postmaster|notifications?|newsletter|alerts?|bounce)[._-]?[^@]*@/i;
+const AUTOMATED = /(^|[._-])(no-?reply|donotreply|do-not-reply|mailer-daemon|postmaster|notifications?|newsletter|boletin|news|marketing|promo(?:ciones)?|alerts?|bounce)[._-]?[^@]*@/i;
 const NOISE_DOMAINS = /@(accounts\.google\.com|facebookmail\.com|messaging\.whatsapp\.com|mail\.instagram\.com|linkedin\.com|e\.linkedin\.com)$/i;
 
 const addrOf = (from: string) => (from.match(/<([^>]+)>/)?.[1] || from).trim().toLowerCase();
@@ -171,4 +171,57 @@ export async function discardDraft(userId: string, id: string) {
   if (!row) return false;
   await prisma.email.delete({ where: { id: row.id } });
   return true;
+}
+
+// ── Pestaña "Cotizaciones": correos que piden cotizar, con su estado de atención ──
+export type QuoteStatus = "PENDING" | "DRAFT" | "ANSWERED";
+const QUOTE_WORDS = ["cotiz", "presupuesto", "precio", "quote", "pricing", "cuánto cuesta", "cuanto cuesta"];
+
+/**
+ * Correos de los últimos `days` días que piden cotización (por palabras, más todo lo que manda el formulario
+ * web, aunque haya caído en Spam), con su estado: sin contestar, borrador listo o contestado. Los que la IA ya
+ * descartó (spam, ventas en frío, phishing, pruebas) no salen.
+ */
+export async function listQuoteEmails(userId: string, days: number) {
+  const since = new Date(Date.now() - days * 864e5);
+  const formFrom = { from: { contains: "no-reply@laserinova.com" } };
+  const [rows, sent, drafts] = await Promise.all([
+    prisma.email.findMany({
+      where: {
+        userId,
+        receivedAt: { gte: since },
+        OR: [
+          { folder: "INBOX", OR: [...QUOTE_WORDS.flatMap((w) => [{ subject: { contains: w } }, { snippet: { contains: w } }]), formFrom] },
+          { folder: "SPAM", ...formFrom },
+        ],
+      },
+      orderBy: { receivedAt: "desc" },
+      take: 300,
+      select: { id: true, messageId: true, uid: true, folder: true, from: true, to: true, cc: true, subject: true, snippet: true, receivedAt: true, isRead: true, isStarred: true, clientId: true },
+    }),
+    prisma.email.findMany({ where: { userId, folder: "SENT", receivedAt: { gte: since } }, select: { to: true, threadId: true } }),
+    prisma.email.findMany({ where: { userId, folder: DRAFTS_FOLDER }, select: { threadId: true } }),
+  ]);
+  const skips = readSkips();
+  const sentThreads = new Set(sent.map((s) => s.threadId).filter(Boolean));
+  const draftThreads = new Set(drafts.map((d) => d.threadId).filter(Boolean));
+
+  const out = rows
+    .filter((e) => {
+      const addr = addrOf(e.from);
+      if (skips[e.id]) return false;
+      if (OWN_DOMAIN.test(addr) && !WEB_FORM.test(addr)) return false;
+      if (!WEB_FORM.test(addr) && (AUTOMATED.test(addr) || NOISE_DOMAINS.test(addr))) return false;
+      return true;
+    })
+    .map((e) => {
+      const addr = addrOf(e.from);
+      const answered = sentThreads.has(e.messageId) || (!WEB_FORM.test(addr) && sent.some((s) => s.to.toLowerCase().includes(addr)));
+      const quoteStatus: QuoteStatus = answered ? "ANSWERED" : draftThreads.has(e.messageId) ? "DRAFT" : "PENDING";
+      return { ...e, attachments: [] as { filename: string; size: number }[], quoteStatus };
+    });
+
+  const rank: Record<QuoteStatus, number> = { PENDING: 0, DRAFT: 1, ANSWERED: 2 };
+  out.sort((a, b) => rank[a.quoteStatus] - rank[b.quoteStatus] || b.receivedAt.getTime() - a.receivedAt.getTime());
+  return out;
 }

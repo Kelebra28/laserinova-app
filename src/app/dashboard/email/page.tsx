@@ -9,17 +9,29 @@ import { useSession } from 'next-auth/react';
 import { 
   Trash2, AlertOctagon, MailOpen, ArrowLeft, Download, X, Reply, ReplyAll, Forward, Loader2, 
   Paperclip, ChevronDown, ChevronRight, Inbox, Send, Star, StarOff,
-  RefreshCw, PenSquare, Search, Archive, ChevronLeft, Mail, Menu, Sparkles
+  RefreshCw, PenSquare, Search, Archive, ChevronLeft, Mail, Menu, Sparkles, FileText
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const FOLDERS = [
   { id: 'INBOX', label: 'Recibidos', icon: Inbox },
+  { id: 'QUOTES', label: 'Cotizaciones', icon: FileText },
   { id: 'DRAFTS', label: 'Borradores IA', icon: Sparkles },
   { id: 'SENT', label: 'Enviados', icon: Send },
   { id: 'SPAM', label: 'Spam', icon: AlertOctagon },
   { id: 'TRASH', label: 'Papelera', icon: Trash2 },
 ];
+
+const QUOTE_CHIP: Record<string, { label: string; cls: string }> = {
+  PENDING: { label: 'Sin contestar', cls: 'bg-red-100 text-red-700' },
+  DRAFT: { label: 'Borrador listo', cls: 'bg-amber-100 text-amber-700' },
+  ANSWERED: { label: 'Contestado', cls: 'bg-emerald-100 text-emerald-700' },
+};
+function QuoteChip({ status }: { status?: string }) {
+  const c = status ? QUOTE_CHIP[status] : null;
+  if (!c) return null;
+  return <span className={`inline-block flex-shrink-0 mr-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none align-middle ${c.cls}`}>{c.label}</span>;
+}
 
 function getInitials(from: string) {
   const nameMatch = from.match(/^"?([^"<]+)"?\s*</);
@@ -88,17 +100,20 @@ export default function EmailPage() {
   // ── Respuestas con IA: borradores que la persona revisa y manda ──
   const [draftsTotal, setDraftsTotal] = useState(0);
   const [pendingAi, setPendingAi] = useState(0);
+  const [quotesPending, setQuotesPending] = useState(0);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiProgress, setAiProgress] = useState('');
 
   const refreshAiCounts = async () => {
     try {
-      const [d, p] = await Promise.all([
+      const [d, p, q] = await Promise.all([
         fetch('/api/email/list?folder=DRAFTS&page=1&limit=1').then(r => r.json()),
         fetch('/api/email/drafts/backlog?days=8').then(r => r.json()),
+        fetch('/api/email/quotes?days=30&page=1&limit=1').then(r => r.json()),
       ]);
       setDraftsTotal(d?.total || 0);
       setPendingAi(p?.pending || 0);
+      setQuotesPending(q?.unread || 0);
     } catch { /* se queda el número anterior */ }
   };
 
@@ -350,6 +365,11 @@ export default function EmailPage() {
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
                 <span className="truncate">{label}</span>
+                {id === 'QUOTES' && quotesPending > 0 && (
+                  <span className="ml-auto text-[11px] font-bold bg-red-600 text-white rounded-full px-1.5 py-0.5 leading-none">
+                    {quotesPending}
+                  </span>
+                )}
                 {id === 'DRAFTS' && draftsTotal > 0 && (
                   <span className="ml-auto text-[11px] font-bold bg-amber-500 text-white rounded-full px-1.5 py-0.5 leading-none">
                     {draftsTotal}
@@ -463,6 +483,7 @@ export default function EmailPage() {
                         
                         {/* Subject & Snippet Container */}
                         <div className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden">
+                          <QuoteChip status={email.quoteStatus} />
                           <span className={`flex-shrink-0 max-w-[40%] md:max-w-[50%] truncate text-sm ${!email.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>
                             {email.subject || '(Sin asunto)'}
                           </span>
@@ -498,7 +519,7 @@ export default function EmailPage() {
                         </p>
 
                         <p className="text-[11px] text-slate-500 truncate mt-0.5 leading-relaxed">
-                          {email.snippet}
+                          <QuoteChip status={email.quoteStatus} />{email.snippet}
                         </p>
                       </div>
                       </>
@@ -521,7 +542,7 @@ export default function EmailPage() {
                         </p>
 
                         <p className="text-[11px] text-slate-500 truncate mt-0.5 leading-relaxed">
-                          {email.snippet}
+                          <QuoteChip status={email.quoteStatus} />{email.snippet}
                         </p>
                       </div>
                     )}

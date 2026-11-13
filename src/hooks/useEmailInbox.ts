@@ -14,6 +14,7 @@ export interface Email {
   cc?: string;
   bcc?: string;
   receivedAt: string;
+  quoteStatus?: 'PENDING' | 'DRAFT' | 'ANSWERED';
   storagePath?: string;
   attachments: { filename: string, size: number }[];
 }
@@ -59,7 +60,8 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
     const folder = folderToFetch || currentFolder;
     const activePage = pageToFetch !== undefined ? pageToFetch : page;
     try {
-      const res = await fetch(`/api/email/list?folder=${folder}&page=${activePage}&limit=${limit}${query ? `&q=${encodeURIComponent(query)}` : ''}`);
+      const base = folder === 'QUOTES' ? '/api/email/quotes?' : `/api/email/list?folder=${folder}&`;
+      const res = await fetch(`${base}page=${activePage}&limit=${limit}${query ? `&q=${encodeURIComponent(query)}` : ''}`);
       if (res.ok) {
         const data = await res.json();
         setEmails(data.emails);
