@@ -1,5 +1,9 @@
 export const dynamic = 'force-dynamic';
 
+// Imágenes incrustadas en el cuerpo (p. ej. el logo de la firma) no son adjuntos: no se listan
+const visibleAtt = <T extends { contentId?: string | null; mimeType?: string | null }>(list: T[]) =>
+  list.filter((a) => !(a.contentId && a.mimeType?.startsWith('image/')));
+
 import { mailboxName } from '@/lib/email-imap';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -46,7 +50,7 @@ export async function GET(
     if (targetEmail.storagePath) {
       const disk = loadEmailFromDisk(targetEmail.storagePath);
       if (disk && (disk.html || disk.text)) {
-        return NextResponse.json({ success: true, thread: [{ ...targetEmail, ...disk }] });
+        return NextResponse.json({ success: true, thread: [{ ...targetEmail, attachments: visibleAtt(targetEmail.attachments), ...disk }] });
       }
     }
 
@@ -102,7 +106,7 @@ export async function GET(
             // Guardar adjuntos si existen y no se guardaron antes
             if (parsed.attachments && parsed.attachments.length > 0 && targetEmail.attachments.length === 0) {
                await prisma.attachment.createMany({
-                 data: parsed.attachments.map(att => ({
+                 data: parsed.attachments.filter(att => !att.related).map(att => ({
                    emailId: targetEmail.id,
                    filename: att.filename || 'adjunto',
                    mimeType: att.contentType || 'application/octet-stream',
@@ -126,7 +130,7 @@ export async function GET(
               },
             });
 
-            return NextResponse.json({ success: true, thread: [{ ...targetEmail, html, text }] });
+            return NextResponse.json({ success: true, thread: [{ ...targetEmail, attachments: visibleAtt(targetEmail.attachments), html, text }] });
           }
         } finally {
           lock.release();

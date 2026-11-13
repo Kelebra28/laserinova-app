@@ -229,10 +229,13 @@ export default function EmailPage() {
   const unreadCount = unreadTotal;
 
   return (
-    <div className="flex h-[calc(100vh-7.5rem)] w-full overflow-hidden rounded-2xl border border-slate-200/60 shadow-xl bg-white">
+    <div className="relative flex h-full w-full overflow-hidden bg-white">
       
+      {/* En celular el menú de carpetas se abre encima: se oscurece lo de atrás y tocarlo lo cierra */}
+      {isSidebarOpen && <div className="md:hidden absolute inset-0 z-40 bg-slate-900/40" onClick={() => setIsSidebarOpen(false)} />}
+
       {/* ─── LEFT SIDEBAR ─── */}
-      <div className={`w-56 flex-shrink-0 bg-slate-50/80 border-r border-slate-200/60 flex-col ${isSidebarOpen ? 'absolute inset-y-0 left-0 z-50 flex shadow-2xl h-full' : 'hidden md:flex'}`}>
+      <div className={`w-56 flex-shrink-0 bg-white md:bg-slate-50/80 border-r border-slate-200/60 flex-col ${isSidebarOpen ? 'absolute inset-y-0 left-0 z-50 flex shadow-2xl h-full' : 'hidden md:flex'}`}>
         <div className="md:hidden flex justify-end p-2 border-b border-slate-200/60">
           <button onClick={() => setIsSidebarOpen(false)} className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg">
             <X className="w-5 h-5" />
@@ -256,7 +259,7 @@ export default function EmailPage() {
             return (
               <button
                 key={id}
-                onClick={() => { setSearchQuery(''); changeFolder(id); }}
+                onClick={() => { setSearchQuery(''); changeFolder(id); setIsSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all mb-0.5 ${
                   isActive
                     ? 'bg-red-50 text-red-700 font-semibold'
@@ -355,15 +358,16 @@ export default function EmailPage() {
                     isSelected ? 'bg-red-50/60 border-l-2 border-l-red-500' : 'border-l-2 border-l-transparent'
                   }`}
                 >
-                  <div className={`w-full min-w-0 flex ${isFullWidth ? 'items-center gap-4' : 'items-start gap-3'}`}>
+                  <div className={`w-full min-w-0 flex ${isFullWidth ? 'items-start gap-3 md:items-center md:gap-4' : 'items-start gap-3'}`}>
                     {/* Avatar */}
                     <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-sm font-bold ${avatarColor}`}>
                       {initials}
                     </div>
 
                     {isFullWidth ? (
-                      /* ─── FULL WIDTH LAYOUT (Gmail style) ─── */
-                      <div className="flex-1 flex items-center gap-3 min-w-0">
+                      <>
+                        {/* ─── PANTALLA ANCHA: una sola línea, estilo Gmail ─── */}
+                        <div className="hidden md:flex flex-1 items-center gap-3 min-w-0">
                         {/* Sender */}
                         <div className={`w-24 md:w-40 flex-shrink-0 truncate text-sm md:text-sm ${!email.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
                           {senderName}
@@ -386,9 +390,31 @@ export default function EmailPage() {
                             {formatEmailDate(email.receivedAt)}
                           </span>
                         </div>
+                        </div>
+                        {/* ─── CELULAR: dos líneas más la vista previa, para que se lea todo ─── */}
+                      <div className="md:hidden min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <span className={`text-sm truncate ${!email.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
+                            {senderName}
+                          </span>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {!email.isRead && <div className="w-1.5 h-1.5 rounded-full bg-red-500" />}
+                            <span className={`text-[10px] ${!email.isRead ? 'font-bold text-slate-900' : 'text-slate-400'}`}>
+                              {formatEmailDate(email.receivedAt)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className={`text-xs truncate ${!email.isRead ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
+                          {email.subject || '(Sin asunto)'}
+                        </p>
+
+                        <p className="text-[11px] text-slate-500 truncate mt-0.5 leading-relaxed">
+                          {email.snippet}
+                        </p>
                       </div>
+                      </>
                     ) : (
-                      /* ─── COMPACT SIDEBAR LAYOUT ─── */
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-1 mb-0.5">
                           <span className={`text-sm truncate ${!email.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
@@ -675,7 +701,7 @@ export default function EmailPage() {
                           )}
 
                           {/* Reply button per message */}
-                          <div className="flex justify-end pt-1">
+                          <div className="flex flex-wrap justify-end gap-2 pt-1">
                             <button
                               onClick={() => handleReply(em)}
                               className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-600 hover:text-red-700 rounded-lg text-xs font-semibold transition-all active:scale-95"
@@ -685,14 +711,14 @@ export default function EmailPage() {
                             </button>
                             <button
                               onClick={() => handleReply(em, 'all')}
-                              className="ml-2 flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-600 hover:text-red-700 rounded-lg text-xs font-semibold transition-all"
+                              className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-600 hover:text-red-700 rounded-lg text-xs font-semibold transition-all"
                             >
                               <ReplyAll className="w-3.5 h-3.5" />
                               Responder a todos
                             </button>
                             <button
                               onClick={() => handleReply(em, 'forward')}
-                              className="ml-2 flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-600 hover:text-red-700 rounded-lg text-xs font-semibold transition-all"
+                              className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-600 hover:text-red-700 rounded-lg text-xs font-semibold transition-all"
                             >
                               <Forward className="w-3.5 h-3.5" />
                               Reenviar
