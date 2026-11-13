@@ -294,6 +294,45 @@ export async function updateQuoteConsiderationsService(quoteId: string, visibleC
   return true;
 }
 
+/**
+ * El dashboard y Finanzas suman FinancialTransaction, no Quote.realAmountCollected. Cada vez que se
+ * marca un cobro a mano, el total de ingresos de la cotización debe quedar igual a lo cobrado.
+ */
+async function syncQuoteIncomeTransactions(quoteId: string, collected: number) {
+  const quote = await prisma.quote.findUnique({ where: { id: quoteId }, select: { folio: true, clientId: true } });
+  if (!quote) return;
+  const INCOME = ["INGRESO", "ANTICIPO", "LIQUIDACION"];
+  const existing = await prisma.financialTransaction.findMany({
+    where: { quoteId, isDeleted: false, type: { in: INCOME } },
+    select: { id: true, amount: true },
+  });
+  const current = existing.reduce((sum, t) => sum + t.amount, 0);
+  let toCreate = collected - current;
+
+  if (toCreate < -0.01) {
+    // Se corrigió el cobro a la baja: se anulan los ingresos anteriores y se registra el monto vigente.
+    await prisma.financialTransaction.updateMany({
+      where: { id: { in: existing.map((t) => t.id) } },
+      data: { isDeleted: true, deletedAt: new Date(), deleteReason: "Cobro corregido a la baja en la cotización" },
+    });
+    toCreate = collected;
+  }
+  if (toCreate > 0.01) {
+    await prisma.financialTransaction.create({
+      data: {
+        type: "INGRESO",
+        category: "Cobranza",
+        amount: toCreate,
+        description: `Cobro registrado en cotización - ${quote.folio}`,
+        date: new Date(),
+        quoteId,
+        clientId: quote.clientId,
+        status: "ACTIVO",
+      },
+    });
+  }
+}
+
 export async function updateQuotePaymentService(quoteId: string, realAmountCollected: number, paymentStatus: string) {
   const quote = await prisma.quote.findUnique({ where: { id: quoteId } });
   if (!quote) throw new Error("Cotización no encontrada");
@@ -313,6 +352,7 @@ export async function updateQuotePaymentService(quoteId: string, realAmountColle
       closeDate: isPaidOrPartial ? new Date() : null,
     },
   });
+  await syncQuoteIncomeTransactions(quoteId, realAmountCollected);
   return true;
 }
 
@@ -857,10 +897,12 @@ export async function updateQuotePaymentKanbanService(quoteId: string, type: 'un
     };
   }
 
-  await prisma.quote.update({
+  const updated = await prisma.quote.update({
     where: { id: quoteId },
-    data
+    data,
+    select: { realAmountCollected: true },
   });
+  await syncQuoteIncomeTransactions(quoteId, updated.realAmountCollected || 0);
 
   return true;
 }

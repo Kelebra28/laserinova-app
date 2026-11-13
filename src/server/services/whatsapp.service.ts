@@ -743,6 +743,13 @@ export async function sendQuotePdfToClient(quoteId: string) {
   });
   await notificationEmitter.emit('whatsapp_message', { message: { ...docMsg, mediaUrl: 'FETCH_REQUIRED' }, contact });
 
+  // Enviarla por WhatsApp la deja "Enviada", igual que por correo. Solo desde borrador/calculada:
+  // si ya estaba aprobada o más adelante, reenviar el PDF no la regresa de estado.
+  await prisma.quote.updateMany({
+    where: { id: quoteId, status: { in: ['DRAFT', 'CALCULATED'] } },
+    data: { status: 'SENT', sentDate: new Date() },
+  });
+
   if (viaTemplate) {
     // La plantilla ya trae el aviso al cliente; el bot no puede escribirle hasta que conteste.
     await prisma.whatsAppMessage.create({
