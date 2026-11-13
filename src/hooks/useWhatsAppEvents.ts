@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { getPusherClient } from '@/lib/pusher';
+import { playNotificationSound } from '@/lib/notificationSound';
 
 type UseWhatsAppEventsProps = {
   onNewMessage?: (message: any) => void;
@@ -39,11 +40,7 @@ export function useWhatsAppEvents({ onNewMessage, onStatusUpdate, onContactUpdat
       const shouldPlaySound = (!isSimulator && isIncoming) || (isSimulator && isOutbound);
 
       if (shouldPlaySound) {
-        const audioEl = document.getElementById('notification-sound') as HTMLAudioElement;
-        if (audioEl) {
-          audioEl.currentTime = 0; // Reiniciar por si suenan varios seguidos
-          audioEl.play().catch(e => console.log('Autoplay bloqueado:', e));
-        }
+        playNotificationSound();
       }
 
       if (onNewMessageRef.current) {

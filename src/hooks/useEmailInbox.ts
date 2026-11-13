@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getPusherClient } from '@/lib/pusher';
+import { playNotificationSound } from '@/lib/notificationSound';
 
 export interface Email {
   id: string;
@@ -205,8 +206,7 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
     const onNewMail = (data: { email?: string }) => {
       if (data?.email && data.email.toLowerCase() !== userEmail.trim().toLowerCase()) return;
       fetchRef.current(undefined, undefined, true);
-      const audio = document.getElementById('notification-sound') as HTMLAudioElement | null;
-      audio?.play().catch(() => {});
+      playNotificationSound();
     };
     channel.bind('email_new', onNewMail);
     return () => { channel.unbind('email_new', onNewMail); };

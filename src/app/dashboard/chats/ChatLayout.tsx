@@ -152,7 +152,6 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
           [contact.id]: (prev[contact.id] || 0) + 1
         }));
         // Sonido de notificación
-        try { new Audio('/notification.mp3').play().catch(() => {}); } catch {}
       }
     },
     onReaction: ({ id, reaction }) => {
