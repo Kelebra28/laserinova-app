@@ -47,6 +47,7 @@ const menuItems = [
   { name: "Etiquetas", href: "/dashboard/labels", icon: Printer, permKey: "labels" },
   { name: "Encuestas", href: "/dashboard/surveys", icon: Star, permKey: "surveys", adminOnly: true },
   { name: "Reportes", href: "/dashboard/reports", icon: PieChart, permKey: "reports" },
+  { name: "Ventas WhatsApp", href: "/dashboard/ventas-whatsapp", icon: MessageCircle, permKey: "reports" },
   { name: "Datos & Analytics", href: "/dashboard/data-analytics", icon: Database, permKey: "reports" },
   { name: "Usuarios", href: "/dashboard/users", icon: Users, adminOnly: true },
   { name: "Configuración", href: "/dashboard/settings", icon: Settings, adminOnly: true },

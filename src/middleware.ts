@@ -18,6 +18,7 @@ const menuMap = [
   { href: "/dashboard/labels", permKey: "labels" },
   { href: "/dashboard/surveys", adminOnly: true },
   { href: "/dashboard/reports", permKey: "reports" },
+  { href: "/dashboard/ventas-whatsapp", permKey: "reports" },
   { href: "/dashboard/users", adminOnly: true },
   { href: "/dashboard/settings", adminOnly: true },
   { href: "/dashboard", permKey: "dashboard" }, // Debe ir al final para que el prefix match no atrape a los demás

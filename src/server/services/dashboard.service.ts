@@ -4,6 +4,8 @@ import { formatDueDate, todayYMD } from "@/lib/dates";
 const INCOME_TYPES = ["INGRESO", "ANTICIPO", "LIQUIDACION"];
 const EXPENSE_TYPES = ["GASTO_OPERATIVO", "GASTO_PROYECTO"];
 const DEAD_STATUSES = ["CANCELLED", "REJECTED"];
+// Solo se debe lo que el cliente ya aprobó; una cotización enviada o calculada aún no es deuda.
+const OWED_STATUSES = ["APPROVED", "ACCEPTED", "IN_PRODUCTION", "DELIVERED", "DONE"];
 const DAY = 24 * 60 * 60 * 1000;
 
 function monthRange(offsetFromCurrent: number) {
@@ -48,7 +50,7 @@ export async function getDashboardStatsService() {
     where: {
       active: true,
       paymentStatus: { in: ["PENDING", "PARTIAL"] },
-      status: { notIn: [...DEAD_STATUSES, "DRAFT"] },
+      status: { in: OWED_STATUSES },
     },
     select: { total: true, realAmountCollected: true },
   });
