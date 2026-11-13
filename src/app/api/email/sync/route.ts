@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { getImapConfig } from '@/lib/email-imap';
 import { runMailboxSync } from '@/lib/email-sync';
 import { notificationEmitter } from '@/lib/notification-emitter';
+import { autoDraftNew } from '@/lib/email-drafts';
 
 export async function POST(req: Request) {
   try {
@@ -39,6 +40,14 @@ export async function POST(req: Request) {
       if (result.newInbox.length) {
         const dbUser = await prisma.user.findUnique({ where: { id: currentUserId }, select: { email: true } });
         await notificationEmitter.emit('email_new', { email: dbUser?.email, count: result.newInbox.length, latest: result.newInbox[0] });
+      }
+      // La revisión rápida (?full=0) también deja borradores de lo nuevo, en segundo plano para no alargar la respuesta
+      if (!full) {
+        void autoDraftNew(currentUserId).then(async (ad) => {
+          if (!ad.drafts) return;
+          const u = await prisma.user.findUnique({ where: { id: currentUserId }, select: { email: true } });
+          await notificationEmitter.emit('email_draft', { email: u?.email, count: ad.drafts, latest: ad.items[0] });
+        }).catch(() => {});
       }
       return NextResponse.json({ success: true, message: 'Sync completado', background: false, syncedCount: result.syncedCount });
     } catch (err: any) {

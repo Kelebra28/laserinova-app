@@ -66,7 +66,8 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
         const data = await res.json();
         setEmails(data.emails);
         setTotalEmails(data.total || 0);
-        setUnreadTotal(data.unread || 0);
+        // El contador de Recibidos es solo de Recibidos: no debe cambiar al mirar Cotizaciones, Borradores, etc.
+        if (folder === 'INBOX') setUnreadTotal(data.unread || 0);
         
         // Cache page 1 locally (solo la vista sin búsqueda)
         if (activePage === 1 && !query) {

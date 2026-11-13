@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { runMailboxSync } from '@/lib/email-sync';
 import { notificationEmitter } from '@/lib/notification-emitter';
+import { autoDraftNew } from '@/lib/email-drafts';
 
 /**
  * Revisión programada del correo: no depende de que alguien tenga la pantalla abierta. La llama el cron
@@ -31,6 +32,12 @@ async function handle(req: Request) {
       report[u.email] = r.syncedCount;
       if (r.newInbox.length) {
         await notificationEmitter.emit('email_new', { email: u.email, count: r.newInbox.length, latest: r.newInbox[0] });
+      }
+      // Borrador de lo nuevo que merece respuesta (solo borrador, nunca se envía)
+      const ad = await autoDraftNew(u.id);
+      if (ad.drafts) {
+        report[`${u.email} borradores`] = ad.drafts;
+        await notificationEmitter.emit('email_draft', { email: u.email, count: ad.drafts, latest: ad.items[0] });
       }
     } catch (e: any) {
       report[u.email] = `error: ${String(e?.message || e).slice(0, 80)}`;

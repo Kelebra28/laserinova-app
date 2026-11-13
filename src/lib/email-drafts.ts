@@ -232,3 +232,30 @@ export async function dismissEmails(userId: string, ids: string[], reason = "Dad
   for (const r of rows) addSkip(r.id, `perdida: ${reason}`);
   return rows.length;
 }
+
+// ── Borrador automático al llegar el correo (lo dispara el cron y la revisión rápida de la pantalla) ──
+const drafting = new Set<string>();
+const failedAt = new Map<string, number>(); // correo → cuándo falló: no se reintenta en 10 min (evita gastar llamadas en un error fijo)
+
+/** Redacta borradores de los correos recientes (últimos 2 días) que merecen respuesta y aún no tienen. Nunca envía. */
+export async function autoDraftNew(userId: string, max = 3): Promise<{ drafts: number; items: { to: string; subject: string }[] }> {
+  if (process.env.EMAIL_AUTO_DRAFT === "off" || drafting.has(userId) || !process.env.GEMINI_API_KEY) return { drafts: 0, items: [] };
+  drafting.add(userId);
+  try {
+    const now = Date.now();
+    const pending = (await findPendingEmails(userId, 2)).filter((e) => now - (failedAt.get(e.id) || 0) > 10 * 60 * 1000).slice(0, max);
+    const items: { to: string; subject: string }[] = [];
+    for (const e of pending) {
+      try {
+        const r = await createDraftForEmail(userId, e.id);
+        if (r.status === "DRAFT") items.push({ to: r.to, subject: r.subject });
+      } catch (err: any) {
+        failedAt.set(e.id, Date.now());
+        console.warn("autoDraftNew:", String(err?.message || err).slice(0, 120));
+      }
+    }
+    return { drafts: items.length, items };
+  } finally {
+    drafting.delete(userId);
+  }
+}

@@ -12,6 +12,7 @@ import {
   RefreshCw, PenSquare, Search, Archive, ChevronLeft, Mail, Menu, Sparkles, FileText
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { getPusherClient } from '@/lib/pusher';
 
 const FOLDERS = [
   { id: 'INBOX', label: 'Recibidos', icon: Inbox },
@@ -178,6 +179,21 @@ export default function EmailPage() {
   };
 
   useEffect(() => { if (!isSyncing) refreshAiCounts(); }, [isSyncing]);
+
+  // Aviso en vivo: la IA dejó un borrador nuevo de un correo que acaba de llegar
+  useEffect(() => {
+    const me = (session?.user?.email || '').toLowerCase();
+    if (!me) return;
+    const channel = getPusherClient().subscribe('crm-channel');
+    const onDraft = (data: { email?: string; count?: number; latest?: { to: string } }) => {
+      if (data?.email && data.email.toLowerCase() !== me) return;
+      toast(`✨ ${data.count && data.count > 1 ? `${data.count} borradores nuevos` : 'Borrador nuevo'} para revisar${data.latest?.to ? ` (${data.latest.to})` : ''}`, { duration: 7000 });
+      refreshAiCounts();
+    };
+    channel.bind('email_draft', onDraft);
+    return () => { channel.unbind('email_draft', onDraft); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.email]);
 
   const handleSelectEmail = async (email: Email) => {
     if (currentFolder === 'DRAFTS') { await openDraft(email.id); return; }
