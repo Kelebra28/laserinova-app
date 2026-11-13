@@ -38,7 +38,31 @@ Meta solo permite texto libre dentro de 24 h del último mensaje del cliente; fu
 
 ## Reglas del bot (contenido)
 
-Hay ~181 reglas activas. `docs/propuesta-cambios-reglas-bot.md` tiene una propuesta de limpieza **pendiente de aprobación** (duplicadas, internas/sensibles, nuevas). Decisiones ya tomadas por el dueño: horario L-V 9-18 y sáb 11-16; entrega 3-4 días hábiles siempre a confirmar; corte de metal solo acero inoxidable, lámina negra y lámina galvanizada; sin réplicas como servicio (se trabaja como corte/grabado nuevo con archivo); plotter 1.8 m; cama UV 90×60 cm; acrílico hasta 15 mm; instalación de vinil se cotiza aparte.
+### Conteo de reglas (al 2026-11-12)
+
+El panel `/dashboard/agent/knowledge` lista **todas** las filas de `AgentRule`, activas o no. Desactivar una regla la saca de Pinecone (el bot ya no la ve) pero la deja en la tabla, y se puede reactivar.
+
+| Concepto | Cantidad |
+|---|---|
+| Total en el panel (tabla `AgentRule`) | **189** |
+| Activas (las que ve el bot) | **184** |
+| Desactivadas | 5 |
+| Vectores en Pinecone | 184 (coinciden 1 a 1 con las activas) |
+
+| Namespace | Activas | Desactivadas |
+|---|---|---|
+| `sales_policies` | 70 | 5 |
+| `product_protocols` | 50 | 0 |
+| `material_rules` | 41 | 0 |
+| `general_rules` | 23 | 0 |
+
+**Desactivadas el 2026-11-12:** meta comercial mensual (interna), viáticos históricos (`EVT-009`) y las fórmulas de margen `COT-002`, `COT-003` y `COT-016` (las fórmulas viven solo en `src/lib/pricing/`; el bot no calcula precios).
+
+**Agregadas el 2026-11-12:** horario de atención (L-V 9-18, sáb 11-16), tiempo de entrega (3 a 4 días hábiles, a confirmar), espesor máximo de corte en acrílico (15 mm) y en MDF (12 mm), corte de metal (solo acero inoxidable, lámina negra y galvanizada; el latón solo se graba) y réplicas (no se ofrecen como servicio).
+
+Para volver a contar: sumar las filas por `active` en `AgentRule` y comparar con `describeIndexStats()` de Pinecone; deben coincidir.
+
+`docs/propuesta-cambios-reglas-bot.md` tiene una propuesta de limpieza **pendiente de aprobación** (duplicadas, internas/sensibles, nuevas). Decisiones ya tomadas por el dueño: horario L-V 9-18 y sáb 11-16; entrega 3-4 días hábiles siempre a confirmar; corte de metal solo acero inoxidable, lámina negra y lámina galvanizada; sin réplicas como servicio (se trabaja como corte/grabado nuevo con archivo); plotter 1.8 m; cama UV 90×60 cm; acrílico hasta 15 mm; instalación de vinil se cotiza aparte.
 
 ## UI de chats (`src/app/dashboard/chats/`)
 
