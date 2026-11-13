@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { getPusherClient } from '@/lib/pusher';
 
 export interface Email {
   id: string;
@@ -80,12 +81,12 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
     setIsLoading(false);
   }, [currentFolder, page, query]);
 
-  const syncEmails = useCallback(async (signal?: AbortSignal) => {
+  const syncEmails = useCallback(async (signal?: AbortSignal, full = true) => {
     setIsSyncing(true);
     setSyncError(null);
     setSyncAuthError(false);
     try {
-      const res = await fetch('/api/email/sync', { method: 'POST', signal });
+      const res = await fetch(`/api/email/sync${full ? '' : '?full=0'}`, { method: 'POST', signal });
       if (signal?.aborted) return;
 
       if (res.ok) {
@@ -184,12 +185,29 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
       const last = parseInt(localStorage.getItem(key) || '0', 10);
       if (Date.now() - last < 110 * 1000) return;
       localStorage.setItem(key, Date.now().toString());
-      syncEmails();
+      syncEmails(undefined, false); // revisión rápida: solo lo nuevo
     };
     const id = setInterval(tick, 120 * 1000);
     document.addEventListener('visibilitychange', tick);
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', tick); };
   }, [userEmail, syncEmails]);
+
+  // Aviso en vivo: cuando el servidor (cron o sincronización) detecta correo nuevo, la bandeja se actualiza
+  // y suena, sin esperar el siguiente ciclo ni tener que apretar "Sincronizar".
+  const fetchRef = useRef(fetchEmails);
+  useEffect(() => { fetchRef.current = fetchEmails; }, [fetchEmails]);
+  useEffect(() => {
+    if (!userEmail) return;
+    const channel = getPusherClient().subscribe('crm-channel');
+    const onNewMail = (data: { email?: string }) => {
+      if (data?.email && data.email.toLowerCase() !== userEmail.trim().toLowerCase()) return;
+      fetchRef.current(undefined, undefined, true);
+      const audio = document.getElementById('notification-sound') as HTMLAudioElement | null;
+      audio?.play().catch(() => {});
+    };
+    channel.bind('email_new', onNewMail);
+    return () => { channel.unbind('email_new', onNewMail); };
+  }, [userEmail]);
 
   return { 
     unreadTotal,
