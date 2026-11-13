@@ -645,6 +645,24 @@ async function reportFailedQuoteDelivery(statusObj: any) {
 }
 
 /**
+ * Chat de WhatsApp de una cotización: el ligado a la cotización o al cliente. Si el cliente no tiene chat ligado
+ * (p. ej. se registró desde la tienda web y después escribió por WA), lo busca por los últimos 10 dígitos de su
+ * teléfono y lo liga para que no vuelva a fallar. Solo liga chats que no pertenecen a otro cliente.
+ */
+export async function findQuoteWhatsAppContact(quote: { contactId: string | null; clientId: string | null }) {
+  const direct = await prisma.whatsAppContact.findFirst({
+    where: quote.contactId ? { id: quote.contactId } : { clientId: quote.clientId },
+  });
+  if (direct || quote.contactId || !quote.clientId) return direct;
+  const client = await prisma.client.findUnique({ where: { id: quote.clientId }, select: { phone: true } });
+  const last10 = (client?.phone ?? '').replace(/\D/g, '').slice(-10);
+  if (last10.length < 10) return null;
+  const byPhone = await prisma.whatsAppContact.findFirst({ where: { phone: { endsWith: last10 }, clientId: null } });
+  if (!byPhone) return null;
+  return prisma.whatsAppContact.update({ where: { id: byPhone.id }, data: { clientId: quote.clientId } });
+}
+
+/**
  * Genera el PDF de una cotización, se lo manda al cliente por WhatsApp y lo guarda en el chat.
  * No revisa sesión: quien lo llame (acción del CRM o el flujo de autorización por WhatsApp)
  * es responsable de haber autorizado el envío. Lanza Error con un mensaje legible si falla.
@@ -667,9 +685,7 @@ export async function sendQuotePdfToClient(quoteId: string) {
     throw new Error("Cotización no encontrada o sin cliente asociado");
   }
 
-  const contact = await prisma.whatsAppContact.findFirst({
-    where: quote.contactId ? { id: quote.contactId } : { clientId: quote.clientId },
-  });
+  const contact = await findQuoteWhatsAppContact(quote);
   if (!contact) {
     throw new Error("El cliente no tiene un número de WhatsApp registrado en el sistema");
   }

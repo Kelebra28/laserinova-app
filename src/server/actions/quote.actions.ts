@@ -27,7 +27,7 @@ import { prisma } from "@/lib/prisma";
 import { generateQuotePDF } from "@/lib/pdf";
 import fs from "fs";
 import path from "path";
-import { processAIAgentResponse, sendQuotePdfToClient, getContactWindow, quoteTemplateConfigured } from "../services/whatsapp.service";
+import { processAIAgentResponse, sendQuotePdfToClient, findQuoteWhatsAppContact, getContactWindow, quoteTemplateConfigured } from "../services/whatsapp.service";
 import { notificationEmitter } from "@/lib/notification-emitter";
 import { after } from "next/server";
 import { pickProductPricing } from "@/lib/calculations";
@@ -377,10 +377,7 @@ export async function getQuoteWhatsAppWindowAction(quoteId: string) {
   await requireAuth();
   const quote = await prisma.quote.findUnique({ where: { id: quoteId }, select: { contactId: true, clientId: true } });
   if (!quote || (!quote.contactId && !quote.clientId)) return { found: false as const };
-  const contact = await prisma.whatsAppContact.findFirst({
-    where: quote.contactId ? { id: quote.contactId } : { clientId: quote.clientId },
-    select: { id: true, name: true },
-  });
+  const contact = await findQuoteWhatsAppContact(quote);
   if (!contact) return { found: false as const };
   const { open, lastInboundAt } = await getContactWindow(contact.id);
   return {
