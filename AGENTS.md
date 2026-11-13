@@ -54,4 +54,5 @@ Páginas en `src/app/dashboard/<módulo>/`; componentes compartidos en `src/comp
 
 - Cambios de datos en producción: mostrar la lista afectada y pedir aprobación antes.
 - Commits en español, estilo `tipo(módulo): qué y por qué` (ver `git log`).
+- **Nada de `scratch/`, `chatts/` ni respaldos/exportaciones va a git** (el repo es público): son scripts que tocan BD/Pinecone y datos de clientes (chats, teléfonos, correos, cuentas). Están en `.gitignore`; no usar `git add -f`. Los archivos temporales y respaldos van al scratchpad de la sesión, no al repo. Antes de commitear, revisar `git status` y que no entren scripts de `scratch/` ni datos de clientes.
 - Al terminar un cambio relevante, actualizar el doc del módulo en `docs/` si cambió el **porqué** o una regla.
