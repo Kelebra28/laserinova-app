@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { colorLabel, guardPublicApi, modelForSlug, publicCategorySlugs } from "@/lib/public-api";
+import { resolveProductUnitPrice, modelCostKey } from "@/lib/calculations";
+import { getModelMaxCostMap, getProductPricingGlobals } from "@/lib/product-pricing";
 
 /**
  * Solicitud de cotización desde la tienda web (carrito → "Solicitar cotización").
  *
  * Crea: el Cliente (prospecto) si no existe + una Cotización en BORRADOR con un concepto RESALE por producto.
- * Los precios quedan en 0: la cotización la completa ventas. El folio es WEB-AAAA-NNNN (serie propia, no choca con LI-/LIA-).
+ * Los precios salen del catálogo con la misma regla que la cotización manual (resolveProductUnitPrice: precio manual o
+ * escalas por cantidad); la cotización queda en borrador para que ventas la revise. Folio WEB-AAAA-NNNN (serie propia).
  *
  * Responsables: PUBLIC_QUOTE_USER_IDS (ids separados por coma). Las solicitudes se reparten POR TURNOS entre ellos
  * (la 1.ª al primero, la 2.ª al segundo, y así). Está APAGADO mientras esa variable no exista: responde 503 y no escribe
@@ -63,7 +66,9 @@ export async function POST(request: Request) {
   const owner = owners[taken % owners.length];
 
   // Cada producto debe existir en el catálogo público; la cantidad se valida. Nada de lo que mande el navegador se confía.
-  const concepts: { description: string; details: string | null; quantity: number; productId: string }[] = [];
+  const pricingGlobals = await getProductPricingGlobals();
+  const modelMaxCosts = await getModelMaxCostMap();
+  const concepts: { description: string; details: string | null; quantity: number; productId: string; unitCost: number; unitPrice: number }[] = [];
   for (const it of rawItems as Record<string, unknown>[]) {
     const slug = str(it?.slug, 80);
     const qty = Math.floor(Number(it?.qty));
@@ -75,12 +80,14 @@ export async function POST(request: Request) {
     if (!model) return NextResponse.json({ error: "Producto no disponible" }, { status: 422 });
     const rows = await prisma.product.findMany({
       where: { active: true, model: { equals: model }, category: { active: true, slug: { in: slugs } } },
-      select: { id: true, name: true, color: true },
       orderBy: { color: "asc" },
     });
     if (!rows.length) return NextResponse.json({ error: "Producto no disponible" }, { status: 422 });
     const row = (color && rows.find((r) => r.color && colorLabel(r.color).toUpperCase() === color)) || rows[0];
+    const priced = resolveProductUnitPrice(row, qty, pricingGlobals, modelMaxCosts[modelCostKey(row)]);
     concepts.push({
+      unitCost: priced.unitCost,
+      unitPrice: priced.unitPrice,
       description: row.name,
       details: color ? `Color solicitado: ${color.charAt(0) + color.slice(1).toLowerCase()}` : "Color por definir",
       quantity: qty,
@@ -98,6 +105,12 @@ export async function POST(request: Request) {
     });
   }
 
+  const taxable = true;
+  const ivaPct = Number(pricingGlobals.porcentaje_iva) || 16;
+  const lines = concepts.map((c) => ({ total: c.unitPrice * c.quantity, cost: c.unitCost * c.quantity }));
+  const subtotal = lines.reduce((a, l) => a + l.total, 0);
+  const realCostTotal = lines.reduce((a, l) => a + l.cost, 0);
+  const tax = taxable ? subtotal * (ivaPct / 100) : 0;
   const contact = [`Nombre: ${name}`, company && `Empresa: ${company}`, phoneOk && `Teléfono: ${phone}`, emailOk && `Correo: ${email}`].filter(Boolean).join("\n");
   for (let attempt = 0; attempt < 3; attempt++) {
     const folio = await nextFolio();
@@ -111,9 +124,19 @@ export async function POST(request: Request) {
           project: `Solicitud web — ${concepts.length} ${concepts.length === 1 ? "producto" : "productos"}`,
           description: notes || null,
           status: "DRAFT",
-          internalNotes: `SOLICITUD DESDE LA TIENDA WEB (sin precios: pendiente de cotizar)\n${contact}${notes ? `\nComentarios: ${notes}` : ""}`,
+          taxable,
+          subtotal,
+          tax,
+          total: subtotal + tax,
+          realCostTotal,
+          estimatedUtility: subtotal - realCostTotal,
+          internalNotes: `SOLICITUD DESDE LA TIENDA WEB (precios de catálogo según cantidad; revisar antes de enviar)\n${contact}${notes ? `\nComentarios: ${notes}` : ""}`,
           concepts: {
-            create: concepts.map((c, order) => ({ conceptType: "RESALE", description: c.description, details: c.details, quantity: c.quantity, productId: c.productId, order })),
+            create: concepts.map((c, order) => ({
+              conceptType: "RESALE", description: c.description, details: c.details, quantity: c.quantity, productId: c.productId, order,
+              realCost: c.unitCost * c.quantity, materialCost: c.unitCost * c.quantity, suggestedPrice: c.unitPrice * c.quantity,
+              finalUnitPrice: c.unitPrice, totalAmount: c.unitPrice * c.quantity,
+            })),
           },
         },
       });
