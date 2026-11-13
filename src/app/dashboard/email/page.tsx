@@ -156,6 +156,17 @@ export default function EmailPage() {
     } finally { setAiBusy(false); setAiProgress(''); }
   };
 
+  // Dar por perdida una cotización: sale de la pestaña Cotizaciones y del contador (no se borra el correo)
+  const dismissQuote = async (email: Email) => {
+    const r = await fetch('/api/email/quotes/dismiss', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emailIds: [email.id] }) }).then(x => x.json()).catch(() => null);
+    if (r?.success) {
+      toast.success('Dada por perdida: ya no cuenta como pendiente');
+      setSelectedEmail(null);
+      fetchEmails(currentFolder, page);
+      refreshAiCounts();
+    } else toast.error('No se pudo marcar');
+  };
+
   const handleSend = async (...args: Parameters<typeof sendEmail>) => {
     const r = await sendEmail(...args);
     if (r.success && replyData?.draftId) {
@@ -609,6 +620,15 @@ export default function EmailPage() {
                 >
                   <Forward className="w-4 h-4" />
                 </button>
+                {currentFolder === 'QUOTES' && selectedEmail.quoteStatus === 'PENDING' && (
+                  <button
+                    onClick={() => dismissQuote(selectedEmail)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all"
+                    title="Dar por perdida (sale de Cotizaciones)"
+                  >
+                    <Archive className="w-4 h-4" />
+                  </button>
+                )}
                 {currentFolder !== 'DRAFTS' && currentFolder !== 'SENT' && (
                   <button
                     onClick={() => generateAiDraft(selectedEmail)}

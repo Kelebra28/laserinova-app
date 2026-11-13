@@ -225,3 +225,10 @@ export async function listQuoteEmails(userId: string, days: number) {
   out.sort((a, b) => rank[a.quoteStatus] - rank[b.quoteStatus] || b.receivedAt.getTime() - a.receivedAt.getTime());
   return out;
 }
+
+/** "Dar por perdida": el correo deja de contar como cotización pendiente (sigue en la bandeja; no se borra nada). */
+export async function dismissEmails(userId: string, ids: string[], reason = "Dada por perdida") {
+  const rows = await prisma.email.findMany({ where: { userId, id: { in: ids } }, select: { id: true } });
+  for (const r of rows) addSkip(r.id, `perdida: ${reason}`);
+  return rows.length;
+}
