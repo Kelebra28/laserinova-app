@@ -9,3 +9,4 @@ export * from "./warehouses.constants";
 export * from "./formatters.constants";
 export * from "./analytics.constants";
 export * from "./providers.constants";
+export * from "./dashboard.constants";
