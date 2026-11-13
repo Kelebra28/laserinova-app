@@ -6,6 +6,9 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { decrypt } from '@/lib/encryption';
 
+// Una sincronización a la vez por usuario: con la actualización automática dos podían chocar y duplicar o agotar el tiempo.
+const syncing = new Set<string>();
+
 function extractAddress(addrArray: any) {
   if (!addrArray || !Array.isArray(addrArray) || !addrArray.length) return '';
   return addrArray.map(a => `${a.name ? `"${a.name}" ` : ''}<${a.address}>`).join(', ');
@@ -51,6 +54,10 @@ export async function POST(req: Request) {
       imapHost = process.env.SMTP_HOST?.replace('smtp', 'imap') || 'imap.hostinger.com';
     }
 
+    if (syncing.has(currentUserId)) {
+      return NextResponse.json({ success: true, message: 'Ya hay una sincronización en curso', background: false, syncedCount: 0, skipped: true });
+    }
+
     const isMockForced = process.env.EMAIL_MOCK === 'true';
     if (isMockForced) {
       await insertMockEmails(currentUserId);
@@ -67,8 +74,10 @@ export async function POST(req: Request) {
       }, { status: 401 });
     }
 
+    syncing.add(currentUserId);
     try {
       let syncedCount = 0;
+      const clientCache = new Map<string, string | null>();
       let debugInfo: any = { imapUser, fallback: !dbUser?.emailPasswordEncrypted || decryptionFailed };
       const syncPromise = async () => {
         const client = new ImapFlow({
@@ -91,30 +100,41 @@ export async function POST(req: Request) {
                   debugInfo[folderName] = totalMessages;
                   if (totalMessages > 0) {
                     const startRange = Math.max(1, totalMessages - (maxCount - 1));
-                    const messages = client.fetch(`${startRange}:*`, { uid: true, envelope: true, internalDate: true });
+                    const messages = client.fetch(`${startRange}:*`, { uid: true, envelope: true, internalDate: true, flags: true });
                     
                     const msgList = [];
                     for await (const msg of messages) {
                       msgList.push(msg);
                     }
 
+                    // Una sola consulta con lo que ya hay en el CRM (antes eran N consultas, una por correo)
+                    const knownRows = await prisma.email.findMany({
+                      where: { userId: currentUserId, folder: dbFolderName, uid: { in: msgList.map((m) => m.uid).filter(Boolean) as number[] } },
+                      select: { id: true, uid: true, isRead: true },
+                    });
+                    const known = new Map(knownRows.map((r) => [r.uid, r]));
+                    // Lo que ya se leyó en el servidor (otro dispositivo o webmail) se marca leído aquí; nunca al revés.
+                    const nowRead = msgList.filter((m) => {
+                      const k = m.uid ? known.get(m.uid) : undefined;
+                      return k && !k.isRead && ((m as any).flags as Set<string> | undefined)?.has('\\Seen');
+                    }).map((m) => known.get(m.uid as number)!.id);
+                    if (nowRead.length) await prisma.email.updateMany({ where: { id: { in: nowRead } }, data: { isRead: true } });
+
                     // Process newest first
                     for (const msg of msgList.reverse()) {
                       if (!msg.uid) continue;
 
-                      // Check if already in DB
-                      const exists = await prisma.email.findUnique({
-                        where: {
-                          userId_folder_uid: {
-                            uid: msg.uid,
-                            folder: dbFolderName,
-                            userId: currentUserId,
-                          }
-                        }
-                      });
+                      const exists = known.get(msg.uid);
 
                       if (exists) {
                         continue; 
+                      }
+
+                      // Si ese mismo correo ya está en el CRM en otra carpeta (se movió aquí), no se vuelve a crear.
+                      const realMessageId = msg.envelope?.messageId;
+                      if (realMessageId) {
+                        const movedHere = await prisma.email.findFirst({ where: { userId: currentUserId, messageId: realMessageId }, select: { id: true } });
+                        if (movedHere) continue;
                       }
 
                       const messageId = msg.envelope?.messageId || `${msg.uid}@local-${dbFolderName.toLowerCase()}`;
@@ -125,9 +145,24 @@ export async function POST(req: Request) {
                       const bcc = extractAddress(msg.envelope?.bcc) || '';
                       const receivedAt = msg.internalDate || msg.envelope?.date || new Date();
 
+                      // Ligar al cliente por su dirección (remitente en recibidos, destinatario en enviados)
+                      const counterpart = ((dbFolderName === 'SENT' ? msg.envelope?.to?.[0]?.address : msg.envelope?.from?.[0]?.address) || '').toLowerCase();
+                      let clientId: string | null = null;
+                      if (counterpart) {
+                        if (!clientCache.has(counterpart)) {
+                          clientCache.set(counterpart, (await prisma.client.findFirst({ where: { email: counterpart }, select: { id: true } }))?.id ?? null);
+                        }
+                        clientId = clientCache.get(counterpart) ?? null;
+                      }
+                      const flags: Set<string> = (msg as any).flags || new Set();
+
                       await prisma.email.create({
                         data: {
                           userId: currentUserId,
+                          clientId,
+                          isRead: dbFolderName === 'SENT' ? true : flags.has('\\Seen'),
+                          isStarred: flags.has('\\Flagged'),
+                          threadId: (msg.envelope as any)?.inReplyTo || null,
                           uid: msg.uid,
                           messageId,
                           subject,
@@ -155,7 +190,7 @@ export async function POST(req: Request) {
             }
           };
 
-          await syncFolder(['INBOX'], 'INBOX', 50);
+          await syncFolder(['INBOX'], 'INBOX', 400);
           await syncFolder(['Sent', 'Sent Messages', 'INBOX.Sent', 'Enviados'], 'SENT', 30);
           await syncFolder(['Junk', 'Spam', 'INBOX.Junk', 'INBOX.Spam', 'Correo no deseado'], 'SPAM', 20);
           await syncFolder(['Trash', 'Deleted Messages', 'INBOX.Trash', 'Papelera'], 'TRASH', 20);
@@ -173,6 +208,8 @@ export async function POST(req: Request) {
       } catch (err: any) {
         console.error('[email sync] Error:', err.message);
         return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      } finally {
+        syncing.delete(currentUserId);
       }
 
   } catch (error: any) {

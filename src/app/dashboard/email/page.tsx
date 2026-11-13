@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useEmailInbox, Email } from '@/hooks/useEmailInbox';
 import { useEmailActions } from '@/hooks/useEmailActions';
 import { EmailComposeModal } from '@/components/ui/email/EmailComposeModal';
@@ -44,7 +44,8 @@ function getAvatarColor(str: string) {
 function getSenderName(from: string) {
   const nameMatch = from.match(/^"?([^"<]+)"?\s*</);
   if (nameMatch) return nameMatch[1].trim().replace(/^"|"$/g, '');
-  return from.split('@')[0];
+  // Sin nombre ("<correo@dominio>"): se muestra el correo sin los <>
+  return from.replace(/[<>"]/g, '').trim().split('@')[0];
 }
 
 function formatEmailDate(dateStr: string) {
@@ -67,7 +68,7 @@ export default function EmailPage() {
   const { 
     emails, isLoading, isSyncing, syncError, syncAuthError,
     syncEmails, fetchEmails, currentFolder, changeFolder,
-    page, totalEmails, limit, changePage
+    page, totalEmails, limit, changePage, unreadTotal, query, search
   } = useEmailInbox('INBOX', session?.user?.email || '');
 
   const { isSending, sendEmail, downloadAttachment, updateEmail } = useEmailActions();
@@ -77,7 +78,7 @@ export default function EmailPage() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [activeThread, setActiveThread] = useState<(Email & { html?: string; text?: string; attachments?: any[] })[]>([]);
   const [expandedEmails, setExpandedEmails] = useState<Record<string, boolean>>({});
-  const [replyData, setReplyData] = useState<{ to: string; subject: string; text: string; quotedText: string } | null>(null);
+  const [replyData, setReplyData] = useState<{ to: string; subject: string; text: string; quotedText: string; inReplyTo: string; quoteHeader: string; quoteBody: string } | null>(null);
   const [isLoadingBody, setIsLoadingBody] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
@@ -106,6 +107,24 @@ export default function EmailPage() {
         setActiveThread([{ ...email, html: `<p>${email.snippet || ''}</p>`, text: email.snippet }]);
         setExpandedEmails({ [email.id]: true });
       }
+
+      // Se muestra ya el mensaje seleccionado; el resto de la conversación se completa en segundo plano
+      setIsLoadingBody(false);
+      // Conversación completa: el original, las respuestas y lo que se mandó, del más viejo al más nuevo
+      try {
+        const tr = await fetch(`/api/email/${email.id}/thread`).then(r => r.json());
+        const others: string[] = (tr?.ids || []).filter((x: string) => x !== email.id);
+        if (others.length) {
+          const results = await Promise.all(others.map(x => fetch(`/api/email/${x}/body`).then(r => r.json()).catch(() => null)));
+          const extra = results.flatMap(r => (r?.success && r.thread ? r.thread : []));
+          setActiveThread(prev => {
+            const byId = new Map<string, any>();
+            [...extra, ...prev].forEach(m => byId.set(m.id, m));
+            return [...byId.values()].sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime());
+          });
+          setExpandedEmails({ [email.id]: true });
+        }
+      } catch { /* sin hilo: se queda el mensaje solo */ }
     } catch (e) {
       setActiveThread([{ ...email, html: `<p>${email.snippet || ''}</p>`, text: email.snippet }]);
       setExpandedEmails({ [email.id]: true });
@@ -146,12 +165,19 @@ export default function EmailPage() {
     const replySubject = email.subject.startsWith('Re:') ? email.subject : `Re: ${email.subject}`;
     const threadMail = activeThread.find(m => m.id === email.id);
     const emailText = threadMail?.text || '';
-    const originalBodyQuoted = emailText
-      ? emailText.split('\n').map(line => `> ${line}`).join('\n')
-      : `> ${email.snippet || ''}`;
+    // Solo el contenido propio del mensaje: sin las citas anidadas ("> >") de respuestas anteriores
+    // ni el encabezado "El … escribió:" que ya traiga, para no ir acumulando capas.
+    const cleanLines: string[] = [];
+    for (const line of emailText.split('\n')) {
+      if (/^\s*(El .{5,120} escribió:?|On .{5,120} wrote:?|-{2,}\s*(Original|Mensaje))/i.test(line)) break;
+      if (/^\s*>/.test(line)) continue;
+      cleanLines.push(line.trimEnd());
+    }
+    const quoteBody = (cleanLines.join('\n').replace(/\n{3,}/g, '\n\n').trim() || email.snippet || '').split('\n').slice(0, 40).join('\n');
     const formattedDate = new Date(email.receivedAt).toLocaleString('es-MX', { dateStyle: 'long', timeStyle: 'short' });
-    const replyText = `El ${formattedDate}, ${email.from} escribió:\n${originalBodyQuoted}`;
-    setReplyData({ to: replyTo, subject: replySubject, text: '', quotedText: replyText });
+    const quoteHeader = `El ${formattedDate}, ${email.from.replace(/"/g, '')} escribió:`;
+    const replyText = `${quoteHeader}\n${quoteBody.split('\n').map(line => `> ${line}`).join('\n')}`;
+    setReplyData({ to: replyTo, subject: replySubject, text: '', quotedText: replyText, inReplyTo: email.messageId, quoteHeader, quoteBody });
     setIsComposeOpen(true);
   };
 
@@ -161,17 +187,15 @@ export default function EmailPage() {
 
   const totalPages = Math.ceil(totalEmails / limit);
 
-  const filteredEmails = emails.filter(e => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      e.subject?.toLowerCase().includes(q) ||
-      e.from?.toLowerCase().includes(q) ||
-      e.snippet?.toLowerCase().includes(q)
-    );
-  });
+  // La búsqueda se hace en el servidor sobre TODOS los correos de la carpeta (antes solo filtraba los 10 visibles)
+  const filteredEmails = emails;
+  useEffect(() => {
+    if (searchQuery === query) return;
+    const t = setTimeout(() => search(searchQuery), 350);
+    return () => clearTimeout(t);
+  }, [searchQuery, query, search]);
 
-  const unreadCount = emails.filter(e => !e.isRead).length;
+  const unreadCount = unreadTotal;
 
   return (
     <div className="flex h-[calc(100vh-7.5rem)] w-full overflow-hidden rounded-2xl border border-slate-200/60 shadow-xl bg-white">
@@ -201,7 +225,7 @@ export default function EmailPage() {
             return (
               <button
                 key={id}
-                onClick={() => changeFolder(id)}
+                onClick={() => { setSearchQuery(''); changeFolder(id); }}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all mb-0.5 ${
                   isActive
                     ? 'bg-red-50 text-red-700 font-semibold'
@@ -636,6 +660,9 @@ export default function EmailPage() {
         initialSubject={replyData?.subject || ''}
         initialText={replyData?.text || ''}
         initialQuotedText={replyData?.quotedText || ''}
+        inReplyTo={replyData?.inReplyTo || ''}
+        quoteHeader={replyData?.quoteHeader || ''}
+        quoteBody={replyData?.quoteBody || ''}
       />
 
       {/* Image Zoom Modal */}

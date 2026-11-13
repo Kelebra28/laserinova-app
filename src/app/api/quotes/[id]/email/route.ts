@@ -131,7 +131,7 @@ export async function POST(
     const signatureName = sigName || dbUser?.name || 'Ricardo Basurto';
     const smtpFrom = `"${signatureName}" <${smtpUser}>`;
     const signatureTitle = sigTitle || 'Director General';
-    const signaturePhone = sigPhone || '+52 1 55 1234 5678';
+    const signaturePhone = sigPhone || '';
     const signatureWeb = sigWeb || 'www.laserinova.com';
     const signatureEmail = sigEmail || smtpUser;
     const cleanPhone = signaturePhone.replace(/\D/g, '');
@@ -168,10 +168,10 @@ export async function POST(
             <div style="color: #64748b; font-size: 11px; margin-top: 2px;">${signatureTitle}</div>
           </td>
           <td style="vertical-align: middle; padding-left: 15px;">
-            <div style="margin-bottom: 4px;">
+${signaturePhone ? `            <div style="margin-bottom: 4px;">
               <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">WhatsApp:</span> 
               <a href="https://wa.me/${cleanPhone}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${signaturePhone}</a>
-            </div>
+            </div>` : ''}
             <div style="margin-bottom: 4px;">
               <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">Email:</span> 
               <a href="mailto:${signatureEmail}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${signatureEmail}</a>

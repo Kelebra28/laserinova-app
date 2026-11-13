@@ -5,12 +5,15 @@ import { EmailInput } from '@/components/ui/EmailInput';
 interface EmailComposeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSend: (to: string, cc: string, subject: string, text: string, files: File[]) => Promise<{ success: boolean; error?: string }>;
+  onSend: (to: string, cc: string, subject: string, text: string, files: File[], inReplyTo?: string, quote?: { header: string; body: string }) => Promise<{ success: boolean; error?: string }>;
   isSending: boolean;
   initialTo?: string;
   initialSubject?: string;
   initialText?: string;
   initialQuotedText?: string;
+  inReplyTo?: string;
+  quoteHeader?: string;
+  quoteBody?: string;
 }
 
 export function EmailComposeModal({ 
@@ -21,7 +24,10 @@ export function EmailComposeModal({
   initialTo = '',
   initialSubject = '',
   initialText = '',
-  initialQuotedText = ''
+  initialQuotedText = '',
+  inReplyTo = '',
+  quoteHeader = '',
+  quoteBody = ''
 }: EmailComposeModalProps) {
   const [to, setTo] = useState(initialTo);
   const [cc, setCc] = useState('');
@@ -112,8 +118,10 @@ export function EmailComposeModal({
     if (!to || !subject || !text) return;
     
     setErrorMsg('');
-    const finalText = text + (quotedText ? `\n\n\n${quotedText}` : '');
-    const result = await onSend(to, cc, subject, finalText, files);
+    // Con cita estructurada (respuesta) el historial viaja aparte para darle formato de cita; si no, se pega como antes.
+    const structured = !!quoteBody && !!quotedText;
+    const finalText = structured ? text : text + (quotedText ? `\n\n\n${quotedText}` : '');
+    const result = await onSend(to, cc, subject, finalText, files, inReplyTo || undefined, structured ? { header: quoteHeader, body: quoteBody } : undefined);
     if (result.success) {
       setTo('');
       setCc('');

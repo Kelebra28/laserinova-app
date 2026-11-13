@@ -55,11 +55,15 @@ export async function POST(req: Request) {
     const cc = data.get('cc') as string;
     const subject = data.get('subject') as string;
     const text = data.get('text') as string;
+    const inReplyTo = (data.get('inReplyTo') as string) || '';
+    // Si es una respuesta, el historial llega aparte (encabezado + texto del original) para poder darle formato de cita
+    const quoteHeader = (data.get('quoteHeader') as string) || '';
+    const quoteBody = (data.get('quoteBody') as string) || '';
 
     // Read customized signature inputs from frontend request BEFORE creating smtpFrom
     const sigName = data.get('sigName') as string || 'Ricardo Basurto';
     const sigTitle = data.get('sigTitle') as string || 'Director General';
-    const sigPhone = data.get('sigPhone') as string || '+52 1 55 1234 5678';
+    const sigPhone = data.get('sigPhone') as string || '';
     const sigEmail = data.get('sigEmail') as string || smtpUser;
     const sigWeb = data.get('sigWeb') as string || 'www.laserinova.com';
 
@@ -121,10 +125,10 @@ export async function POST(req: Request) {
             <div style="color: #64748b; font-size: 11px; margin-top: 2px;">${sigTitle}</div>
           </td>
           <td style="vertical-align: middle; padding-left: 15px;">
-            <div style="margin-bottom: 4px;">
+${sigPhone ? `            <div style="margin-bottom: 4px;">
               <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">WhatsApp:</span> 
               <a href="https://wa.me/${cleanPhone}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${sigPhone}</a>
-            </div>
+            </div>` : ''}
             <div style="margin-bottom: 4px;">
               <span style="font-weight: bold; color: #ef4444; font-size: 11px; text-transform: uppercase;">Email:</span> 
               <a href="mailto:${sigEmail}" style="color: #1e293b; text-decoration: none; font-weight: 500;">${sigEmail}</a>
@@ -138,7 +142,17 @@ export async function POST(req: Request) {
       </table>
     `;
 
-    const htmlBody = `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #1e293b; line-height: 1.6;">${text.replace(/\n/g, '<br>')}</div>` + signatureHtml;
+    const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Cita estilo correo: encabezado + bloque con barra lateral (no líneas con ">" pegadas al texto)
+    const quoteHtml = quoteBody
+      ? `<div style="margin-top: 24px; font-family: Arial, sans-serif; font-size: 12px; color: #64748b;">${esc(quoteHeader)}</div>` +
+        `<blockquote style="margin: 8px 0 0; padding: 4px 0 4px 14px; border-left: 3px solid #cbd5e1; font-family: Arial, sans-serif; font-size: 13px; color: #475569; line-height: 1.5;">${esc(quoteBody).replace(/\n/g, '<br>')}</blockquote>`
+      : '';
+    // La firma va justo después de lo que escribiste y ANTES de la cita (antes quedaba al final y Gmail la escondía)
+    const htmlBody = `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #1e293b; line-height: 1.6;">${esc(text).replace(/\n/g, '<br>')}</div>` + signatureHtml + quoteHtml;
+    const plainBody = quoteBody
+      ? `${text}\n\n${quoteHeader}\n${quoteBody.split('\n').map((l) => `> ${l}`).join('\n')}`
+      : text;
 
     // Send the email (or mock it)
     let messageId = uuidv4();
@@ -150,8 +164,10 @@ export async function POST(req: Request) {
           to,
           cc,
           subject,
-          text,
+          text: plainBody,
           html: htmlBody,
+          // Para que el correo de destino lo agrupe en el mismo hilo que el original
+          ...(inReplyTo ? { inReplyTo, references: [inReplyTo] } : {}),
           attachments,
         });
         messageId = info.messageId || messageId;
@@ -174,6 +190,8 @@ export async function POST(req: Request) {
         receivedAt: new Date(),
         folder: 'SENT',
         isRead: true,
+        threadId: inReplyTo || null,
+        userId: (session.user as any).id,
       }
     });
 

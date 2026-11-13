@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 
+import { mailboxName } from '@/lib/email-imap';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { loadEmailFromDisk, saveEmailToDisk } from '@/lib/emailStorage';
@@ -86,7 +87,7 @@ export async function GET(
 
       try {
         await client.connect();
-        const folderName = IMAP_FOLDERS[targetEmail.folder] || 'INBOX';
+        const folderName = await mailboxName(client, targetEmail.folder).catch(() => IMAP_FOLDERS[targetEmail.folder] || 'INBOX');
         const lock = await client.getMailboxLock(folderName);
         
         try {

@@ -127,7 +127,7 @@ export function SendQuoteMailModal({
           saveToClient,
           sigName: getSignatureField('sig_name', userName || 'Ricardo Basurto'),
           sigTitle: getSignatureField('sig_title', 'Director General'),
-          sigPhone: getSignatureField('sig_phone', '+52 1 55 1234 5678'),
+          sigPhone: getSignatureField('sig_phone', ''),
           sigEmail: getSignatureField('sig_email', userEmail || 'info@laserinova.com'),
           sigWeb: getSignatureField('sig_web', 'www.laserinova.com'),
           selectedVersionIds

@@ -43,6 +43,8 @@ function getInitialData(folder: string): { emails: Email[]; total: number } {
 export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: string) {
   const [emails, setEmails] = useState<Email[]>([]);
   const [totalEmails, setTotalEmails] = useState(0);
+  const [unreadTotal, setUnreadTotal] = useState(0);
+  const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -56,14 +58,15 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
     const folder = folderToFetch || currentFolder;
     const activePage = pageToFetch !== undefined ? pageToFetch : page;
     try {
-      const res = await fetch(`/api/email/list?folder=${folder}&page=${activePage}&limit=${limit}`);
+      const res = await fetch(`/api/email/list?folder=${folder}&page=${activePage}&limit=${limit}${query ? `&q=${encodeURIComponent(query)}` : ''}`);
       if (res.ok) {
         const data = await res.json();
         setEmails(data.emails);
         setTotalEmails(data.total || 0);
+        setUnreadTotal(data.unread || 0);
         
-        // Cache page 1 locally
-        if (activePage === 1) {
+        // Cache page 1 locally (solo la vista sin búsqueda)
+        if (activePage === 1 && !query) {
           const cachePayload = { emails: data.emails, total: data.total || 0 };
           memoryCache[folder] = cachePayload;
           if (typeof window !== 'undefined') {
@@ -75,7 +78,7 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
       console.error('Failed to fetch emails', error);
     }
     setIsLoading(false);
-  }, [currentFolder, page]);
+  }, [currentFolder, page, query]);
 
   const syncEmails = useCallback(async (signal?: AbortSignal) => {
     setIsSyncing(true);
@@ -122,12 +125,15 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
     setIsSyncing(false);
   }, [fetchEmails, currentFolder]);
 
+  const search = useCallback((q: string) => { setQuery(q); setPage(1); }, []);
+
   const changeFolder = (folder: string) => {
     setCurrentFolder(folder);
     setPage(1);
     
     // Instantly load folder from cache if present to prevent visual flash
     const folderData = getInitialData(folder);
+    setQuery('');
     setEmails(folderData.emails);
     setTotalEmails(folderData.total);
     
@@ -168,7 +174,27 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
     };
   }, [currentFolder, page, fetchEmails, userEmail, syncEmails]);
 
+  // Auto-sync: mientras la bandeja esté abierta se revisa el correo nuevo cada 2 minutos (antes solo al abrir
+  // la página y cada 5 min), y de inmediato al volver a la pestaña.
+  useEffect(() => {
+    if (!userEmail) return;
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return;
+      const key = `last_imap_sync_${userEmail.trim().toLowerCase()}`;
+      const last = parseInt(localStorage.getItem(key) || '0', 10);
+      if (Date.now() - last < 110 * 1000) return;
+      localStorage.setItem(key, Date.now().toString());
+      syncEmails();
+    };
+    const id = setInterval(tick, 120 * 1000);
+    document.addEventListener('visibilitychange', tick);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', tick); };
+  }, [userEmail, syncEmails]);
+
   return { 
+    unreadTotal,
+    query,
+    search,
     emails, 
     isLoading, 
     isSyncing, 

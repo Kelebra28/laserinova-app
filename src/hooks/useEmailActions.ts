@@ -8,7 +8,7 @@ export function useEmailActions() {
 
   const getStorageKey = (key: string) => `${key}${userEmail ? `_${userEmail}` : ''}`;
 
-  const sendEmail = async (to: string, cc: string, subject: string, text: string, attachments: File[]) => {
+  const sendEmail = async (to: string, cc: string, subject: string, text: string, attachments: File[], inReplyTo?: string, quote?: { header: string; body: string }) => {
     setIsSending(true);
     try {
       const formData = new FormData();
@@ -16,6 +16,8 @@ export function useEmailActions() {
       formData.append('cc', cc);
       formData.append('subject', subject);
       formData.append('text', text);
+      if (inReplyTo) formData.append('inReplyTo', inReplyTo);
+      if (quote?.body) { formData.append('quoteHeader', quote.header); formData.append('quoteBody', quote.body); }
       
       // Append signature fields dynamically from localStorage using user-specific keys
       if (typeof window !== 'undefined') {
@@ -35,7 +37,7 @@ export function useEmailActions() {
 
         formData.append('sigName', getSignatureField('sig_name', 'Ricardo Basurto'));
         formData.append('sigTitle', getSignatureField('sig_title', 'Director General'));
-        formData.append('sigPhone', getSignatureField('sig_phone', '+52 1 55 1234 5678'));
+        formData.append('sigPhone', getSignatureField('sig_phone', ''));
         formData.append('sigEmail', getSignatureField('sig_email', 'info@laserinova.com'));
         formData.append('sigWeb', getSignatureField('sig_web', 'www.laserinova.com'));
       }
@@ -76,6 +78,10 @@ export function useEmailActions() {
         },
         body: JSON.stringify({ emailId, ...updates }),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        if (typeof window !== 'undefined' && err?.error) alert(err.error);
+      }
       return res.ok;
     } catch (error) {
       console.error('Failed to update email', error);

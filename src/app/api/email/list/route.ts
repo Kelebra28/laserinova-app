@@ -20,12 +20,19 @@ export async function GET(req: Request) {
     const skip = (page - 1) * limit;
 
     const baseWhere = folder === 'STARRED' ? { isStarred: true } : { folder };
-    const whereClause = {
+    const q = (searchParams.get('q') || '').trim();
+    const whereClause: any = {
       ...baseWhere,
-      userId: currentUserId
+      userId: currentUserId,
+      ...(q ? { OR: [
+        { subject: { contains: q } },
+        { from: { contains: q } },
+        { to: { contains: q } },
+        { snippet: { contains: q } },
+      ] } : {}),
     };
 
-    const [emails, total] = await Promise.all([
+    const [emails, total, unread] = await Promise.all([
       prisma.email.findMany({
         where: whereClause,
         orderBy: { receivedAt: 'desc' },
@@ -36,12 +43,17 @@ export async function GET(req: Request) {
       prisma.email.count({
         where: whereClause,
       }),
+      // No leídos reales de la carpeta (antes el contador solo veía los 10 de la página visible)
+      prisma.email.count({
+        where: { ...baseWhere, userId: currentUserId, isRead: false },
+      }),
     ]);
 
     return NextResponse.json({
       success: true,
       emails,
       total,
+      unread,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
