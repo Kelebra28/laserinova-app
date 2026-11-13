@@ -145,7 +145,7 @@ ${sigPhone ? `            <div style="margin-bottom: 4px;">
     const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     // Cita estilo correo: encabezado + bloque con barra lateral (no líneas con ">" pegadas al texto)
     const quoteHtml = quoteBody
-      ? `<div style="margin-top: 24px; font-family: Arial, sans-serif; font-size: 12px; color: #64748b;">${esc(quoteHeader)}</div>` +
+      ? `<div style="margin-top: 24px; font-family: Arial, sans-serif; font-size: 12px; color: #64748b;">${esc(quoteHeader).replace(/\n/g, '<br>')}</div>` +
         `<blockquote style="margin: 8px 0 0; padding: 4px 0 4px 14px; border-left: 3px solid #cbd5e1; font-family: Arial, sans-serif; font-size: 13px; color: #475569; line-height: 1.5;">${esc(quoteBody).replace(/\n/g, '<br>')}</blockquote>`
       : '';
     // La firma va justo después de lo que escribiste y ANTES de la cita (antes quedaba al final y Gmail la escondía)

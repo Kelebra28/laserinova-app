@@ -1,6 +1,7 @@
 import { ImapFlow } from "imapflow";
 import { prisma } from "@/lib/prisma";
-import { getImapConfig } from "@/lib/email-imap";
+import { getImapConfig, mailboxName } from "@/lib/email-imap";
+import { makeSnippet, SNIPPET_PLACEHOLDER } from "@/lib/email-snippet";
 
 /**
  * Sincronización del buzón IMAP → CRM, compartida por el botón "Sincronizar", la revisión automática de
@@ -58,6 +59,7 @@ async function syncMailbox(userId: string, full: boolean): Promise<SyncResult> {
   let syncedCount = 0;
   const newInbox: NewMail[] = [];
   const clientCache = new Map<string, string | null>();
+  let snippetBudget = 30; // vistas previas que se descargan en esta pasada; el resto las rellena el relleno de abajo
 
   const syncFolder = async (folderNames: string[], dbFolder: string, maxCount: number) => {
     for (const folderName of folderNames) {
@@ -117,6 +119,17 @@ async function syncMailbox(userId: string, full: boolean): Promise<SyncResult> {
                 }
                 const flags: Set<string> = msg.flags || new Set();
 
+                // Vista previa: solo se baja el inicio del mensaje (20 KB), no el correo completo
+                let snippet = SNIPPET_PLACEHOLDER;
+                if (snippetBudget > 0) {
+                  snippetBudget--;
+                  try {
+                    const part: any = await client.fetchOne(String(msg.uid), { source: { maxLength: 20000 } } as any, { uid: true });
+                    if (part?.source) snippet = await makeSnippet(part.source as Buffer);
+                  } catch { /* se queda el texto de relleno y lo completa el relleno posterior */ }
+                }
+
+                try {
                 await prisma.email.create({
                   data: {
                     userId,
@@ -131,11 +144,16 @@ async function syncMailbox(userId: string, full: boolean): Promise<SyncResult> {
                     to: extractAddress(msg.envelope?.to) || "",
                     cc: extractAddress(msg.envelope?.cc) || "",
                     bcc: extractAddress(msg.envelope?.bcc) || "",
-                    snippet: "Abre el correo para ver el contenido...",
+                    snippet,
                     receivedAt: msg.internalDate || msg.envelope?.date || new Date(),
                     folder: dbFolder,
                   },
                 });
+                } catch (e: any) {
+                  // Otra sincronización (cron o pantalla) ya guardó este mismo correo: se ignora, no se aborta la carpeta
+                  if (e?.code === "P2002") continue;
+                  throw e;
+                }
                 syncedCount++;
                 if (dbFolder === "INBOX" && !flags.has("\\Seen")) newInbox.push({ from, subject });
               }
@@ -151,9 +169,41 @@ async function syncMailbox(userId: string, full: boolean): Promise<SyncResult> {
     }
   };
 
+  // Relleno de vistas previas de los correos que ya estaban sin ellas, de a poco en cada pasada (tope de 15 s)
+  const backfillSnippets = async () => {
+    const t0 = Date.now();
+    const pending = await prisma.email.findMany({
+      where: { userId, snippet: SNIPPET_PLACEHOLDER, uid: { gt: 0 } },
+      orderBy: { receivedAt: "desc" },
+      take: 30,
+      select: { id: true, uid: true, folder: true },
+    });
+    const byFolder = new Map<string, typeof pending>();
+    for (const r of pending) byFolder.set(r.folder, [...(byFolder.get(r.folder) || []), r]);
+    for (const [folder, rows] of byFolder) {
+      if (Date.now() - t0 > 15000) break;
+      try {
+        const lock = await client.getMailboxLock(await mailboxName(client, folder));
+        try {
+          for (const r of rows) {
+            if (Date.now() - t0 > 15000) break;
+            const part: any = await client.fetchOne(String(r.uid), { source: { maxLength: 20000 } } as any, { uid: true }).catch(() => undefined);
+            const snippet = part?.source ? await makeSnippet(part.source as Buffer) : "(Sin vista previa)";
+            await prisma.email.update({ where: { id: r.id }, data: { snippet } });
+          }
+        } finally {
+          lock.release();
+        }
+      } catch (e: any) {
+        console.warn(`Relleno de vistas previas (${folder}):`, e?.message);
+      }
+    }
+  };
+
   try {
     // La revisión rápida solo mira Recibidos, que es donde llega el correo nuevo
     for (const f of full ? FOLDERS : FOLDERS.slice(0, 1)) await syncFolder(f.names, f.db, f.max);
+    await backfillSnippets();
   } finally {
     await client.logout().catch(() => {});
   }

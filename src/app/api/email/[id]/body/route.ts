@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { loadEmailFromDisk, saveEmailToDisk } from '@/lib/emailStorage';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
+import { snippetFromText, SNIPPET_PLACEHOLDER } from '@/lib/email-snippet';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { decrypt } from '@/lib/encryption';
@@ -116,7 +117,14 @@ export async function GET(
 
             // Guardar HTML a disco usando el ID único de BD
             const savedPath = saveEmailToDisk(targetEmail.id, html, text);
-            await prisma.email.update({ where: { id: targetEmail.id }, data: { storagePath: savedPath } });
+            await prisma.email.update({
+              where: { id: targetEmail.id },
+              data: {
+                storagePath: savedPath,
+                // De paso queda la vista previa de la lista, si aún no la tenía
+                ...(targetEmail.snippet === SNIPPET_PLACEHOLDER && text ? { snippet: snippetFromText(text) || '(Sin texto)' } : {}),
+              },
+            });
 
             return NextResponse.json({ success: true, thread: [{ ...targetEmail, html, text }] });
           }

@@ -7,7 +7,7 @@ import { EmailComposeModal } from '@/components/ui/email/EmailComposeModal';
 import { EmailBodyViewer } from '@/components/ui/email/EmailBodyViewer';
 import { useSession } from 'next-auth/react';
 import { 
-  Trash2, AlertOctagon, MailOpen, ArrowLeft, Download, X, Reply, Loader2, 
+  Trash2, AlertOctagon, MailOpen, ArrowLeft, Download, X, Reply, ReplyAll, Forward, Loader2, 
   Paperclip, ChevronDown, ChevronRight, Inbox, Send, Star, StarOff,
   RefreshCw, PenSquare, Search, Archive, ChevronLeft, Mail, Menu
 } from 'lucide-react';
@@ -78,7 +78,7 @@ export default function EmailPage() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [activeThread, setActiveThread] = useState<(Email & { html?: string; text?: string; attachments?: any[] })[]>([]);
   const [expandedEmails, setExpandedEmails] = useState<Record<string, boolean>>({});
-  const [replyData, setReplyData] = useState<{ to: string; subject: string; text: string; quotedText: string; inReplyTo: string; quoteHeader: string; quoteBody: string } | null>(null);
+  const [replyData, setReplyData] = useState<{ to: string; subject: string; text: string; quotedText: string; inReplyTo: string; quoteHeader: string; quoteBody: string; cc: string } | null>(null);
   const [isLoadingBody, setIsLoadingBody] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
@@ -159,12 +159,28 @@ export default function EmailPage() {
     if (success) fetchEmails(currentFolder, page);
   };
 
-  const handleReply = (email: Email) => {
+  const addrsOf = (s?: string) => (s?.match(/[\w.+'-]+@[\w-]+(?:\.[\w-]+)+/g) || []).map(x => x.toLowerCase());
+
+  // modo: 'reply' = responder al remitente · 'all' = responder a todos (con copia) · 'forward' = reenviar
+  const handleReply = (email: Email, mode: 'reply' | 'all' | 'forward' = 'reply') => {
     const match = email.from.match(/<([^>]+)>/);
     const replyTo = match ? match[1] : email.from.trim();
-    const replySubject = email.subject.startsWith('Re:') ? email.subject : `Re: ${email.subject}`;
+    const me = (session?.user?.email || '').toLowerCase();
+    const prefix = mode === 'forward' ? /^\s*(fwd?|rv|rvs):\s*/i : /^\s*re:\s*/i;
+    const baseSubject = email.subject.replace(prefix, '').trim();
+    const replySubject = mode === 'forward' ? `Fwd: ${baseSubject}` : `Re: ${baseSubject}`;
     const threadMail = activeThread.find(m => m.id === email.id);
     const emailText = threadMail?.text || '';
+    const formattedDate = new Date(email.receivedAt).toLocaleString('es-MX', { dateStyle: 'long', timeStyle: 'short' });
+
+    if (mode === 'forward') {
+      const quoteHeader = `---------- Mensaje reenviado ----------\nDe: ${email.from.replace(/"/g, '')}\nFecha: ${formattedDate}\nAsunto: ${email.subject}\nPara: ${email.to.replace(/"/g, '')}`;
+      const quoteBody = (emailText.trim() || email.snippet || '').split('\n').slice(0, 300).join('\n');
+      setReplyData({ to: '', cc: '', subject: replySubject, text: '', quotedText: `${quoteHeader}\n\n${quoteBody}`, inReplyTo: '', quoteHeader, quoteBody });
+      setIsComposeOpen(true);
+      return;
+    }
+
     // Solo el contenido propio del mensaje: sin las citas anidadas ("> >") de respuestas anteriores
     // ni el encabezado "El … escribió:" que ya traiga, para no ir acumulando capas.
     const cleanLines: string[] = [];
@@ -174,10 +190,25 @@ export default function EmailPage() {
       cleanLines.push(line.trimEnd());
     }
     const quoteBody = (cleanLines.join('\n').replace(/\n{3,}/g, '\n\n').trim() || email.snippet || '').split('\n').slice(0, 40).join('\n');
-    const formattedDate = new Date(email.receivedAt).toLocaleString('es-MX', { dateStyle: 'long', timeStyle: 'short' });
     const quoteHeader = `El ${formattedDate}, ${email.from.replace(/"/g, '')} escribió:`;
     const replyText = `${quoteHeader}\n${quoteBody.split('\n').map(line => `> ${line}`).join('\n')}`;
-    setReplyData({ to: replyTo, subject: replySubject, text: '', quotedText: replyText, inReplyTo: email.messageId, quoteHeader, quoteBody });
+
+    // Responder a todos: al remitente, y en copia los demás destinatarios (sin repetir ni incluirme).
+    // Si el mensaje lo mandé yo, "todos" son quienes lo recibieron.
+    let to = replyTo;
+    let cc = '';
+    if (mode === 'all') {
+      const sender = replyTo.toLowerCase();
+      const others = [...new Set([...addrsOf(email.to), ...addrsOf(email.cc)])].filter(a => a !== me && a !== sender);
+      if (sender === me) {
+        const recipients = [...new Set(addrsOf(email.to))].filter(a => a !== me);
+        to = recipients.join(', ') || replyTo;
+        cc = [...new Set(addrsOf(email.cc))].filter(a => a !== me).join(', ');
+      } else {
+        cc = others.join(', ');
+      }
+    }
+    setReplyData({ to, cc, subject: replySubject, text: '', quotedText: replyText, inReplyTo: email.messageId, quoteHeader, quoteBody });
     setIsComposeOpen(true);
   };
 
@@ -429,6 +460,20 @@ export default function EmailPage() {
                   <Reply className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Responder</span>
                 </button>
+                <button
+                  onClick={() => handleReply(selectedEmail, 'all')}
+                  className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  title="Responder a todos"
+                >
+                  <ReplyAll className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleReply(selectedEmail, 'forward')}
+                  className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  title="Reenviar"
+                >
+                  <Forward className="w-4 h-4" />
+                </button>
 
                 <div className="h-4 w-px bg-slate-200" />
 
@@ -638,6 +683,20 @@ export default function EmailPage() {
                               <Reply className="w-3.5 h-3.5" />
                               Responder a este mensaje
                             </button>
+                            <button
+                              onClick={() => handleReply(em, 'all')}
+                              className="ml-2 flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-600 hover:text-red-700 rounded-lg text-xs font-semibold transition-all"
+                            >
+                              <ReplyAll className="w-3.5 h-3.5" />
+                              Responder a todos
+                            </button>
+                            <button
+                              onClick={() => handleReply(em, 'forward')}
+                              className="ml-2 flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-600 hover:text-red-700 rounded-lg text-xs font-semibold transition-all"
+                            >
+                              <Forward className="w-3.5 h-3.5" />
+                              Reenviar
+                            </button>
                           </div>
                         </div>
                       )}
@@ -657,6 +716,7 @@ export default function EmailPage() {
         onSend={sendEmail}
         isSending={isSending}
         initialTo={replyData?.to || ''}
+        initialCc={replyData?.cc || ''}
         initialSubject={replyData?.subject || ''}
         initialText={replyData?.text || ''}
         initialQuotedText={replyData?.quotedText || ''}

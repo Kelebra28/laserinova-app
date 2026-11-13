@@ -8,6 +8,7 @@ interface EmailComposeModalProps {
   onSend: (to: string, cc: string, subject: string, text: string, files: File[], inReplyTo?: string, quote?: { header: string; body: string }) => Promise<{ success: boolean; error?: string }>;
   isSending: boolean;
   initialTo?: string;
+  initialCc?: string;
   initialSubject?: string;
   initialText?: string;
   initialQuotedText?: string;
@@ -22,6 +23,7 @@ export function EmailComposeModal({
   onSend, 
   isSending,
   initialTo = '',
+  initialCc = '',
   initialSubject = '',
   initialText = '',
   initialQuotedText = '',
@@ -44,14 +46,14 @@ export function EmailComposeModal({
   useEffect(() => {
     if (isOpen) {
       setTo(initialTo);
-      setCc('');
+      setCc(initialCc);
       setSubject(initialSubject);
       setText(initialText);
       setQuotedText(initialQuotedText);
       setShowQuoted(false);
       setErrorMsg('');
     }
-  }, [isOpen, initialTo, initialSubject, initialText, initialQuotedText]);
+  }, [isOpen, initialTo, initialCc, initialSubject, initialText, initialQuotedText]);
 
   const templates = [
     {
@@ -115,7 +117,7 @@ export function EmailComposeModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!to || !subject || !text) return;
+    if (!to || !subject || (!text && !quoteBody)) return;
     
     setErrorMsg('');
     // Con cita estructurada (respuesta) el historial viaja aparte para darle formato de cita; si no, se pega como antes.
@@ -339,7 +341,7 @@ export function EmailComposeModal({
 
               <button 
                 type="submit" 
-                disabled={isSending || !to || !subject || !text}
+                disabled={isSending || !to || !subject || (!text && !quoteBody)}
                 className="flex items-center gap-1.5 px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-full shadow-md hover:shadow-lg transition-all disabled:opacity-40 active:scale-95"
               >
                 {isSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
