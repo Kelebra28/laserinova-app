@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { formatDueDate, todayYMD } from "@/lib/dates";
+import { PIPELINE_COLORS } from "@/constants/dashboard.constants";
 
 const INCOME_TYPES = ["INGRESO", "ANTICIPO", "LIQUIDACION"];
 const EXPENSE_TYPES = ["GASTO_OPERATIVO", "GASTO_PROYECTO"];
@@ -82,10 +83,10 @@ export async function getDashboardStatsService() {
   });
   const pipelineDef = [
     // counted: solo lo que el cliente ya aceptó suma dinero; borrador y enviadas se muestran como cantidad.
-    { key: "DRAFT", label: "Borrador", color: "#94a3b8", counted: false },
-    { key: "SENT", label: "Enviadas", color: "#3b82f6", counted: false },
-    { key: "APPROVED", label: "Aprobadas", color: "#a855f7", counted: true },
-    { key: "IN_PRODUCTION", label: "En producción", color: "#f97316", counted: true },
+    { key: "DRAFT", label: "Borrador", color: PIPELINE_COLORS.DRAFT, counted: false },
+    { key: "SENT", label: "Enviadas", color: PIPELINE_COLORS.SENT, counted: false },
+    { key: "APPROVED", label: "Aprobadas", color: PIPELINE_COLORS.APPROVED, counted: true },
+    { key: "IN_PRODUCTION", label: "En producción", color: PIPELINE_COLORS.IN_PRODUCTION, counted: true },
   ];
   const pipeline = pipelineDef.map((p) => {
     const rows = openQuotes.filter((q) => q.status === p.key);
@@ -117,11 +118,15 @@ export async function getDashboardStatsService() {
 
   // ── Atención requerida ────────────────────────────────────────────────────
   const staleCutoff = new Date(now.getTime() - 7 * DAY);
-  const [staleSent, deliveredUnpaid, overdueTasks, blockedTasks] = await Promise.all([
+  // Lo rescatable va primero: cotizaciones con 7 a 60 días sin respuesta. Las de más de 60 días se cuentan aparte
+  // (casi seguro están perdidas) para que no tapen lo que sí se puede cerrar.
+  const dormantCutoff = new Date(now.getTime() - 60 * DAY);
+  const todayStart = new Date(`${todayYMD("America/Mexico_City")}T00:00:00.000Z`);
+  const [staleSent, deliveredUnpaid, overdueTasks, blockedTasks, staleTotal, dormantCount, unpaidTotal, overdueTotal, blockedTotal] = await Promise.all([
     prisma.quote.findMany({
-      where: { active: true, status: "SENT", updatedAt: { lt: staleCutoff } },
+      where: { active: true, status: "SENT", updatedAt: { lt: staleCutoff, gte: dormantCutoff } },
       select: { id: true, folio: true, project: true, total: true, updatedAt: true, client: { select: { name: true, company: true } }, prospectName: true },
-      orderBy: { updatedAt: "asc" },
+      orderBy: { updatedAt: "desc" },
       take: 5,
     }),
     prisma.quote.findMany({
@@ -131,9 +136,9 @@ export async function getDashboardStatsService() {
       take: 5,
     }),
     prisma.task.findMany({
-      where: { status: { not: "DONE" }, dueDate: { lt: new Date(`${todayYMD("America/Mexico_City")}T00:00:00.000Z`) } },
+      where: { status: { not: "DONE" }, dueDate: { lt: todayStart } },
       select: { id: true, title: true, dueDate: true, status: true },
-      orderBy: { dueDate: "asc" },
+      orderBy: { dueDate: "desc" },
       take: 5,
     }),
     prisma.task.findMany({
@@ -141,17 +146,23 @@ export async function getDashboardStatsService() {
       select: { id: true, title: true, blockerReason: true },
       take: 5,
     }),
+    prisma.quote.count({ where: { active: true, status: "SENT", updatedAt: { lt: staleCutoff, gte: dormantCutoff } } }),
+    prisma.quote.count({ where: { active: true, status: "SENT", updatedAt: { lt: dormantCutoff } } }),
+    prisma.quote.count({ where: { active: true, status: "DELIVERED", paymentStatus: { in: ["PENDING", "PARTIAL"] } } }),
+    prisma.task.count({ where: { status: { not: "DONE" }, dueDate: { lt: todayStart } } }),
+    prisma.task.count({ where: { status: "BLOCKED" } }),
   ]);
 
   const clientLabel = (q: { client: { name: string | null; company: string | null } | null; prospectName: string | null }) =>
     q.client?.company || q.client?.name || q.prospectName || "Sin cliente";
 
   type AttentionItem = { id: string; href: string; title: string; detail: string };
-  const attention: { key: string; label: string; tone: "amber" | "red" | "orange"; items: AttentionItem[] }[] = [
+  const attention: { key: string; label: string; tone: "amber" | "red" | "orange"; total: number; items: AttentionItem[] }[] = [
     {
       key: "stale",
-      label: "Enviadas sin respuesta (+7 días)",
+      label: "Enviadas sin respuesta (7 a 60 días)",
       tone: "amber" as const,
+      total: staleTotal,
       items: staleSent.map((q) => ({
         id: q.id,
         href: `/dashboard/quotes/${q.id}`,
@@ -163,6 +174,7 @@ export async function getDashboardStatsService() {
       key: "unpaid",
       label: "Entregadas con saldo pendiente",
       tone: "red" as const,
+      total: unpaidTotal,
       items: deliveredUnpaid.map((q) => ({
         id: q.id,
         href: `/dashboard/quotes/${q.id}`,
@@ -174,6 +186,7 @@ export async function getDashboardStatsService() {
       key: "overdue",
       label: "Tareas vencidas",
       tone: "red" as const,
+      total: overdueTotal,
       items: overdueTasks.map((t) => ({
         id: t.id,
         href: "/dashboard/tasks",
@@ -185,6 +198,7 @@ export async function getDashboardStatsService() {
       key: "blocked",
       label: "Tareas bloqueadas",
       tone: "orange" as const,
+      total: blockedTotal,
       items: blockedTasks.map((t) => ({
         id: t.id,
         href: "/dashboard/tasks",
@@ -261,6 +275,7 @@ export async function getDashboardStatsService() {
       conversionRate,
     },
     attention,
+    dormantQuotes: dormantCount,
     topClients,
     activeTasks,
     tasksOpen,
