@@ -1105,22 +1105,78 @@ async function runAIAgentResponse(contactId: string) {
           const args = call.args as any;
           // El bot NO se apaga: solo se avisa al equipo y el bot sigue contestando en el chat.
           // Si alguien del equipo escribe manualmente en el chat, ahí sí se pausa (sendManualMessageAction).
-          if (!contact.name?.includes("Simulador")) {
-            const summary = await quickConversationSummary(contact.id);
-            await notifyAdmin(
-              [
-                `🔔 ${contact.name || 'Un cliente'} necesita atención humana`,
-                `Tel: +${contact.phone}`,
-                `Motivo: ${args.motivo}`,
-                summary ? `\nResumen:\n${summary}` : '',
-                `\nAbrir chat: ${conversationLink(contact.id)}`,
-              ].filter(Boolean).join('\n'),
-              conversationPath(contact.id)
-            );
-          }
 
-          // El motivo es interno (va solo en el aviso al administrador), no se le muestra al cliente.
-          responseText = `Claro, ya avisé a uno de nuestros asesores para que te contacte. Mientras tanto, cualquier duda me la puedes escribir por aquí.`;
+          // Un cliente molesto escribe varios mensajes seguidos: avisar una sola vez por hora (la nota interna
+          // sirve de marca) para no llenar de alertas a los administradores ni repetir el mismo texto fijo.
+          const TRANSFER_NOTE = `${SYSTEM_NOTE_PREFIX}: Ya se avisó al equipo que este cliente necesita atención humana`;
+          const alreadyTransferred = !!(await prisma.whatsAppMessage.findFirst({
+            where: {
+              contactId: contact.id,
+              direction: 'INTERNAL',
+              content: { startsWith: TRANSFER_NOTE },
+              timestamp: { gt: new Date(Date.now() - 60 * 60 * 1000) },
+            },
+            select: { id: true },
+          }).catch(() => null));
+
+          if (!alreadyTransferred) {
+            try {
+              const note = await prisma.whatsAppMessage.create({
+                data: {
+                  contactId: contact.id,
+                  messageId: `transfer_${Date.now()}`,
+                  direction: 'INTERNAL',
+                  type: 'TEXT',
+                  content: `${TRANSFER_NOTE} (motivo: ${String(args.motivo || '').slice(0, 200)}). No vuelvas a avisar; si el cliente insiste, dile con empatía que el equipo ya tiene su caso y le escribirá por este chat.`,
+                  status: 'DELIVERED',
+                },
+              });
+              await notificationEmitter.emit('whatsapp_message', { message: note, contact });
+            } catch (e) {
+              console.error('Error guardando la nota de transferencia a humano:', e);
+            }
+
+            if (!contact.name?.includes("Simulador")) {
+              const summary = await quickConversationSummary(contact.id);
+              await notifyAdmin(
+                [
+                  `🔔 ${contact.name || 'Un cliente'} necesita atención humana`,
+                  `Tel: +${contact.phone}`,
+                  `Motivo: ${args.motivo}`,
+                  summary ? `\nResumen:\n${summary}` : '',
+                  `\nAbrir chat: ${conversationLink(contact.id)}`,
+                ].filter(Boolean).join('\n'),
+                conversationPath(contact.id)
+              );
+            }
+
+            // El motivo es interno (va solo en el aviso al administrador), no se le muestra al cliente.
+            responseText = `Claro, ya avisé a uno de nuestros asesores para que te contacte. Mientras tanto, cualquier duda me la puedes escribir por aquí.`;
+          } else {
+            // Ya se avisó hace poco: no se avisa de nuevo y se contesta con el modelo para no repetir el texto fijo.
+            responseText = 'Sigo al pendiente: el equipo ya tiene tu caso y te escribirá por este chat.';
+            if (result.response.candidates && result.response.candidates[0].content) {
+              contents.push(result.response.candidates[0].content);
+              contents.push({
+                role: 'user',
+                parts: [{
+                  functionResponse: {
+                    name: 'transferir_a_humano',
+                    response: {
+                      ya_avisado: true,
+                      instruccion: 'El equipo YA fue avisado hace poco y el caso sigue pendiente. Responde en una o dos frases, con empatía y sin repetir lo que ya dijiste. NO prometas tiempos, NO menciones reembolsos, devoluciones ni dinero, y NO nombres a ninguna persona. No menciones herramientas ni avisos.',
+                    },
+                  },
+                }],
+              });
+              try {
+                const followUp = await model.generateContent({ contents });
+                responseText = followUp.response.text() || responseText;
+              } catch (e) {
+                console.error('Error redactando respuesta de transferencia repetida:', e);
+              }
+            }
+          }
         } else if (call.name === 'buscar_productos_en_catalogo') {
           const args = call.args as any;
           const searchKeyword = args.termino_busqueda || "termo";
