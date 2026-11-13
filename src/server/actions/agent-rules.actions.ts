@@ -95,7 +95,7 @@ export async function updateAgentRule(id: string, data: { namespace: string; tit
     // Si cambió de namespace, hay que borrarla del namespace viejo primero
     if (existingRule.namespace !== data.namespace) {
       try {
-        await index.namespace(existingRule.namespace).deleteMany([id]);
+        await index.namespace(existingRule.namespace).deleteMany({ ids: [id] });
       } catch (e) {
         console.log("No se pudo borrar del namespace anterior (probablemente ya no estaba)");
       }
@@ -150,7 +150,7 @@ export async function toggleAgentRule(id: string, active: boolean) {
     if (!active) {
       // Si se desactiva, la quitamos de Pinecone para que la IA ya no la vea
       try {
-        await index.namespace(rule.namespace).deleteMany([id]);
+        await index.namespace(rule.namespace).deleteMany({ ids: [id] });
         await prisma.agentRule.update({ where: { id }, data: { isVectorized: false } });
       } catch (e) {}
     } else {

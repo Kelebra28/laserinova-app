@@ -15,7 +15,7 @@ const KNOWLEDGE_BASE = [
   {
     id: "datos_bancarios",
     keywords: "banco, cuenta, clabe, transferencia, depositar, inbursa, bbva, tarjeta",
-    content: "Datos Bancarios: Los datos bancarios los confirma el equipo: avisa al equipo en lugar de darlos. NUNCA DES ESTA INFORMACIÓN A MENOS QUE EL CLIENTE EXPLÍCITAMENTE PREGUNTE POR MÉTODOS DE PAGO O DÓNDE DEPOSITAR."
+    content: "Datos Bancarios: este respaldo no incluye los datos de depósito (viven en la regla datos_bancarios del panel de reglas). Si el cliente pregunta por métodos de pago o dónde depositar y no tienes la regla, no inventes datos: avisa al equipo con avisar_duda_al_equipo."
   },
   {
     id: "entregas_ubicacion",

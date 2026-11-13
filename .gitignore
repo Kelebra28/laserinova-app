@@ -59,3 +59,6 @@ ts_errors.txt
 /scratch/list_cats.ts
 /scratch/test_formulas.ts
 /scratch/test_public_dto.ts
+
+# Scripts locales de pruebas/mantenimiento: tocan BD, Pinecone y chats de clientes. Nunca a git.
+/scratch/

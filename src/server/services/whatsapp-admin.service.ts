@@ -329,7 +329,9 @@ export async function proposeAutoDraft(params: {
   const unit = round2(subtotal / qty);
   const marginPct = subtotal > 0 ? Math.max(0, round2((1 - pricing.realCost / subtotal) * 100)) : 0;
   const clientName = contact.name || `+${contact.phone}`;
-  const work = `${pricing.tipo === 'GRABADO' ? 'Grabado' : 'Corte'} láser en ${pricing.materialName}, ${pricing.widthCm} × ${pricing.heightCm} cm`;
+  const work = pricing.materialOnly
+    ? `SOLO MATERIAL (falta ${pricing.tipo === 'GRABADO' ? 'grabado' : 'corte'}): ${pricing.materialName}, ${pricing.widthCm} × ${pricing.heightCm} cm`
+    : `${pricing.tipo === 'GRABADO' ? 'Grabado' : 'Corte'} láser en ${pricing.materialName}, ${pricing.widthCm} × ${pricing.heightCm} cm`;
   const detail = (params.description || '').trim();
   const conceptDescription = detail ? `${detail} (${work})` : work;
 
@@ -352,6 +354,30 @@ export async function proposeAutoDraft(params: {
     data: { contactId: contact.id, status: 'DRAFT' },
     select: { folio: true },
   });
+
+  // Borrador parcial (sin archivo): NO queda pendiente de AUTORIZAR, para que no se mande al cliente
+  // una cotización sin corte/grabado. El administrador la completa desde el CRM cuando llegue el archivo.
+  if (pricing.materialOnly) {
+    const partial = [
+      `🧱 *Borrador PARCIAL ${quote.folio}* para ${clientName} (+${contact.phone})`,
+      `Proyecto: ${params.project}`,
+      `• ${conceptDescription}`,
+      `• Solo material (rectángulo completo + merma, margen ${pricing.marginPct}%): ${qty} pzas × ${money(unit)} = ${money(subtotal)} + IVA ${money(tax)}`,
+      `Costo de material: ${money(pricing.realCost)}`,
+      '',
+      `El cliente aún no manda su archivo, así que NO incluye corte ni grabado (son por tiempo). Cuando llegue, súmalos desde el CRM. Este borrador no se puede autorizar por WhatsApp.`,
+      `Completar: ${quoteLink(quoteId)}`,
+      `Chat: ${params.chatLink}`,
+    ].join('\n');
+    for (const a of admins) {
+      const saved = await prisma.whatsAppMessage.create({
+        data: { contactId: a.id, messageId: `admin_partial_${Date.now()}_${a.id.slice(-4)}`, direction: 'OUTBOUND', type: 'TEXT', content: partial, status: 'SENT' },
+      });
+      await notificationEmitter.emit('whatsapp_message', { message: saved, contact: a }).catch(() => {});
+    }
+    await notifyAdmin(partial, params.chatPath);
+    return { quoteId, folio: quote.folio };
+  }
 
   const text = [
     `📝 *Borrador ${quote.folio}* para ${clientName} (+${contact.phone})`,
