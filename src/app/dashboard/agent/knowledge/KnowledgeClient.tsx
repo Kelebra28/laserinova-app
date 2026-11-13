@@ -23,6 +23,7 @@ export function KnowledgeClient({ initialRules }: KnowledgeClientProps) {
   const [rulesList, setRulesList] = useState(initialRules);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<string>("todos");
+  const [statusFilter, setStatusFilter] = useState<"todas" | "activas" | "desactivadas">("todas");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
 
@@ -83,13 +84,27 @@ export function KnowledgeClient({ initialRules }: KnowledgeClientProps) {
   const uniqueNamespaces = Array.from(new Set(rawNamespaces)).sort();
   const namespaces = ["todos", ...uniqueNamespaces];
 
+  // Conteos en vivo (se actualizan al activar, desactivar o crear reglas)
+  const totalCount = rulesList.length;
+  const activeCount = rulesList.filter((r) => r.active).length;
+  const inactiveCount = totalCount - activeCount;
+  // Activas que no están en Pinecone: el bot no las ve aunque estén "activas"
+  const notVectorizedCount = rulesList.filter((r) => r.active && !r.isVectorized).length;
+  const countsByNamespace = rulesList.reduce((acc: Record<string, { active: number; inactive: number }>, r) => {
+    acc[r.namespace] ??= { active: 0, inactive: 0 };
+    acc[r.namespace][r.active ? "active" : "inactive"]++;
+    return acc;
+  }, {});
+
   const filteredRules = rulesList.filter((rule) => {
     const matchesSearch = 
       (rule.title?.toLowerCase() || "").includes(searchTerm.toLowerCase()) || 
       (rule.content?.toLowerCase() || "").includes(searchTerm.toLowerCase());
     const matchesTab = activeTab === "todos" || rule.namespace === activeTab;
-    
-    return matchesSearch && matchesTab;
+    const matchesStatus =
+      statusFilter === "todas" || (statusFilter === "activas" ? rule.active : !rule.active);
+
+    return matchesSearch && matchesTab && matchesStatus;
   });
 
   // Paginación
@@ -117,13 +132,6 @@ export function KnowledgeClient({ initialRules }: KnowledgeClientProps) {
             </div>
           </div>
           <div className="flex gap-3 shrink-0">
-            <div className="bg-white border border-zinc-200 shadow-sm rounded-xl px-4 py-2 flex items-center gap-3">
-              <Database className="w-4 h-4 text-emerald-500" />
-              <div>
-                <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Reglas en BD</p>
-                <p className="text-sm font-bold text-zinc-800">{initialRules.length}</p>
-              </div>
-            </div>
             <Link 
               href="/dashboard/agent/knowledge/guide"
               className="bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-5 py-2 rounded-xl text-sm font-semibold transition-all border border-zinc-200 flex items-center gap-2"
@@ -132,12 +140,47 @@ export function KnowledgeClient({ initialRules }: KnowledgeClientProps) {
               Guía de IA
             </Link>
             <button 
-              onClick={() => setIsModalOpen(true)}
+              onClick={openNewModal}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-sm font-semibold transition-all shadow-md shadow-indigo-200 flex items-center gap-2"
             >
               <Bot className="w-4 h-4" />
               Nueva Regla
             </button>
+          </div>
+        </div>
+
+        {/* Resumen de reglas (en vivo) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white border border-zinc-200 shadow-sm rounded-xl px-4 py-3 flex items-center gap-3">
+            <Database className="w-4 h-4 text-zinc-500 shrink-0" />
+            <div>
+              <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Total en BD</p>
+              <p className="text-lg font-bold text-zinc-800 leading-tight">{totalCount}</p>
+            </div>
+          </div>
+          <div className="bg-white border border-emerald-200 shadow-sm rounded-xl px-4 py-3 flex items-center gap-3">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+            <div>
+              <p className="text-[10px] uppercase font-bold text-emerald-600 tracking-wider">Activas</p>
+              <p className="text-lg font-bold text-zinc-800 leading-tight">{activeCount}</p>
+              <p className="text-[10px] text-zinc-400">las que ve el bot</p>
+            </div>
+          </div>
+          <div className="bg-white border border-zinc-200 shadow-sm rounded-xl px-4 py-3 flex items-center gap-3">
+            <Power className="w-4 h-4 text-zinc-400 shrink-0" />
+            <div>
+              <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Desactivadas</p>
+              <p className="text-lg font-bold text-zinc-800 leading-tight">{inactiveCount}</p>
+              <p className="text-[10px] text-zinc-400">el bot no las ve</p>
+            </div>
+          </div>
+          <div className={`bg-white shadow-sm rounded-xl px-4 py-3 flex items-center gap-3 border ${notVectorizedCount > 0 ? "border-amber-300" : "border-zinc-200"}`}>
+            <Bot className={`w-4 h-4 shrink-0 ${notVectorizedCount > 0 ? "text-amber-500" : "text-zinc-400"}`} />
+            <div>
+              <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Sin vectorizar</p>
+              <p className="text-lg font-bold text-zinc-800 leading-tight">{notVectorizedCount}</p>
+              <p className="text-[10px] text-zinc-400">{notVectorizedCount > 0 ? "activas que el bot no encuentra" : "todo sincronizado"}</p>
+            </div>
           </div>
         </div>
 
@@ -158,6 +201,29 @@ export function KnowledgeClient({ initialRules }: KnowledgeClientProps) {
           </div>
           
           <div className="flex flex-wrap gap-2">
+            {([
+              ["todas", `Todas (${totalCount})`],
+              ["activas", `Activas (${activeCount})`],
+              ["desactivadas", `Desactivadas (${inactiveCount})`],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => {
+                  setStatusFilter(key);
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wider transition-all ${
+                  statusFilter === key
+                    ? "bg-zinc-900 text-white border border-zinc-900 shadow-sm"
+                    : "bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 border border-zinc-200"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
             {namespaces.map((ns) => (
               <button
                 key={ns}
@@ -172,6 +238,12 @@ export function KnowledgeClient({ initialRules }: KnowledgeClientProps) {
                 }`}
               >
                 {ns === "todos" ? "Todos" : ns.replace(/_/g, " ")}
+                {ns !== "todos" && countsByNamespace[ns] && (
+                  <span className="ml-1.5 normal-case font-medium opacity-70">
+                    {countsByNamespace[ns].active}
+                    {countsByNamespace[ns].inactive > 0 && ` · ${countsByNamespace[ns].inactive} off`}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -182,14 +254,21 @@ export function KnowledgeClient({ initialRules }: KnowledgeClientProps) {
           {paginatedRules.map((rule) => (
             <div 
               key={rule.id} 
-              className="bg-white rounded-2xl border border-zinc-200 p-6 flex flex-col gap-4 hover:shadow-lg hover:border-indigo-200 transition-all duration-300 group relative overflow-hidden h-[280px]"
+              className={`rounded-2xl border p-6 flex flex-col gap-4 hover:shadow-lg hover:border-indigo-200 transition-all duration-300 group relative overflow-hidden h-[280px] ${
+                rule.active ? "bg-white border-zinc-200" : "bg-zinc-50 border-dashed border-zinc-300 opacity-70"
+              }`}
             >
               {/* Etiqueta Namespace */}
               <div className="flex items-center justify-between shrink-0">
                 <span className="bg-zinc-100 text-zinc-600 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider truncate max-w-[150px]">
                   {rule.namespace}
                 </span>
-                {rule.isVectorized && (
+                {!rule.active && (
+                  <span className="text-zinc-500 bg-zinc-200 px-2 py-1 rounded-md shrink-0 text-[10px] font-bold uppercase tracking-wider">
+                    Desactivada
+                  </span>
+                )}
+                {rule.active && rule.isVectorized && (
                   <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md shrink-0">
                     <CheckCircle2 className="w-3 h-3" />
                     <span className="text-[10px] font-bold uppercase tracking-wider">Vectorizado</span>
