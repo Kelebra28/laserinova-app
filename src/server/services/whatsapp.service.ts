@@ -584,7 +584,7 @@ const BOT_FAILURE_ALERT_COOLDOWN_MS = 10 * 60 * 1000;
  */
 /** Link de la tienda web que el bot le manda al cliente (configurable con STORE_URL). */
 function getStoreUrl() {
-  return (process.env.STORE_URL || 'https://www.laserinova.com/').trim();
+  return (process.env.STORE_URL || 'https://www.laserinova.com/tienda').trim();
 }
 
 async function reportBotFailure(contact: { id: string; name: string | null; phone: string }, error: unknown) {
