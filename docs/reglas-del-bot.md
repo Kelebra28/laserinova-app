@@ -27,7 +27,7 @@ Para volver a contar: sumar las filas por `active` en `AgentRule` y comparar con
 **Desactivadas:** meta comercial mensual (interna), viáticos históricos (`EVT-009`) y las fórmulas de margen `COT-002`, `COT-003` y `COT-016` (las fórmulas de precio viven solo en `src/lib/pricing/`; el bot no calcula precios).
 
 **Agregadas (2026-11-12 y 2026-11-13):**
-- Facturación e IVA: sí se factura; el IVA (16%) se suma y la cotización normalmente ya lo incluye, salvo que el cliente la pida sin IVA.
+- Facturación e IVA: sí se factura. Todas las cotizaciones ya llevan IVA (16%). Si el cliente pregunta si es obligatorio, se puede cotizar sin IVA, pero entonces no se emite factura; con factura es forzosamente con IVA y el bot nunca ofrece factura sin IVA.
 - PVC (incluido espumado): solo cortes rectos, no se hace con láser ni se hacen figuras (círculos u otras formas); se ofrece la figura en acrílico o MDF.
 - Horario de atención: L-V 9:00-18:00, sáb 11:00-16:00.
 - Tiempo de entrega: 3 a 4 días hábiles, siempre a confirmar con el equipo.
