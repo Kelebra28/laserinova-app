@@ -582,6 +582,11 @@ const BOT_FAILURE_ALERT_COOLDOWN_MS = 10 * 60 * 1000;
  * interna en el chat. NO escribe nada al cliente. Para no spamear mientras Gemini siga caído,
  * solo avisa una vez por contacto cada 10 minutos (la nota interna sirve de marca).
  */
+/** Link de la tienda web que el bot le manda al cliente (configurable con STORE_URL). */
+function getStoreUrl() {
+  return (process.env.STORE_URL || 'https://www.laserinova.com/').trim();
+}
+
 async function reportBotFailure(contact: { id: string; name: string | null; phone: string }, error: unknown) {
   try {
     if (contact.name?.includes('Simulador')) return;
@@ -929,11 +934,6 @@ async function runAIAgentResponse(contactId: string) {
       }
     };
 
-    const buscar_productos_en_catalogo: FunctionDeclaration = {
-      name: 'buscar_productos_en_catalogo',
-      description: 'Busca productos reales en la base de datos (catálogo) para ofrecerle opciones al cliente. Úsalo cuando el cliente pregunte qué tipos de termos, tazas, libretas u otros artículos promocionales tienes.',
-      parameters: {
-        type: SchemaType.OBJECT,
     const sugerir_cambio_cotizacion: FunctionDeclaration = {
       name: 'sugerir_cambio_cotizacion',
       description: 'Úsala cuando el cliente responda de forma CLARA y EXPLÍCITA a una cotización que ya le enviaron: ACEPTADA si dice que la acepta o que procedan ("sí, adelante", "va, la quiero", "hagámoslo"); RECHAZADA si dice claramente que no la quiere. Solo deja una sugerencia al equipo, que decide. NO la uses ante dudas, negociación, "déjame verlo", "te aviso", preguntas ni si no hay una cotización enviada.',
@@ -947,6 +947,11 @@ async function runAIAgentResponse(contactId: string) {
       }
     };
 
+    const buscar_productos_en_catalogo: FunctionDeclaration = {
+      name: 'buscar_productos_en_catalogo',
+      description: 'Busca productos reales en la base de datos (catálogo) para ofrecerle opciones al cliente. Úsalo cuando el cliente pregunte qué tipos de termos, tazas, libretas u otros artículos promocionales tienes.',
+      parameters: {
+        type: SchemaType.OBJECT,
         properties: { 
           termino_busqueda: { type: SchemaType.STRING, description: 'Palabra o frase de búsqueda (ej. "termo", "taza azul", "cilindro acero")' },
           pagina: { type: SchemaType.INTEGER, description: 'Página de resultados (usa 1 la primera vez, y 2, 3... si el cliente pide ver "más opciones" o "otros modelos")' }
@@ -1238,76 +1243,31 @@ async function runAIAgentResponse(contactId: string) {
           const pricingGlobals = await getProductPricingGlobals();
           const modelMaxCosts = await getModelMaxCostMap();
 
-          // 1. Enviar imágenes de WhatsApp si hay productos
-          for (const prod of foundProducts) {
-             let imageUrl = null;
-             
-             // Priorizar la imagen genérica (que suele tener todos los colores)
-             if (prod.images) {
-                try {
-                   const parsedImages = JSON.parse(prod.images);
-                   if (Array.isArray(parsedImages) && parsedImages.length > 0) {
-                      imageUrl = parsedImages[0];
-                   }
-                } catch(e) {}
-             }
-             // Si no hay imagen genérica, usar la específica del color
-             if (!imageUrl) {
-                 imageUrl = prod.image;
-             }
-
-             if (imageUrl) {
-                let cleanName = prod.name;
-                if (prod.color) cleanName = cleanName.replace(new RegExp(prod.color, 'i'), '').trim();
-                if (prod.model) cleanName = cleanName.replace(new RegExp(prod.model, 'i'), '').trim();
-                // Limpiar posibles espacios dobles o guiones
-                cleanName = cleanName.replace(/[-\s]+$/, '').trim();
-
-                const caption = `🔥 ${cleanName || prod.name}\n💰 Precio: $${resolveProductUnitPrice(prod, 1, pricingGlobals, modelMaxCosts[modelCostKey(prod)]).unitPrice.toFixed(2)} MXN`;
-                
-                // Enviar a WhatsApp Real y conservar el id de Meta (sirve para palomitas y para ubicar la cita si el cliente responde a esta foto)
-                let imageMessageId = `bot_img_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-                if (!contact.name?.includes("Simulador")) {
-                   const imgRes = await sendMessageToMeta(contact.phone, {
-                      type: 'image',
-                      image: { link: imageUrl, caption }
-                   }).catch(console.error);
-                   if (imgRes?.messages?.[0]?.id) imageMessageId = imgRes.messages[0].id;
-                }
-
-                // Guardar en la DB para que se vea en el UI
-                const sentImgMsg = await prisma.whatsAppMessage.create({
-                  data: {
-                    contactId: contact.id,
-                    messageId: imageMessageId,
-                    direction: 'OUTBOUND',
-                    type: 'IMAGE',
-                    mediaUrl: imageUrl,
-                    content: caption,
-                    status: 'DELIVERED',
-                  }
-                });
-                await notificationEmitter.emit('whatsapp_message', { message: sentImgMsg, contact });
-             }
-          }
+          // Ya no se mandan fotos una por una (4 mensajes seguidos): se le da el link de la tienda en un
+          // solo mensaje. La foto de un color concreto sí sale, desde consultar_colores_producto.
+          const storeUrl = getStoreUrl();
 
           // Agregar la llamada de función al historial
           if (result.response.candidates && result.response.candidates[0].content) {
             contents.push(result.response.candidates[0].content);
           }
 
-          // Responder con los resultados a Gemini indicando que ya mandamos fotos
+          // Responder con los resultados a Gemini: nada se mandó todavía, el link va en SU respuesta
           contents.push({
             role: "user",
             parts: [{
               functionResponse: {
                 name: "buscar_productos_en_catalogo",
-                response: {
-                  productos: foundProducts.length > 0 ? foundProducts.map(p => ({
-                    nombre: p.name,
-                    estado: "FOTOS Y PRECIOS ENVIADOS EXITOSAMENTE POR WHATSAPP AL CLIENTE. Diles algo corto como 'Ahí te mandé unas fotos con los precios, ¿cuál te gusta más?'"
-                  })) : [{ mensaje: "No se encontraron productos con ese término." }]
-                }
+                response: foundProducts.length > 0
+                  ? {
+                      productos: foundProducts.map(p => ({
+                        nombre: p.name,
+                        precio_desde_mxn: Number(resolveProductUnitPrice(p, 1, pricingGlobals, modelMaxCosts[modelCostKey(p)]).unitPrice.toFixed(2)),
+                      })),
+                      link_tienda: storeUrl,
+                      instruccion: `NO se mandó ninguna foto. Responde con UN SOLO mensaje corto: dile que ahí puede ver todos los productos, fotos y colores en ${storeUrl} y pregúntale cuál le interesa. Puedes mencionar uno o dos nombres con su precio si ayuda, sin listar todo.`,
+                    }
+                  : { mensaje: `No se encontraron productos con ese término. Dale el link de la tienda ${storeUrl} para que explore, o pregúntale qué otro producto tiene en mente.` },
               }
             }]
           });
@@ -1317,12 +1277,12 @@ async function runAIAgentResponse(contactId: string) {
             const followUpResult = await model.generateContent({ contents });
             const funcs = followUpResult.response.functionCalls();
             if (funcs && funcs.length > 0) {
-              responseText = foundProducts.length > 0 ? "Ahí te envié algunas opciones con sus precios. ¿Te interesa alguna?" : "No encontré productos con ese término exacto, ¿tienes algún otro en mente?";
+              responseText = `Aquí puedes ver todos nuestros productos con fotos, colores y precios: ${storeUrl} ¿Cuál te interesa?`;
             } else {
               responseText = followUpResult.response.text();
             }
           } catch(e) {
-            responseText = foundProducts.length > 0 ? "Ahí te envié algunas opciones con sus precios. ¿Te interesa alguna?" : "No encontré productos con ese término exacto, ¿tienes algún otro en mente?";
+            responseText = `Aquí puedes ver todos nuestros productos con fotos, colores y precios: ${storeUrl} ¿Cuál te interesa?`;
           }
 
         } else if (call.name === 'consultar_colores_producto') {
@@ -1404,6 +1364,46 @@ async function runAIAgentResponse(contactId: string) {
                     }
                   : { mensaje: 'No encontré ese producto en el catálogo. Pídele al cliente que lo describa de otra forma.' },
               },
+            }],
+          });
+
+          try {
+            const followUp = await model.generateContent({ contents });
+            responseText = followUp.response.text();
+          } catch (e) {
+            console.error('Error redactando respuesta de colores:', e);
+            responseText = variants.length > 0
+              ? `De ese modelo tenemos: ${Array.from(byColor.values()).map(c => c.color).join(', ')}. ¿Cuál te gusta más?`
+              : 'No encontré ese producto en el catálogo, ¿me lo describes de otra forma?';
+          }
+        } else if (call.name === 'avisar_duda_al_equipo') {
+          const args = call.args as any;
+
+          await escalateDoubt(args.duda);
+
+          if (result.response.candidates && result.response.candidates[0].content) {
+            contents.push(result.response.candidates[0].content);
+          }
+          contents.push({
+            role: 'user',
+            parts: [{
+              functionResponse: {
+                name: 'avisar_duda_al_equipo',
+                response: {
+                  aviso_enviado: true,
+                  instruccion: 'Dile al cliente en una frase corta que lo confirmas con el equipo y le avisas por este mismo chat. No menciones herramientas ni notificaciones.',
+                },
+              },
+            }],
+          });
+
+          try {
+            const followUp = await model.generateContent({ contents });
+            responseText = followUp.response.text();
+          } catch (e) {
+            console.error('Error redactando respuesta de duda al equipo:', e);
+            responseText = 'Déjame confirmarlo con el equipo y te aviso por aquí.';
+          }
         } else if (call.name === 'sugerir_cambio_cotizacion') {
           const args = call.args as any;
           const decision: SuggestionDecision = String(args.decision).toUpperCase().startsWith('RECHAZ') ? 'REJECT' : 'ACCEPT';
@@ -1460,46 +1460,6 @@ async function runAIAgentResponse(contactId: string) {
           } catch (e) {
             console.error('Error redactando respuesta de sugerencia de cotización:', e);
             responseText = decision === 'ACCEPT' ? 'Perfecto, lo confirmo con el equipo y te avisamos los siguientes pasos por aquí.' : 'Gracias por avisarnos. Si más adelante lo necesitas, aquí estamos.';
-          }
-            }],
-          });
-
-          try {
-            const followUp = await model.generateContent({ contents });
-            responseText = followUp.response.text();
-          } catch (e) {
-            console.error('Error redactando respuesta de colores:', e);
-            responseText = variants.length > 0
-              ? `De ese modelo tenemos: ${Array.from(byColor.values()).map(c => c.color).join(', ')}. ¿Cuál te gusta más?`
-              : 'No encontré ese producto en el catálogo, ¿me lo describes de otra forma?';
-          }
-        } else if (call.name === 'avisar_duda_al_equipo') {
-          const args = call.args as any;
-
-          await escalateDoubt(args.duda);
-
-          if (result.response.candidates && result.response.candidates[0].content) {
-            contents.push(result.response.candidates[0].content);
-          }
-          contents.push({
-            role: 'user',
-            parts: [{
-              functionResponse: {
-                name: 'avisar_duda_al_equipo',
-                response: {
-                  aviso_enviado: true,
-                  instruccion: 'Dile al cliente en una frase corta que lo confirmas con el equipo y le avisas por este mismo chat. No menciones herramientas ni notificaciones.',
-                },
-              },
-            }],
-          });
-
-          try {
-            const followUp = await model.generateContent({ contents });
-            responseText = followUp.response.text();
-          } catch (e) {
-            console.error('Error redactando respuesta de duda al equipo:', e);
-            responseText = 'Déjame confirmarlo con el equipo y te aviso por aquí.';
           }
         } else if (call.name === 'notificar_solicitud_cotizacion') {
           const args = call.args as any;
