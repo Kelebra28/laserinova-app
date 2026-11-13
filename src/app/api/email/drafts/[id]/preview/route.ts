@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+import { DEFAULT_SIGNATURE_PHONE } from '@/lib/email-signature';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { getDraft } from '@/lib/email-drafts';
@@ -18,7 +19,7 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
     text: d.text,
     quoteHeader: d.quoteHeader,
     quoteBody: d.quoteBody,
-    sig: { name: 'Ricardo Basurto', title: 'Director General', phone: '', email: 'info@laserinova.com', web: 'www.laserinova.com' },
+    sig: { name: 'Ricardo Basurto', title: 'Director General', phone: DEFAULT_SIGNATURE_PHONE, email: 'info@laserinova.com', web: 'www.laserinova.com' },
     logoSrc: '/logo_pdf.png',
   });
 

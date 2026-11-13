@@ -1,3 +1,4 @@
+import { DEFAULT_SIGNATURE_PHONE } from '@/lib/email-signature';
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 
@@ -37,7 +38,7 @@ export function useEmailActions() {
 
         formData.append('sigName', getSignatureField('sig_name', 'Ricardo Basurto'));
         formData.append('sigTitle', getSignatureField('sig_title', 'Director General'));
-        formData.append('sigPhone', getSignatureField('sig_phone', ''));
+        formData.append('sigPhone', getSignatureField('sig_phone', DEFAULT_SIGNATURE_PHONE));
         formData.append('sigEmail', getSignatureField('sig_email', 'info@laserinova.com'));
         formData.append('sigWeb', getSignatureField('sig_web', 'www.laserinova.com'));
       }

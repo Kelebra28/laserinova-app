@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+import { DEFAULT_SIGNATURE_PHONE } from '@/lib/email-signature';
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/prisma';
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
     // Read customized signature inputs from frontend request BEFORE creating smtpFrom
     const sigName = data.get('sigName') as string || 'Ricardo Basurto';
     const sigTitle = data.get('sigTitle') as string || 'Director General';
-    const sigPhone = data.get('sigPhone') as string || '';
+    const sigPhone = data.get('sigPhone') as string || DEFAULT_SIGNATURE_PHONE;
     const sigEmail = data.get('sigEmail') as string || smtpUser;
     const sigWeb = data.get('sigWeb') as string || 'www.laserinova.com';
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { DEFAULT_SIGNATURE_PHONE } from '@/lib/email-signature';
 import React, { useState, useEffect } from 'react';
 import { Mail, X, Loader2, Check, FileText } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -127,7 +128,7 @@ export function SendQuoteMailModal({
           saveToClient,
           sigName: getSignatureField('sig_name', userName || 'Ricardo Basurto'),
           sigTitle: getSignatureField('sig_title', 'Director General'),
-          sigPhone: getSignatureField('sig_phone', ''),
+          sigPhone: getSignatureField('sig_phone', DEFAULT_SIGNATURE_PHONE),
           sigEmail: getSignatureField('sig_email', userEmail || 'info@laserinova.com'),
           sigWeb: getSignatureField('sig_web', 'www.laserinova.com'),
           selectedVersionIds

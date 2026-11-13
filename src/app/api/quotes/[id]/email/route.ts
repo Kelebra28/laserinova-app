@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+import { DEFAULT_SIGNATURE_PHONE } from '@/lib/email-signature';
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateQuotePDF } from "@/lib/pdf";
@@ -131,7 +132,7 @@ export async function POST(
     const signatureName = sigName || dbUser?.name || 'Ricardo Basurto';
     const smtpFrom = `"${signatureName}" <${smtpUser}>`;
     const signatureTitle = sigTitle || 'Director General';
-    const signaturePhone = sigPhone || '';
+    const signaturePhone = sigPhone || DEFAULT_SIGNATURE_PHONE;
     const signatureWeb = sigWeb || 'www.laserinova.com';
     const signatureEmail = sigEmail || smtpUser;
     const cleanPhone = signaturePhone.replace(/\D/g, '');

@@ -254,8 +254,21 @@ export async function autoDraftNew(userId: string, max = 3): Promise<{ drafts: n
         console.warn("autoDraftNew:", String(err?.message || err).slice(0, 120));
       }
     }
+    if (items.length) await notifyDraftsReady(items).catch((e) => console.warn("Aviso de borradores por WhatsApp:", e?.message));
     return { drafts: items.length, items };
   } finally {
     drafting.delete(userId);
   }
+}
+
+/** Aviso por WhatsApp (y push) al administrador: hay borradores listos. Un solo mensaje por pasada, aunque sean varios. */
+async function notifyDraftsReady(items: { to: string; subject: string }[]) {
+  const { notifyAdmin } = await import("@/server/services/whatsapp.service");
+  const base = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://app.laserinova.com").replace(/\/$/, "");
+  const link = `${base}/dashboard/email`;
+  const text =
+    items.length === 1
+      ? [`✨ Borrador de correo listo para revisar`, `Para: ${items[0].to}`, `Asunto: ${items[0].subject.slice(0, 90)}`, `Revísalo y envíalo aquí: ${link}`].join("\n")
+      : [`✨ ${items.length} borradores de correo listos para revisar`, ...items.slice(0, 5).map((i) => `- ${i.to}`), `Revísalos y envíalos aquí: ${link}`].join("\n");
+  await notifyAdmin(text, "/dashboard/email");
 }
