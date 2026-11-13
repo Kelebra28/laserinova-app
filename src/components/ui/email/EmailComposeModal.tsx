@@ -15,6 +15,7 @@ interface EmailComposeModalProps {
   inReplyTo?: string;
   quoteHeader?: string;
   quoteBody?: string;
+  banner?: string;
 }
 
 export function EmailComposeModal({ 
@@ -29,7 +30,8 @@ export function EmailComposeModal({
   initialQuotedText = '',
   inReplyTo = '',
   quoteHeader = '',
-  quoteBody = ''
+  quoteBody = '',
+  banner = ''
 }: EmailComposeModalProps) {
   const [to, setTo] = useState(initialTo);
   const [cc, setCc] = useState('');
@@ -140,11 +142,11 @@ export function EmailComposeModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-end p-6 pointer-events-none">
-      <div className="flex gap-4 items-end pointer-events-auto">
+    <div className="fixed inset-0 z-50 flex items-end justify-end p-0 sm:p-6 pointer-events-none">
+      <div className="flex gap-4 items-end pointer-events-auto w-full h-full sm:w-auto sm:h-auto">
         {/* Templates Panel (Opens alongside) */}
         {showTemplates && (
-          <div className="w-[320px] h-[550px] bg-white rounded-2xl shadow-[0_15px_35px_-5px_rgba(0,0,0,0.15)] border border-gray-200/80 flex flex-col overflow-hidden animate-in slide-in-from-right-4 duration-200">
+          <div className="fixed inset-0 z-[60] w-full h-full rounded-none sm:static sm:z-auto sm:w-[320px] sm:h-[550px] sm:rounded-2xl bg-white shadow-[0_15px_35px_-5px_rgba(0,0,0,0.15)] border border-gray-200/80 flex flex-col overflow-hidden animate-in slide-in-from-right-4 duration-200">
             <div className="px-4 py-3 bg-red-600 text-white flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-rose-200 animate-pulse" />
@@ -180,7 +182,7 @@ export function EmailComposeModal({
 
         {/* Main Compose Modal */}
         <div 
-          className="w-[520px] h-[550px] bg-white rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] flex flex-col border border-gray-200/80 overflow-hidden transition-all duration-300 relative"
+          className="w-full h-full sm:w-[520px] sm:h-[550px] bg-white rounded-none sm:rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] flex flex-col border border-gray-200/80 overflow-hidden transition-all duration-300 relative"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -224,6 +226,12 @@ export function EmailComposeModal({
             
             {/* Headers (Sticky at top) */}
             <div className="flex-shrink-0 space-y-3">
+              {/* Borrador con IA: lo que hay que verificar antes de enviar */}
+              {banner && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2 rounded-lg text-xs mb-2 leading-relaxed">
+                  <b>Borrador con IA · verifica antes de enviar:</b> {banner}
+                </div>
+              )}
               {/* Error Banner */}
               {errorMsg && (
                 <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-lg text-xs font-semibold mb-2 animate-in fade-in slide-in-from-top-1 flex items-start gap-2">

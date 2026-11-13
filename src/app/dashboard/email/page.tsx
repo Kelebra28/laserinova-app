@@ -9,11 +9,13 @@ import { useSession } from 'next-auth/react';
 import { 
   Trash2, AlertOctagon, MailOpen, ArrowLeft, Download, X, Reply, ReplyAll, Forward, Loader2, 
   Paperclip, ChevronDown, ChevronRight, Inbox, Send, Star, StarOff,
-  RefreshCw, PenSquare, Search, Archive, ChevronLeft, Mail, Menu
+  RefreshCw, PenSquare, Search, Archive, ChevronLeft, Mail, Menu, Sparkles
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 const FOLDERS = [
   { id: 'INBOX', label: 'Recibidos', icon: Inbox },
+  { id: 'DRAFTS', label: 'Borradores IA', icon: Sparkles },
   { id: 'SENT', label: 'Enviados', icon: Send },
   { id: 'SPAM', label: 'Spam', icon: AlertOctagon },
   { id: 'TRASH', label: 'Papelera', icon: Trash2 },
@@ -78,12 +80,81 @@ export default function EmailPage() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [activeThread, setActiveThread] = useState<(Email & { html?: string; text?: string; attachments?: any[] })[]>([]);
   const [expandedEmails, setExpandedEmails] = useState<Record<string, boolean>>({});
-  const [replyData, setReplyData] = useState<{ to: string; subject: string; text: string; quotedText: string; inReplyTo: string; quoteHeader: string; quoteBody: string; cc: string } | null>(null);
+  const [replyData, setReplyData] = useState<{ to: string; subject: string; text: string; quotedText: string; inReplyTo: string; quoteHeader: string; quoteBody: string; cc: string; draftId?: string; notes?: string } | null>(null);
   const [isLoadingBody, setIsLoadingBody] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
+  // ── Respuestas con IA: borradores que la persona revisa y manda ──
+  const [draftsTotal, setDraftsTotal] = useState(0);
+  const [pendingAi, setPendingAi] = useState(0);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiProgress, setAiProgress] = useState('');
+
+  const refreshAiCounts = async () => {
+    try {
+      const [d, p] = await Promise.all([
+        fetch('/api/email/list?folder=DRAFTS&page=1&limit=1').then(r => r.json()),
+        fetch('/api/email/drafts/backlog?days=8').then(r => r.json()),
+      ]);
+      setDraftsTotal(d?.total || 0);
+      setPendingAi(p?.pending || 0);
+    } catch { /* se queda el número anterior */ }
+  };
+
+  const openDraft = async (id: string) => {
+    const r = await fetch(`/api/email/drafts/${id}`).then(x => x.json()).catch(() => null);
+    if (!r?.success) { toast.error('No se pudo abrir el borrador'); return; }
+    const d = r.draft;
+    const quotedText = d.quoteBody ? `${d.quoteHeader}\n${d.quoteBody.split('\n').map((l: string) => `> ${l}`).join('\n')}` : '';
+    setReplyData({ to: d.to, cc: '', subject: d.subject, text: d.text, quotedText, inReplyTo: d.inReplyTo, quoteHeader: d.quoteHeader, quoteBody: d.quoteBody, draftId: d.id, notes: d.notes });
+    setIsComposeOpen(true);
+  };
+
+  const generateAiDraft = async (email: Email) => {
+    setAiBusy(true);
+    try {
+      const r = await fetch('/api/email/drafts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emailId: email.id }) }).then(x => x.json());
+      if (!r.success) toast.error(r.error || 'No se pudo redactar la respuesta');
+      else if (r.status === 'SKIP') toast(`La IA no recomienda responder este correo: ${r.reason}`, { icon: 'ℹ️', duration: 6000 });
+      else { await refreshAiCounts(); await openDraft(r.id); }
+    } finally { setAiBusy(false); }
+  };
+
+  // Redacta borradores de todos los pendientes recientes, de 3 en 3, hasta terminar
+  const runBacklog = async () => {
+    setAiBusy(true);
+    let made = 0;
+    try {
+      for (let i = 0; i < 15; i++) {
+        setAiProgress(made ? `Redactando… (${made} listos)` : 'Redactando…');
+        const r = await fetch('/api/email/drafts/backlog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days: 8 }) }).then(x => x.json());
+        if (!r.success) { toast.error('Error al redactar los borradores'); break; }
+        made += r.drafts.length;
+        const progress = r.drafts.length + r.skipped.length;
+        if (r.failed?.length) toast.error(`${r.failed.length} no se pudieron redactar (¿límite de Gemini?)`);
+        if (r.remaining <= 0 || progress === 0) break;
+      }
+      await refreshAiCounts();
+      toast.success(made ? `${made} borradores listos para revisar` : 'No había nada que contestar');
+      if (made) { setSearchQuery(''); changeFolder('DRAFTS'); }
+    } finally { setAiBusy(false); setAiProgress(''); }
+  };
+
+  const handleSend = async (...args: Parameters<typeof sendEmail>) => {
+    const r = await sendEmail(...args);
+    if (r.success && replyData?.draftId) {
+      await fetch(`/api/email/drafts/${replyData.draftId}`, { method: 'DELETE' }).catch(() => {});
+      await refreshAiCounts();
+      if (currentFolder === 'DRAFTS') fetchEmails(currentFolder, page);
+    }
+    return r;
+  };
+
+  useEffect(() => { if (!isSyncing) refreshAiCounts(); }, [isSyncing]);
+
   const handleSelectEmail = async (email: Email) => {
+    if (currentFolder === 'DRAFTS') { await openDraft(email.id); return; }
     setSelectedEmail(email);
     setActiveThread([]);
     setExpandedEmails({});
@@ -250,6 +321,17 @@ export default function EmailPage() {
             <PenSquare className="w-4 h-4" />
             Nuevo correo
           </button>
+          {(pendingAi > 0 || aiBusy) && (
+            <button
+              onClick={runBacklog}
+              disabled={aiBusy}
+              className="mt-2 w-full flex items-center gap-2 px-3 py-2 bg-amber-50 hover:bg-amber-100 disabled:opacity-70 text-amber-800 border border-amber-200 rounded-xl font-semibold text-xs transition-all"
+              title="La IA redacta borradores de los correos recientes que no has contestado; tú los revisas y los mandas"
+            >
+              {aiBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              <span className="text-left leading-tight">{aiBusy ? (aiProgress || 'Redactando…') : `Contestar ${pendingAi} pendientes con IA`}</span>
+            </button>
+          )}
         </div>
 
         {/* Folders */}
@@ -268,6 +350,11 @@ export default function EmailPage() {
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
                 <span className="truncate">{label}</span>
+                {id === 'DRAFTS' && draftsTotal > 0 && (
+                  <span className="ml-auto text-[11px] font-bold bg-amber-500 text-white rounded-full px-1.5 py-0.5 leading-none">
+                    {draftsTotal}
+                  </span>
+                )}
                 {id === 'INBOX' && unreadCount > 0 && (
                   <span className="ml-auto text-[11px] font-bold bg-red-600 text-white rounded-full px-1.5 py-0.5 leading-none">
                     {unreadCount}
@@ -343,8 +430,9 @@ export default function EmailPage() {
           ) : (
             filteredEmails.map(email => {
               const isSelected = selectedEmail?.id === email.id;
-              const senderName = getSenderName(email.from);
-              const initials = getInitials(email.from);
+              const isDraftRow = currentFolder === 'DRAFTS';
+              const senderName = isDraftRow ? `Para: ${email.to.replace(/[<>"]/g, '')}` : getSenderName(email.from);
+              const initials = isDraftRow ? 'IA' : getInitials(email.from);
               const avatarColor = getAvatarColor(email.from);
               
               // If no email is selected, we are in full-width mode
@@ -500,6 +588,16 @@ export default function EmailPage() {
                 >
                   <Forward className="w-4 h-4" />
                 </button>
+                {currentFolder !== 'DRAFTS' && currentFolder !== 'SENT' && (
+                  <button
+                    onClick={() => generateAiDraft(selectedEmail)}
+                    disabled={aiBusy}
+                    className="p-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50 disabled:opacity-50 rounded-lg transition-all"
+                    title="Redactar respuesta con IA"
+                  >
+                    {aiBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  </button>
+                )}
 
                 <div className="h-4 w-px bg-slate-200" />
 
@@ -739,7 +837,8 @@ export default function EmailPage() {
       <EmailComposeModal
         isOpen={isComposeOpen}
         onClose={() => { setIsComposeOpen(false); setReplyData(null); }}
-        onSend={sendEmail}
+        onSend={handleSend}
+        banner={replyData?.notes || ''}
         isSending={isSending}
         initialTo={replyData?.to || ''}
         initialCc={replyData?.cc || ''}

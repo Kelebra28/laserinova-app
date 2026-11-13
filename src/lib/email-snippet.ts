@@ -3,7 +3,7 @@ import { simpleParser } from "mailparser";
 /** Texto que se guardaba antes de tener vista previa; sirve para detectar los correos que aún no la tienen. */
 export const SNIPPET_PLACEHOLDER = "Abre el correo para ver el contenido...";
 
-function stripHtml(html: string) {
+export function stripHtml(html: string) {
   return html
     .replace(/<(style|script|head)[\s\S]*?<\/\1>/gi, " ")
     .replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, "\n")
