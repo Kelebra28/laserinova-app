@@ -19,13 +19,23 @@ function fakeToolResult(name: string, args: any) {
 }
 
 async function turn(history: Content[], msg: string, hasQuote: boolean) {
+  const rawMsg = msg;
   const rag = await getRelevantRules(msg, genAI);
   const model = genAI.getGenerativeModel({
     model: 'gemini-3.5-flash',
     systemInstruction: getSecretarySystemPrompt('', rag.context, hasQuote),
     tools: [{ functionDeclarations: TOOLS }],
   });
-  history.push({ role: 'user', parts: [{ text: msg }] });
+  const parts: any[] = [];
+  if (msg.startsWith('@img ')) {
+    msg = msg.slice(5);
+    const fs = await import('fs');
+    parts.push({ text: msg || '[El cliente envió una imagen]' }, { inlineData: { data: fs.readFileSync(process.env.SIM_IMG as string).toString('base64'), mimeType: 'image/webp' } });
+  } else if (msg.startsWith('@ph ')) {
+    msg = msg.slice(4);
+    parts.push({ text: `[El cliente envió una imagen]\n${msg}` });
+  } else parts.push({ text: msg });
+  history.push({ role: 'user', parts });
   console.log('\nCLIENTE:', msg);
   console.log('  reglas:', rag.sources.length ? rag.sources.map((s) => s.slice(0, 70)).join(' | ') : '(ninguna)');
 

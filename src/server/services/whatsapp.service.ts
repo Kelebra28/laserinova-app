@@ -1053,54 +1053,61 @@ async function runAIAgentResponse(contactId: string) {
 
 
 
-    // Soporte Multimodal: Revisar si el último mensaje del cliente tiene audio/imagen
-    const lastClientMessage = recentMessages[recentMessages.length - 1];
-    
-    if (lastClientMessage && lastClientMessage.direction === 'INBOUND' && lastClientMessage.mediaUrl && ['AUDIO', 'IMAGE'].includes(lastClientMessage.type)) {
+    // Soporte Multimodal: se adjuntan las fotos/audios que el cliente mandó y el bot aún no contesta.
+    // Antes solo se miraba el ÚLTIMO mensaje: si el cliente mandaba la foto y luego texto ("dos placas,
+    // quiero una réplica"), la foto no llegaba a Gemini y el bot solo veía "[El cliente envió una imagen]".
+    let lastReplyIdx = -1;
+    for (let i = recentMessages.length - 1; i >= 0; i--) {
+      if (recentMessages[i].direction === 'OUTBOUND') { lastReplyIdx = i; break; }
+    }
+    const pendingMedia = recentMessages
+      .slice(lastReplyIdx + 1)
+      .filter((m) => m.direction === 'INBOUND' && m.mediaUrl && ['AUDIO', 'IMAGE'].includes(m.type) && m.content !== '🎭 Sticker')
+      .slice(-3);
+
+    const mediaParts: { inlineData: { data: string; mimeType: string } }[] = [];
+    for (const media of pendingMedia) {
       try {
         let base64Data: string | null = null;
-        let mimeType = lastClientMessage.mimeType || (lastClientMessage.type === 'AUDIO' ? 'audio/ogg' : 'image/jpeg');
+        let mimeType = media.mimeType || (media.type === 'AUDIO' ? 'audio/ogg' : 'image/jpeg');
+        const url = media.mediaUrl as string;
 
-        if (lastClientMessage.mediaUrl.startsWith('data:')) {
+        if (url.startsWith('data:')) {
           // Formato Base64: "data:audio/ogg;base64,XXXX..."
-          const match = lastClientMessage.mediaUrl.match(/^data:([^;]+);base64,(.+)$/);
+          const match = url.match(/^data:([^;]+);base64,(.+)$/);
           if (match) {
             mimeType = match[1];
             base64Data = match[2];
           }
-        } else if (lastClientMessage.mediaUrl.startsWith('http')) {
+        } else if (url.startsWith('http')) {
           // Archivo en Vercel Blob: descargarlo para pasárselo a Gemini
-          const mediaRes = await fetch(lastClientMessage.mediaUrl);
+          const mediaRes = await fetch(url);
           if (mediaRes.ok) {
             base64Data = Buffer.from(await mediaRes.arrayBuffer()).toString('base64');
           } else {
-            console.error(`No se pudo descargar el media del bot (${mediaRes.status}): ${lastClientMessage.mediaUrl}`);
+            console.error(`No se pudo descargar el media del bot (${mediaRes.status}): ${url}`);
           }
         } else {
           // Fallback: archivo en disco (legacy)
-          const filePath = path.join(process.cwd(), 'public', lastClientMessage.mediaUrl);
+          const filePath = path.join(process.cwd(), 'public', url);
           if (fs.existsSync(filePath)) {
-            const fileData = fs.readFileSync(filePath);
-            base64Data = fileData.toString('base64');
+            base64Data = fs.readFileSync(filePath).toString('base64');
           }
         }
 
-        if (base64Data) {
-          // Encontrar el último mensaje de usuario en contents y adjuntarle el archivo
-          for (let i = contents.length - 1; i >= 0; i--) {
-            if (contents[i].role === 'user') {
-              contents[i].parts.push({
-                inlineData: {
-                  data: base64Data,
-                  mimeType
-                }
-              });
-              break;
-            }
-          }
-        }
+        if (base64Data) mediaParts.push({ inlineData: { data: base64Data, mimeType } });
       } catch (e) {
         console.error("Error adjuntando media a Gemini:", e);
+      }
+    }
+
+    if (mediaParts.length > 0) {
+      // Se adjuntan al último turno del cliente (los mensajes seguidos ya van juntos en un solo turno)
+      for (let i = contents.length - 1; i >= 0; i--) {
+        if (contents[i].role === 'user') {
+          contents[i].parts.push(...mediaParts);
+          break;
+        }
       }
     }
 
@@ -1555,6 +1562,19 @@ async function runAIAgentResponse(contactId: string) {
       // retoma solo con el siguiente mensaje del cliente (botMode se queda activo).
       await reportBotFailure(contact, error);
       return;
+    }
+
+    // Respuesta vieja: si mientras Gemini armaba esto llegó otro mensaje del cliente que no estaba en el
+    // historial que leímos, esta respuesta ya no lo toma en cuenta. Se descarta y contesta la corrida de
+    // ese mensaje (espera el candado y lee todo junto), en vez de mandar dos respuestas seguidas.
+    // Solo si no se usó ninguna herramienta: con herramientas ya hubo efectos (avisos, fotos) y la
+    // respuesta sale igual.
+    if (toolsUsed.length === 0) {
+      const newest = await latestBotTriggerMessage(contactId).catch(() => null);
+      if (newest && !recentMessages.some((m) => m.id === newest.id)) {
+        console.warn(`[BOT] Respuesta descartada para ${contactId}: llegó un mensaje nuevo del cliente mientras se generaba.`);
+        return;
+      }
     }
 
     // Enviar el mensaje físico por WhatsApp

@@ -38,7 +38,7 @@ Meta solo permite texto libre dentro de 24 h del último mensaje del cliente; fu
 
 ## Reglas del bot (contenido)
 
-Hay ~181 reglas activas. `docs/propuesta-cambios-reglas-bot.md` tiene una propuesta de limpieza **pendiente de aprobación** (duplicadas, internas/sensibles, nuevas). Decisiones ya tomadas por el dueño: horario L-V 9-18 y sáb 11-16; entrega 3-4 días hábiles siempre a confirmar; corte de metal solo acero inoxidable (sujeto a revisión); plotter 1.8 m; cama UV 90×60 cm; acrílico hasta 15 mm; instalación de vinil se cotiza aparte.
+Hay ~181 reglas activas. `docs/propuesta-cambios-reglas-bot.md` tiene una propuesta de limpieza **pendiente de aprobación** (duplicadas, internas/sensibles, nuevas). Decisiones ya tomadas por el dueño: horario L-V 9-18 y sáb 11-16; entrega 3-4 días hábiles siempre a confirmar; corte de metal solo acero inoxidable, lámina negra y lámina galvanizada; sin réplicas como servicio (se trabaja como corte/grabado nuevo con archivo); plotter 1.8 m; cama UV 90×60 cm; acrílico hasta 15 mm; instalación de vinil se cotiza aparte.
 
 ## UI de chats (`src/app/dashboard/chats/`)
 
