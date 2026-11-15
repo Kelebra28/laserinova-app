@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import Panel from "../atoms/Panel";
-import SegmentedControl from "../atoms/SegmentedControl";
-import LegendItem from "../atoms/LegendItem";
-import { EmptyState } from "../atoms/EmptyState";
+import Panel from "@/components/ui/atoms/Panel";
+import SegmentedControl from "@/components/ui/atoms/SegmentedControl";
+import LegendItem from "@/components/ui/atoms/LegendItem";
+import { EmptyState } from "@/components/ui/atoms/EmptyState";
 import { CHART_COLORS, CHART_TOOLTIP_STYLE, VOLUME_GRANULARITIES, VOLUME_METRICS, type VolumeGranularity, type VolumeMetric } from "@/constants/dashboard.constants";
 import type { DashboardOverview } from "@/types/dashboard";
 

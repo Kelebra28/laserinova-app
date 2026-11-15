@@ -1,7 +1,7 @@
-import Panel from "../atoms/Panel";
-import ProgressBar from "../atoms/ProgressBar";
-import ActionLink from "../atoms/ActionLink";
-import { EmptyState } from "../atoms/EmptyState";
+import Panel from "@/components/ui/atoms/Panel";
+import ProgressBar from "@/components/ui/atoms/ProgressBar";
+import ActionLink from "@/components/ui/atoms/ActionLink";
+import { EmptyState } from "@/components/ui/atoms/EmptyState";
 import { DASHBOARD_TASKS_SHOWN } from "@/constants/dashboard.constants";
 import { formatDueDate, isDatePast } from "@/lib/dates";
 import type { DashboardStats } from "@/types/dashboard";

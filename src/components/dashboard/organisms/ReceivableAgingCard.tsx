@@ -1,5 +1,5 @@
-import Panel from "../atoms/Panel";
-import { AllClear } from "../atoms/EmptyState";
+import Panel from "@/components/ui/atoms/Panel";
+import { AllClear } from "@/components/ui/atoms/EmptyState";
 import { formatMoney } from "@/constants/formatters.constants";
 import type { DashboardOverview } from "@/types/dashboard";
 

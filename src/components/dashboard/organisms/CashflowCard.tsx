@@ -1,9 +1,9 @@
 "use client";
 
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import Panel from "../atoms/Panel";
-import LegendItem from "../atoms/LegendItem";
-import { EmptyState } from "../atoms/EmptyState";
+import Panel from "@/components/ui/atoms/Panel";
+import LegendItem from "@/components/ui/atoms/LegendItem";
+import { EmptyState } from "@/components/ui/atoms/EmptyState";
 import { CHART_COLORS, CHART_TOOLTIP_STYLE } from "@/constants/dashboard.constants";
 import { formatMoney, formatMoneyCompact } from "@/constants/formatters.constants";
 import type { DashboardStats } from "@/types/dashboard";

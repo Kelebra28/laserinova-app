@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Download, Plus } from "lucide-react";
-import SegmentedControl from "../atoms/SegmentedControl";
+import SegmentedControl from "@/components/ui/atoms/SegmentedControl";
 import { DASHBOARD_RANGES } from "@/constants/dashboard.constants";
 import type { DashboardRange } from "@/types/dashboard";
 

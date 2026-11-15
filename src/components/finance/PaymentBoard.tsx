@@ -114,12 +114,12 @@ export default function PaymentBoard({
         onDrop={(e) => onDrop(e, 'unpaid')}
         className={`flex flex-col rounded-3xl p-4 border min-h-[400px] transition-all duration-200 ${
           dragOverCol === 'unpaid' 
-            ? 'bg-blue-50 border-blue-200 shadow-inner scale-[1.01]' 
+            ? 'bg-gray-50 border-gray-200 shadow-inner scale-[1.01]' 
             : 'bg-gray-50/50 border-gray-100'
         }`}
       >
         <div className="flex items-center justify-between mb-4 px-2">
-          <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Pendientes (0%)</span>
+          <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Pendientes (0%)</span>
           <span className="text-[10px] font-black bg-white px-2 py-1 rounded-lg shadow-sm border border-gray-100 text-gray-500">{unpaid.length}</span>
         </div>
         <div className="space-y-3 overflow-y-auto max-h-[360px] 2xl:max-h-[500px] pr-1.5 scrollbar-thin">
@@ -136,7 +136,7 @@ export default function PaymentBoard({
                 }`}
               >
                 {isDragging && (
-                  <div className={`absolute inset-0 border-2 border-dashed rounded-2xl animate-pulse border-blue-200 bg-blue-50/20`}></div>
+                  <div className={`absolute inset-0 border-2 border-dashed rounded-2xl animate-pulse border-gray-200 bg-gray-50/20`}></div>
                 )}
 
                 <PaymentCard quote={quote} type="unpaid" />
@@ -155,12 +155,12 @@ export default function PaymentBoard({
         onDrop={(e) => onDrop(e, 'partial')}
         className={`flex flex-col rounded-3xl p-4 border min-h-[400px] transition-all duration-200 ${
           dragOverCol === 'partial' 
-            ? 'bg-orange-50 border-orange-200 shadow-inner scale-[1.01]' 
+            ? 'bg-amber-50 border-amber-200 shadow-inner scale-[1.01]' 
             : 'bg-gray-50/50 border-gray-100'
         }`}
       >
         <div className="flex items-center justify-between mb-4 px-2">
-          <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">En Abono (Anticipos)</span>
+          <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">En Abono (Anticipos)</span>
           <span className="text-[10px] font-black bg-white px-2 py-1 rounded-lg shadow-sm border border-gray-100 text-gray-500">{partial.length}</span>
         </div>
         <div className="space-y-3 overflow-y-auto max-h-[360px] 2xl:max-h-[500px] pr-1.5 scrollbar-thin">
@@ -176,7 +176,7 @@ export default function PaymentBoard({
                   isDragging ? 'opacity-0 scale-95' : 'hover:scale-[1.02] opacity-100'
                 }`}
               >
-                {isDragging && <div className="absolute inset-0 border-2 border-dashed border-orange-200 rounded-2xl bg-orange-50/20 animate-pulse"></div>}
+                {isDragging && <div className="absolute inset-0 border-2 border-dashed border-amber-200 rounded-2xl bg-amber-50/20 animate-pulse"></div>}
                 <PaymentCard quote={quote} type="partial" />
               </div>
             );
@@ -244,7 +244,7 @@ function PaymentCard({ quote, type }: { quote: any, type: 'unpaid' | 'partial' |
         </div>
         <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest ${
           type === 'paid' ? 'bg-emerald-50 text-emerald-600' : 
-          type === 'partial' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'
+          type === 'partial' ? 'bg-amber-50 text-amber-600' : 'bg-gray-50 text-gray-600'
         }`}>
           {type === 'paid' ? 'Liquidada' : type === 'partial' ? 'Abono' : 'Pendiente'}
         </span>

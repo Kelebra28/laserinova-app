@@ -18,7 +18,8 @@ export function formatCurrency(val: number | string | null | undefined): string 
 
 /** Pesos sin decimales por defecto: $1,234 (con `decimals` para tooltips: $1,234.50). */
 export function formatMoney(n: number, decimals = 0): string {
-  return `$${n.toLocaleString("es-MX", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+  const abs = Math.abs(n).toLocaleString("es-MX", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return `${n < 0 ? "-" : ""}$${abs}`;
 }
 
 /** Pesos abreviados para ejes de gráficas: $1.2k */
@@ -42,4 +43,12 @@ export function formatDuration(mins: number | null): string {
 /** Hora de 24 h a formato corto: 15 → "3 pm" */
 export function formatHour(h: number): string {
   return `${h % 12 || 12} ${h < 12 ? "am" : "pm"}`;
+}
+
+const SHORT_MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/** "2026-11-03" → "03 nov" */
+export function formatShortDate(ymd: string): string {
+  const [, m, d] = ymd.split("-");
+  return `${d} ${SHORT_MONTHS[Number(m) - 1] ?? m}`;
 }

@@ -1,4 +1,4 @@
-import ProgressBar from "../atoms/ProgressBar";
+import ProgressBar from "@/components/ui/atoms/ProgressBar";
 
 type Props = { label: string; sub: string; valueLabel: string; percent: number };
 

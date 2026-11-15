@@ -1,5 +1,5 @@
-import SectionTitle from "../atoms/SectionTitle";
-import ActionLink from "../atoms/ActionLink";
+import SectionTitle from "@/components/ui/atoms/SectionTitle";
+import ActionLink from "@/components/ui/atoms/ActionLink";
 import MessageVolumeCard from "../organisms/MessageVolumeCard";
 import PendingCard from "../organisms/PendingCard";
 import ActivityHeatmapCard from "../organisms/ActivityHeatmapCard";

@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { pickProductPricing } from "@/lib/calculations";
 
+/** El cliente normal de Prisma o el de una transacción: permite registrar un cobro como parte de una operación mayor. */
+export type DbClient = Prisma.TransactionClient | typeof prisma;
+
 export interface GetQuotesParams {
   search?: string;
   month?: string;
@@ -300,11 +303,11 @@ export async function updateQuoteConsiderationsService(quoteId: string, visibleC
  * El dashboard y Finanzas suman FinancialTransaction, no Quote.realAmountCollected. Cada vez que se
  * marca un cobro a mano, el total de ingresos de la cotización debe quedar igual a lo cobrado.
  */
-async function syncQuoteIncomeTransactions(quoteId: string, collected: number) {
-  const quote = await prisma.quote.findUnique({ where: { id: quoteId }, select: { folio: true, clientId: true } });
+async function syncQuoteIncomeTransactions(quoteId: string, collected: number, db: DbClient = prisma) {
+  const quote = await db.quote.findUnique({ where: { id: quoteId }, select: { folio: true, clientId: true } });
   if (!quote) return;
   const INCOME = ["INGRESO", "ANTICIPO", "LIQUIDACION"];
-  const existing = await prisma.financialTransaction.findMany({
+  const existing = await db.financialTransaction.findMany({
     where: { quoteId, isDeleted: false, type: { in: INCOME } },
     select: { id: true, amount: true },
   });
@@ -313,14 +316,14 @@ async function syncQuoteIncomeTransactions(quoteId: string, collected: number) {
 
   if (toCreate < -0.01) {
     // Se corrigió el cobro a la baja: se anulan los ingresos anteriores y se registra el monto vigente.
-    await prisma.financialTransaction.updateMany({
+    await db.financialTransaction.updateMany({
       where: { id: { in: existing.map((t) => t.id) } },
       data: { isDeleted: true, deletedAt: new Date(), deleteReason: "Cobro corregido a la baja en la cotización" },
     });
     toCreate = collected;
   }
   if (toCreate > 0.01) {
-    await prisma.financialTransaction.create({
+    await db.financialTransaction.create({
       data: {
         type: "INGRESO",
         category: "Cobranza",
@@ -335,8 +338,8 @@ async function syncQuoteIncomeTransactions(quoteId: string, collected: number) {
   }
 }
 
-export async function updateQuotePaymentService(quoteId: string, realAmountCollected: number, paymentStatus: string) {
-  const quote = await prisma.quote.findUnique({ where: { id: quoteId } });
+export async function updateQuotePaymentService(quoteId: string, realAmountCollected: number, paymentStatus: string, db: DbClient = prisma) {
+  const quote = await db.quote.findUnique({ where: { id: quoteId } });
   if (!quote) throw new Error("Cotización no encontrada");
 
   const taxPortion = quote.total > 0 ? (realAmountCollected * (quote.tax / quote.total)) : 0;
@@ -345,7 +348,7 @@ export async function updateQuotePaymentService(quoteId: string, realAmountColle
 
   const isPaidOrPartial = ["PARTIAL", "PAID"].includes(paymentStatus);
 
-  await prisma.quote.update({
+  await db.quote.update({
     where: { id: quoteId },
     data: { 
       realAmountCollected,
@@ -354,7 +357,7 @@ export async function updateQuotePaymentService(quoteId: string, realAmountColle
       closeDate: isPaidOrPartial ? new Date() : null,
     },
   });
-  await syncQuoteIncomeTransactions(quoteId, realAmountCollected);
+  await syncQuoteIncomeTransactions(quoteId, realAmountCollected, db);
   return true;
 }
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import Sparkline from "../atoms/Sparkline";
+import Sparkline from "@/components/ui/atoms/Sparkline";
 
 type Props = {
   label: string;

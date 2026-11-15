@@ -2,13 +2,14 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { requireAdminUser } from "@/lib/auth-guards";
+
+// Todas las acciones de este archivo son solo para ADMIN: las acciones del servidor se pueden invocar sin pasar
+// por la página, así que el rol se valida aquí y no solo en el middleware.
 
 // ─── Create ────────────────────────────────────────────────
 export async function createTransaction(formData: FormData) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
+  const userId = (await requireAdminUser()).id;
 
   const type          = formData.get("type") as string;
   const category      = formData.get("category") as string;
@@ -52,8 +53,7 @@ export async function createTransaction(formData: FormData) {
 
 // ─── Update ────────────────────────────────────────────────
 export async function updateTransaction(formData: FormData) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
+  const userId = (await requireAdminUser()).id;
 
   const id            = formData.get("id") as string;
   const type          = formData.get("type") as string;
@@ -96,8 +96,7 @@ export async function updateTransaction(formData: FormData) {
 
 // ─── Soft Delete ───────────────────────────────────────────
 export async function softDeleteTransaction(formData: FormData) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
+  const userId = (await requireAdminUser()).id;
 
   const id     = formData.get("id") as string;
   const reason = formData.get("reason") as string | null;
@@ -121,6 +120,7 @@ export async function softDeleteTransaction(formData: FormData) {
 
 // ─── Restore (undo delete) ─────────────────────────────────
 export async function restoreTransaction(formData: FormData) {
+  await requireAdminUser();
   const id = formData.get("id") as string;
   if (!id) throw new Error("Falta ID del movimiento");
 
@@ -142,6 +142,7 @@ export async function restoreTransaction(formData: FormData) {
 
 /** KPIs financieros del periodo dado. Sólo incluye movimientos activos (no eliminados). */
 export async function getFinancialKPIs(startDate: Date, endDate: Date) {
+  await requireAdminUser();
   const transactions = await prisma.financialTransaction.findMany({
     where: {
       isDeleted: false,

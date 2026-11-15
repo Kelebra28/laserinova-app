@@ -361,7 +361,7 @@ export async function updateQuoteStatusAction(quoteId: string, newStatus: string
 }
 
 export async function updateQuotePaymentAction(quoteId: string, type: 'unpaid' | 'partial' | 'paid') {
-  await requireAuth();
+  await requireAuth(["ADMIN"]); // solo lo usa el tablero de cobros de Finanzas (solo ADMIN)
   await updateQuotePaymentKanbanService(quoteId, type);
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/finance");
