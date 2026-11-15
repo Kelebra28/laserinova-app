@@ -129,7 +129,7 @@ export default function TransactionEditModal({ transaction, quotes = [], clients
           <div
             onClick={() => setApplyIVA(!applyIVA)}
             className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer ${
-              applyIVA ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-100"
+              applyIVA ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-100"
             }`}
           >
             <div>
@@ -137,12 +137,12 @@ export default function TransactionEditModal({ transaction, quotes = [], clients
                 {isExpense ? "¿Tiene IVA acreditable?" : "¿Incluye IVA?"}
               </p>
               {applyIVA && amount && (
-                <p className="text-[10px] font-bold text-blue-600 mt-0.5">
+                <p className="text-[10px] font-bold text-amber-600 mt-0.5">
                   IVA: ${ivaAmount.toFixed(2)}
                 </p>
               )}
             </div>
-            <div className={`w-12 h-6 rounded-full transition-all relative ${applyIVA ? "bg-blue-500" : "bg-gray-200"}`}>
+            <div className={`w-12 h-6 rounded-full transition-all relative ${applyIVA ? "bg-amber-500" : "bg-gray-200"}`}>
               <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${applyIVA ? "left-7" : "left-1"}`} />
             </div>
           </div>
@@ -154,7 +154,7 @@ export default function TransactionEditModal({ transaction, quotes = [], clients
               <select
                 name="quoteId"
                 defaultValue={transaction.quoteId || ""}
-                className="w-full text-xs font-bold p-3 bg-orange-50 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 transition-all appearance-none cursor-pointer"
+                className="w-full text-xs font-bold p-3 bg-amber-50 border border-amber-100 rounded-xl outline-none focus:ring-2 focus:ring-amber-400 transition-all appearance-none cursor-pointer"
               >
                 <option value="">Sin proyecto</option>
                 {quotes.map(q => (

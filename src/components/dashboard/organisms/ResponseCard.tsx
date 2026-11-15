@@ -1,6 +1,6 @@
 import { Bot, Clock, MessageCircle, UserCheck, UserPlus } from "lucide-react";
-import Panel from "../atoms/Panel";
-import StatBlock from "../molecules/StatBlock";
+import Panel from "@/components/ui/atoms/Panel";
+import StatBlock from "@/components/ui/molecules/StatBlock";
 import { formatDuration } from "@/constants/formatters.constants";
 import type { DashboardOverview } from "@/types/dashboard";
 

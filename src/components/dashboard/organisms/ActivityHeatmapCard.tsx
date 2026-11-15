@@ -1,6 +1,6 @@
-import Panel from "../atoms/Panel";
-import InsightTile from "../molecules/InsightTile";
-import { EmptyState } from "../atoms/EmptyState";
+import Panel from "@/components/ui/atoms/Panel";
+import InsightTile from "@/components/ui/molecules/InsightTile";
+import { EmptyState } from "@/components/ui/atoms/EmptyState";
 import { HEATMAP_BLOCK_HOURS, HEATMAP_DAY_NAMES, HEATMAP_LEVEL_STYLE, HEATMAP_WORK_HOURS } from "@/constants/dashboard.constants";
 import { formatHour } from "@/constants/formatters.constants";
 import type { DashboardOverview } from "@/types/dashboard";

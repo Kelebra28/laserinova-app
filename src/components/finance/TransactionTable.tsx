@@ -4,38 +4,26 @@ import { useState, useMemo } from "react";
 import { 
   Trash2, Pencil, Filter, ChevronDown, Search,
   TrendingUp, TrendingDown, Briefcase, Receipt, 
-  SlidersHorizontal, X, AlertTriangle, Loader2
+  SlidersHorizontal, X, AlertTriangle, Loader2, type LucideIcon
 } from "lucide-react";
 import { softDeleteTransaction } from "@/app/dashboard/finance/actions";
 import TransactionEditModal from "./TransactionEditModal";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { FINANCE_TYPE_STYLE } from "@/constants/finance.constants";
+import type { FinanceMovement as Transaction } from "@/types/finance";
 
-type Transaction = {
-  id: string;
-  type: string;
-  category: string;
-  amount: number;
-  taxAmount: number;
-  description: string;
-  notes?: string | null;
-  date: Date;
-  paymentMethod?: string | null;
-  provider?: string | null;
-  status: string;
-  isVirtual?: boolean;
-  quote?: { folio: string; project: string } | null;
-  client?: { name: string } | null;
-  createdBy?: { name: string } | null;
+const TYPE_ICONS: Record<string, LucideIcon> = {
+  GASTO_OPERATIVO: TrendingDown,
+  GASTO_PROYECTO: Briefcase,
+  INGRESO: TrendingUp,
+  ANTICIPO: TrendingUp,
+  LIQUIDACION: TrendingUp,
+  AJUSTE: Receipt,
 };
 
-const TYPE_CONFIG: Record<string, { label: string; color: string; icon: any; bg: string }> = {
-  GASTO_OPERATIVO: { label: "Gasto Op.",    color: "text-red-700",     bg: "bg-red-50 border-red-100",     icon: TrendingDown },
-  GASTO_PROYECTO:  { label: "Gasto Proy.",  color: "text-orange-700",  bg: "bg-orange-50 border-orange-100", icon: Briefcase    },
-  INGRESO:         { label: "Ingreso",      color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-100", icon: TrendingUp  },
-  ANTICIPO:        { label: "Anticipo",     color: "text-blue-700",    bg: "bg-blue-50 border-blue-100",    icon: TrendingUp   },
-  LIQUIDACION:     { label: "Liquidación",  color: "text-teal-700",    bg: "bg-teal-50 border-teal-100",   icon: TrendingUp   },
-  AJUSTE:          { label: "Ajuste",       color: "text-gray-600",    bg: "bg-gray-50 border-gray-200",   icon: Receipt      },
-};
+const TYPE_CONFIG: Record<string, { label: string; color: string; bg: string; icon: LucideIcon }> = Object.fromEntries(
+  Object.entries(FINANCE_TYPE_STYLE).map(([type, style]) => [type, { ...style, icon: TYPE_ICONS[type] }]),
+);
 
 const INCOME_TYPES = ["INGRESO", "ANTICIPO", "LIQUIDACION"];
 
@@ -214,7 +202,7 @@ export default function TransactionTable({ transactions, quotes = [], clients = 
                           {config.label}
                         </span>
                         {t.taxAmount > 0 && (
-                          <span className="block mt-1 text-[8px] font-bold text-blue-500 uppercase">+IVA ${t.taxAmount.toFixed(0)}</span>
+                          <span className="block mt-1 text-[8px] font-bold text-amber-600 uppercase">+IVA ${t.taxAmount.toFixed(0)}</span>
                         )}
                       </td>
                       <td className="px-5 py-4 max-w-[220px]">
@@ -228,7 +216,7 @@ export default function TransactionTable({ transactions, quotes = [], clients = 
                       <td className="px-5 py-4">
                         {t.quote ? (
                           <div>
-                            <p className="text-[10px] font-black text-orange-600">{t.quote.folio}</p>
+                            <p className="text-[10px] font-black text-gray-600">{t.quote.folio}</p>
                             <p className="text-[9px] font-bold text-gray-400 truncate max-w-[120px]">{t.quote.project}</p>
                           </div>
                         ) : t.client ? (

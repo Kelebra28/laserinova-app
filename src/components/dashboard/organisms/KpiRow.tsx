@@ -1,6 +1,6 @@
 import { Hourglass, Inbox, MessageCircle, Timer, TrendingUp, Wallet } from "lucide-react";
-import KpiCard, { KpiCardSkeleton } from "../molecules/KpiCard";
-import TrendBadge from "../atoms/TrendBadge";
+import KpiCard, { KpiCardSkeleton } from "@/components/ui/molecules/KpiCard";
+import TrendBadge from "@/components/ui/atoms/TrendBadge";
 import { CHART_COLORS, COMPARISON_LABEL } from "@/constants/dashboard.constants";
 import { formatDuration, formatMoney } from "@/constants/formatters.constants";
 import type { DashboardOverview, DashboardStats } from "@/types/dashboard";

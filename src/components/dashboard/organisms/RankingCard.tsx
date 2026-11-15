@@ -1,6 +1,6 @@
-import Panel from "../atoms/Panel";
-import RankedRow from "../molecules/RankedRow";
-import { EmptyState } from "../atoms/EmptyState";
+import Panel from "@/components/ui/atoms/Panel";
+import RankedRow from "@/components/ui/molecules/RankedRow";
+import { EmptyState } from "@/components/ui/atoms/EmptyState";
 import { formatMoney } from "@/constants/formatters.constants";
 
 type Row = { label: string; sub: string; value: number };

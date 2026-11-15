@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import Panel from "../atoms/Panel";
-import FilterChip from "../atoms/FilterChip";
-import ActionLink from "../atoms/ActionLink";
-import { AllClear } from "../atoms/EmptyState";
+import Panel from "@/components/ui/atoms/Panel";
+import FilterChip from "@/components/ui/atoms/FilterChip";
+import ActionLink from "@/components/ui/atoms/ActionLink";
+import { AllClear } from "@/components/ui/atoms/EmptyState";
 import { PENDING_GROUPS, type PendingGroupKey } from "@/constants/dashboard.constants";
 import { formatDuration } from "@/constants/formatters.constants";
 import type { DashboardOverview } from "@/types/dashboard";

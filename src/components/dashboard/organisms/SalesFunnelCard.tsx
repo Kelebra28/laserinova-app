@@ -1,6 +1,6 @@
 import { ArrowDown } from "lucide-react";
-import Panel from "../atoms/Panel";
-import ProgressBar from "../atoms/ProgressBar";
+import Panel from "@/components/ui/atoms/Panel";
+import ProgressBar from "@/components/ui/atoms/ProgressBar";
 import { formatMoney, formatPercent } from "@/constants/formatters.constants";
 import type { DashboardOverview } from "@/types/dashboard";
 

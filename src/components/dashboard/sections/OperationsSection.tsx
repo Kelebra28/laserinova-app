@@ -1,4 +1,4 @@
-import SectionTitle from "../atoms/SectionTitle";
+import SectionTitle from "@/components/ui/atoms/SectionTitle";
 import CashflowCard from "../organisms/CashflowCard";
 import PipelineCard from "../organisms/PipelineCard";
 import AttentionCard from "../organisms/AttentionCard";

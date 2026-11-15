@@ -1,4 +1,4 @@
-import SectionTitle from "../atoms/SectionTitle";
+import SectionTitle from "@/components/ui/atoms/SectionTitle";
 import SalesFunnelCard from "../organisms/SalesFunnelCard";
 import ReceivableAgingCard from "../organisms/ReceivableAgingCard";
 import type { DashboardOverview } from "@/types/dashboard";

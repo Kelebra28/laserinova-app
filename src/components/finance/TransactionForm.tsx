@@ -26,9 +26,9 @@ const TYPES = [
     label: "Gasto de Proyecto",
     desc: "Material o servicio ligado a un trabajo específico",
     icon: Briefcase,
-    color: "bg-orange-50 border-orange-200 text-orange-700",
-    activeColor: "bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/30",
-    dot: "bg-orange-500",
+    color: "bg-amber-50 border-amber-200 text-amber-700",
+    activeColor: "bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-500/30",
+    dot: "bg-amber-500",
   },
   {
     value: "INGRESO",
@@ -44,9 +44,9 @@ const TYPES = [
     label: "Venta Rápida / Mostrador",
     desc: "Ingreso directo en efectivo por trabajos rápidos sin cotización previa",
     icon: DollarSign,
-    color: "bg-teal-50 border-teal-200 text-teal-700",
-    activeColor: "bg-teal-600 border-teal-600 text-white shadow-lg shadow-teal-600/30",
-    dot: "bg-teal-500",
+    color: "bg-emerald-50 border-emerald-200 text-emerald-700",
+    activeColor: "bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-600/30",
+    dot: "bg-emerald-500",
   },
   {
     value: "AJUSTE",
@@ -119,10 +119,10 @@ export default function TransactionForm({ quotes = [], clients = [] }: Transacti
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
+        className="inline-flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-black transition-colors active:scale-95"
       >
-        <Plus className="h-4 w-4" />
-        Registrar Movimiento
+        <Plus className="h-4 w-4 text-red-500" />
+        Registrar movimiento
       </button>
 
       {isOpen && (
@@ -258,7 +258,7 @@ export default function TransactionForm({ quotes = [], clients = [] }: Transacti
 
                 {/* IVA Toggle */}
                 <div className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer ${
-                  applyIVA ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-100"
+                  applyIVA ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-100"
                 }`}
                   onClick={() => setApplyIVA(!applyIVA)}
                 >
@@ -267,7 +267,7 @@ export default function TransactionForm({ quotes = [], clients = [] }: Transacti
                       {isExpense ? "¿Tiene IVA acreditable?" : "¿Incluye IVA en el monto?"}
                     </p>
                     {applyIVA && amount && (
-                      <p className="text-[10px] font-bold text-blue-600 mt-0.5">
+                      <p className="text-[10px] font-bold text-amber-600 mt-0.5">
                         IVA: ${ivaAmount.toFixed(2)} | Total c/IVA: ${(parseFloat(amount) + ivaAmount).toFixed(2)}
                       </p>
                     )}
@@ -277,7 +277,7 @@ export default function TransactionForm({ quotes = [], clients = [] }: Transacti
                       </p>
                     )}
                   </div>
-                  <div className={`w-12 h-6 rounded-full transition-all relative ${applyIVA ? "bg-blue-500" : "bg-gray-200"}`}>
+                  <div className={`w-12 h-6 rounded-full transition-all relative ${applyIVA ? "bg-amber-500" : "bg-gray-200"}`}>
                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${applyIVA ? "left-7" : "left-1"}`} />
                   </div>
                 </div>
@@ -294,7 +294,7 @@ export default function TransactionForm({ quotes = [], clients = [] }: Transacti
                       ]}
                       value={quoteId}
                       onChange={setQuoteId}
-                      className="bg-orange-50/30 rounded-xl"
+                      className="bg-amber-50/30 rounded-xl"
                     />
                   </div>
                 )}

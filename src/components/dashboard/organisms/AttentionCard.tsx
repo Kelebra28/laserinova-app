@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import Panel from "../atoms/Panel";
-import FilterChip from "../atoms/FilterChip";
-import ActionLink from "../atoms/ActionLink";
-import { AllClear } from "../atoms/EmptyState";
+import Panel from "@/components/ui/atoms/Panel";
+import FilterChip from "@/components/ui/atoms/FilterChip";
+import ActionLink from "@/components/ui/atoms/ActionLink";
+import { AllClear } from "@/components/ui/atoms/EmptyState";
 import { ATTENTION_META, ATTENTION_TONE_DOT } from "@/constants/dashboard.constants";
 import type { DashboardStats } from "@/types/dashboard";
 
