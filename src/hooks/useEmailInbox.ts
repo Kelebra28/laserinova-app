@@ -167,7 +167,8 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
       const lastSyncStr = localStorage.getItem(cacheKey);
       const lastSync = lastSyncStr ? parseInt(lastSyncStr, 10) : 0;
 
-      if (now - lastSync > 5 * 60 * 1000) {
+      // Solo la primera vez (importación inicial). Después la sincronización es manual con el botón.
+      if (lastSync === 0) {
         localStorage.setItem(cacheKey, now.toString());
         abortController = new AbortController();
         syncEmails(abortController.signal);
@@ -179,23 +180,6 @@ export function useEmailInbox(initialFolder: string = 'INBOX', userEmail?: strin
       abortController?.abort();
     };
   }, [currentFolder, page, fetchEmails, userEmail, syncEmails]);
-
-  // Auto-sync: mientras la bandeja esté abierta se revisa el correo nuevo cada 2 minutos (antes solo al abrir
-  // la página y cada 5 min), y de inmediato al volver a la pestaña.
-  useEffect(() => {
-    if (!userEmail) return;
-    const tick = () => {
-      if (document.visibilityState !== 'visible') return;
-      const key = `last_imap_sync_${userEmail.trim().toLowerCase()}`;
-      const last = parseInt(localStorage.getItem(key) || '0', 10);
-      if (Date.now() - last < 110 * 1000) return;
-      localStorage.setItem(key, Date.now().toString());
-      syncEmails(undefined, false); // revisión rápida: solo lo nuevo
-    };
-    const id = setInterval(tick, 120 * 1000);
-    document.addEventListener('visibilitychange', tick);
-    return () => { clearInterval(id); document.removeEventListener('visibilitychange', tick); };
-  }, [userEmail, syncEmails]);
 
   // Aviso en vivo: cuando el servidor (cron o sincronización) detecta correo nuevo, la bandeja se actualiza
   // y suena, sin esperar el siguiente ciclo ni tener que apretar "Sincronizar".

@@ -41,8 +41,8 @@ export async function POST(req: Request) {
         const dbUser = await prisma.user.findUnique({ where: { id: currentUserId }, select: { email: true } });
         await notificationEmitter.emit('email_new', { email: dbUser?.email, count: result.newInbox.length, latest: result.newInbox[0] });
       }
-      // La revisión rápida (?full=0) también deja borradores de lo nuevo, en segundo plano para no alargar la respuesta
-      if (!full) {
+      // Al sincronizar (manual) se generan los borradores de lo nuevo, en segundo plano para no alargar la respuesta
+      {
         void autoDraftNew(currentUserId).then(async (ad) => {
           if (!ad.drafts) return;
           const u = await prisma.user.findUnique({ where: { id: currentUserId }, select: { email: true } });
