@@ -654,3 +654,51 @@ model PushSubscription {
 
   @@index([userId])
 }
+
+// ============================================================
+// ESTADOS DE CUENTA BANCARIOS — solo los datos leídos, nunca el PDF
+// ============================================================
+
+model BankStatement {
+  id             String         @id @default(uuid())
+  bank           String
+  product        String
+  accountId      String // Número de cuenta completo: identifica la cuenta entre estados
+  accountLast4   String
+  holder         String?
+  periodFrom     DateTime       @db.Date
+  periodTo       DateTime       @db.Date
+  openingBalance Float?
+  closingBalance Float?
+  // Controles contra los totales del banco: [{ label, ok, detail }]
+  checks         Json
+  warnings       Json
+  fileName       String?
+  uploadedById   String?
+  createdAt      DateTime       @default(now())
+  movements      BankMovement[]
+
+  @@unique([accountId, periodFrom, periodTo])
+  @@index([accountId])
+  @@index([periodTo])
+}
+
+model BankMovement {
+  id            String        @id @default(uuid())
+  statementId   String
+  // Marca estable del renglón (fecha|monto|texto#n); la misma que se escribe en las notas de los cobros
+  fingerprint   String
+  date          DateTime      @db.Date
+  description   String        @db.Text
+  amount        Float // + abono, - cargo
+  balance       Float?
+  // PENDIENTE | GASTO (cargo ya en Finanzas) | COBRO (abono ya aplicado a cotizaciones) | IGNORADO (no es del negocio)
+  state         String        @default("PENDIENTE")
+  // Movimiento de Finanzas creado desde este renglón (solo cuando state = GASTO)
+  transactionId String?
+  statement     BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+
+  @@unique([statementId, fingerprint])
+  @@index([state])
+  @@index([date])
+}

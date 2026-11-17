@@ -3,7 +3,7 @@ import type { BankLine } from "@/types/reconciliation";
 import type { OverviewMode } from "@/constants/bank-overview.constants";
 
 /** Estado de cuenta ya leído, con el nombre del archivo del que salió. */
-export type LoadedStatement = ParsedStatement & { fileName: string };
+export type LoadedStatement = ParsedStatement & { fileName: string; /** id en la base de datos cuando el estado ya está guardado. */ storedId?: string };
 
 export type OverviewOptions = {
   /** "all" o el número de cuenta completo. */

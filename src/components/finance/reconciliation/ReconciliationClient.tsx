@@ -7,9 +7,10 @@ import PdfSummary from "./PdfSummary";
 import ReconciliationSummary from "./ReconciliationSummary";
 import ReconciliationResults from "./ReconciliationResults";
 import ReconciliationCharts from "./ReconciliationCharts";
+import type { LoadedStatement } from "@/types/bank-overview";
 
 /** Contenedor: lleva el estado (archivo, columnas, resultado) y arma las piezas. */
-export default function ReconciliationClient() {
+export default function ReconciliationClient({ stored = [] }: { stored?: LoadedStatement[] }) {
   const r = useReconciliation();
   return (
     <div className="space-y-6">
@@ -18,7 +19,7 @@ export default function ReconciliationClient() {
       {r.pdf && r.report ? (
         <PdfSummary fileName={r.fileName ?? "estado de cuenta"} statement={r.pdf} running={r.running} onRun={r.run} onReset={() => r.reset()} />
       ) : !r.parsed || !r.report ? (
-        <StatementUploader onFile={r.loadFile} reading={r.reading} />
+        <StatementUploader onFile={r.loadFile} reading={r.reading} stored={stored} onStored={r.useStored} />
       ) : (
         <ColumnMapper
           fileName={r.fileName ?? "estado de cuenta"}

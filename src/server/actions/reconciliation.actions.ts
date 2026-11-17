@@ -8,7 +8,7 @@ import { parseStatementPages } from "@/lib/bank-pdf";
 import { reconcileStatementService, registerBankPaymentService } from "../services/reconciliation.service";
 
 const LineSchema = z.object({
-  id: z.string().max(20),
+  id: z.string().max(64),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   description: z.string().max(500),
   amount: z.number().finite(),
@@ -41,6 +41,7 @@ export async function reconcileBankStatement(lines: unknown, period?: unknown) {
 
 const RegisterSchema = z.object({
   line: LineSchema,
+  movementId: z.string().min(1).max(64).optional(),
   fingerprint: z.string().regex(/^\d{4}-\d{2}-\d{2}\|-?\d+\.\d{2}\|[a-z0-9]+#\d+$/),
   allocations: z
     .array(z.object({ quoteId: z.string().min(1).max(64), amount: z.number().finite().positive() }))

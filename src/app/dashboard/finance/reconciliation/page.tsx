@@ -2,11 +2,13 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import ReconciliationClient from "@/components/finance/reconciliation/ReconciliationClient";
 import { requireAdminPage } from "@/lib/auth-guards";
+import { listStatementsService } from "@/server/services/bank-statement.service";
 
 export const metadata = { title: "Conciliación bancaria | CRM Laser Inova" };
 
 export default async function ReconciliationPage() {
   await requireAdminPage(); // solo ADMIN (el middleware ya redirige; esto protege la página por sí sola)
+  const stored = await listStatementsService();
   return (
     <div className="space-y-6 max-w-7xl pb-20 animate-in fade-in duration-500">
       <div>
@@ -23,7 +25,7 @@ export default async function ReconciliationPage() {
           </Link>
         </p>
       </div>
-      <ReconciliationClient />
+      <ReconciliationClient stored={stored} />
     </div>
   );
 }

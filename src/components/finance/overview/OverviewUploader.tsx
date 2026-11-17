@@ -51,7 +51,7 @@ export default function OverviewUploader({ onFiles, progress, compact = false }:
           }}
         />
       </div>
-      {!compact && <p className="mt-4 text-xs text-gray-500">Los PDFs <b>no se guardan</b>: se procesan en el servidor solo para extraer los movimientos. Para volver a ver el panorama hay que subirlos otra vez.</p>}
+      {!compact && <p className="mt-4 text-xs text-gray-500">El PDF <b>no se guarda</b>: se lee en el servidor y se guardan solo los movimientos, el saldo y el periodo. Si subes el mismo mes otra vez, no se duplica nada.</p>}
     </Panel>
   );
 }

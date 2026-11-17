@@ -3,11 +3,13 @@
 import { useRef, useState } from "react";
 import { FileSpreadsheet, UploadCloud } from "lucide-react";
 import Panel from "@/components/ui/atoms/Panel";
+import { formatShortDate } from "@/constants/formatters.constants";
+import type { LoadedStatement } from "@/types/bank-overview";
 
-type Props = { onFile: (file: File) => void; reading?: boolean };
+type Props = { onFile: (file: File) => void; reading?: boolean; stored?: LoadedStatement[]; onStored?: (s: LoadedStatement) => void };
 
 /** Zona para soltar o elegir el CSV del banco. */
-export default function StatementUploader({ onFile, reading = false }: Props) {
+export default function StatementUploader({ onFile, reading = false, stored = [], onStored }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   return (
@@ -51,6 +53,20 @@ export default function StatementUploader({ onFile, reading = false }: Props) {
       <p className="mt-4 text-xs text-gray-500">
         El archivo <b>no se guarda</b>: el CSV se lee en tu navegador y el PDF se procesa en el servidor solo para extraer los movimientos. Subirlo no cambia ningún dato; solo se registra un cobro cuando tú lo confirmas.
       </p>
+      {stored.length > 0 && onStored && (
+        <div className="mt-5 border-t border-gray-100 pt-4">
+          <p className="text-xs font-bold text-gray-900">O usa un estado que ya subiste al Panorama</p>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {stored.map((s) => (
+              <li key={s.storedId}>
+                <button onClick={() => onStored(s)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs hover:border-gray-900">
+                  <span className="font-bold text-gray-900">…{s.accountLast4}</span> <span className="text-gray-500">{s.period ? `${formatShortDate(s.period.from)} al ${formatShortDate(s.period.to)}` : s.fileName}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </Panel>
   );
 }

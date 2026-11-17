@@ -142,6 +142,8 @@ export type RegisterInput = {
   fingerprint: string;
   allocations: { quoteId: string; amount: number }[];
   userId: string;
+  /** Si el depósito viene de un estado guardado: su movimiento, para marcarlo como cobrado. */
+  movementId?: string;
 };
 
 export type RegisteredPayment = { quoteId: string; folio: string; amount: number; collected: number; total: number; paid: boolean };
@@ -155,7 +157,7 @@ const cents = (n: number) => Math.round(n * 100);
  * sus movimientos (en ese caso el sistema "corregiría" movimientos viejos y no se debe tocar).
  */
 async function registerWithClient(tx: DbClient, input: RegisterInput): Promise<RegisteredPayment[]> {
-  const { line, fingerprint, allocations, userId } = input;
+  const { line, fingerprint, allocations, userId, movementId } = input;
   const mark = fingerprintNote(fingerprint);
 
   if (line.amount <= 0) throw new Error("Solo se pueden registrar depósitos (abonos).");
@@ -211,6 +213,7 @@ async function registerWithClient(tx: DbClient, input: RegisterInput): Promise<R
     await updateQuotePaymentService(q.id, newCollected, paid ? "PAID" : "PARTIAL", tx);
     done.push({ quoteId: q.id, folio: q.folio, amount: a.amount, collected: newCollected, total: q.total, paid });
   }
+  if (movementId) await tx.bankMovement.updateMany({ where: { id: movementId, state: "PENDIENTE" }, data: { state: "COBRO" } });
   return done;
 }
 

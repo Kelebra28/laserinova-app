@@ -3,19 +3,14 @@ import Panel from "@/components/ui/atoms/Panel";
 import { formatShortDate } from "@/constants/formatters.constants";
 import type { LoadedStatement } from "@/types/bank-overview";
 
-type Props = { statements: LoadedStatement[]; onRemove: (index: number) => void; onClear: () => void };
+type Props = { statements: LoadedStatement[]; onRemove: (index: number) => void };
 
 /** Los estados que ya se leyeron, con su cuenta, periodo y si pasaron los controles del banco. */
-export default function LoadedStatementsList({ statements, onRemove, onClear }: Props) {
+export default function LoadedStatementsList({ statements, onRemove }: Props) {
   return (
     <Panel
-      title="Estados cargados"
+      title="Estados guardados"
       subtitle={`${statements.length} estado${statements.length === 1 ? "" : "s"}`}
-      action={
-        <button onClick={onClear} className="text-xs font-bold text-gray-500 hover:text-gray-900 underline-offset-4 hover:underline">
-          Quitar todos
-        </button>
-      }
     >
       <ul className="flex flex-wrap gap-2">
         {statements.map((s, i) => {
@@ -25,7 +20,7 @@ export default function LoadedStatementsList({ statements, onRemove, onClear }: 
               {ok ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
               <span className="font-bold text-gray-900">…{s.accountLast4}</span>
               <span className="text-gray-500">{s.period ? `${formatShortDate(s.period.from)} al ${formatShortDate(s.period.to)}` : s.fileName}</span>
-              <button onClick={() => onRemove(i)} aria-label={`Quitar ${s.fileName}`} className="text-gray-400 hover:text-gray-900">
+              <button onClick={() => window.confirm("¿Quitar este estado guardado? Los gastos que ya registraste en Finanzas se conservan.") && onRemove(i)} aria-label={`Quitar ${s.fileName}`} className="text-gray-400 hover:text-gray-900">
                 <X className="h-3.5 w-3.5" />
               </button>
             </li>

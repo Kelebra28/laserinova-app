@@ -5,6 +5,7 @@ import { parseBankStatementPdf, reconcileBankStatement, registerBankPayment } fr
 import { RECON_MAX_FILE_BYTES } from "@/constants/reconciliation.constants";
 import { detectMapping, normalizeLines, parseBankCsv } from "@/lib/bank-csv";
 import type { ParsedStatement } from "@/types/bank-statement";
+import type { LoadedStatement } from "@/types/bank-overview";
 import type { BankLine, ColumnMapping, NormalizeReport, ParsedCsv, ReconResult } from "@/types/reconciliation";
 
 /** Los CSV de los bancos a veces vienen en Windows-1252: si el texto sale con caracteres rotos, se relee. */
@@ -22,7 +23,7 @@ export function useReconciliation() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ParsedCsv | null>(null);
   /** Estado de cuenta leído de un PDF (ya viene con sus columnas resueltas). */
-  const [pdf, setPdf] = useState<ParsedStatement | null>(null);
+  const [pdf, setPdf] = useState<(ParsedStatement & { storedId?: string }) | null>(null);
   const [reading, setReading] = useState(false);
   const [headerRow, setHeaderRowState] = useState(0);
   const [mapping, setMapping] = useState<ColumnMapping>({});
@@ -97,12 +98,21 @@ export function useReconciliation() {
   const register = async (line: BankLine, allocations: { quoteId: string; amount: number }[]) => {
     const fingerprint = result?.fingerprints[line.id];
     if (!fingerprint || !report) return { success: false as const, error: "Falta la marca del renglón. Vuelve a conciliar." };
-    const res = await registerBankPayment({ line, fingerprint, allocations });
+    const res = await registerBankPayment({ line, fingerprint, allocations, movementId: pdf?.storedId ? line.id : undefined });
     if (res.success) {
       const again = await reconcileBankStatement(report.lines, pdf?.period ?? undefined);
       if (again.success) setResult(again.data);
     }
     return res;
+  };
+
+  /** Usa un estado ya guardado (sin volver a subir el PDF). */
+  const useStored = (s: LoadedStatement) => {
+    setError(null);
+    setResult(null);
+    setParsed(null);
+    setFileName(s.fileName);
+    setPdf(s);
   };
 
   const reset = () => {
@@ -114,5 +124,5 @@ export function useReconciliation() {
     setError(null);
   };
 
-  return { fileName, parsed, pdf, reading, headerRow, headers, mapping, report, result, error, running, loadFile, setHeaderRow, setField, run, register, reset };
+  return { fileName, parsed, pdf, reading, headerRow, headers, mapping, report, result, error, running, loadFile, useStored, setHeaderRow, setField, run, register, reset };
 }

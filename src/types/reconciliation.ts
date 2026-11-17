@@ -11,6 +11,8 @@ export type BankLine = {
   description: string;
   amount: number;
   balance: number | null;
+  /** Solo en renglones guardados: PENDIENTE | GASTO | COBRO | IGNORADO. */
+  state?: "PENDIENTE" | "GASTO" | "COBRO" | "IGNORADO";
 };
 
 /** Movimiento del sistema, con signo: ingresos positivos, gastos negativos. */
