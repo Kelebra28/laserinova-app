@@ -4,7 +4,7 @@ import path from 'path';
 
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sendMessageToMeta, isAdminPhone, lastInboundByContact, processAIAgentResponse, retryBotReply, deleteConversationService, clearConversationMessagesService } from '@/server/services/whatsapp.service';
+import { sendMessageToMeta, sendMediaToMeta, isAdminPhone, lastInboundByContact, processAIAgentResponse, retryBotReply, deleteConversationService, clearConversationMessagesService } from '@/server/services/whatsapp.service';
 import { notificationEmitter } from '@/lib/notification-emitter';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { executeChalanEstimate } from '@/lib/agents/chalan';
@@ -220,42 +220,13 @@ export async function sendMediaMessageAction(formData: FormData) {
     
     if (!isSimulator && process.env.WHATSAPP_TOKEN) {
       try {
-        // A. Subir archivo a Meta
-        const metaFormData = new FormData();
-        const blob = new Blob([buffer], { type: mimeType });
-        metaFormData.append('file', blob, file.name || 'file');
-        metaFormData.append('type', mimeType);
-        metaFormData.append('messaging_product', 'whatsapp');
-
-        const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/media`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`
-          },
-          body: metaFormData
-        });
-
-        const uploadData = await uploadRes.json();
-        if (!uploadRes.ok) throw new Error(uploadData.error?.message || 'Error subiendo media a Meta');
-        
-        const mediaId = uploadData.id;
-
-        // B. Enviar el mensaje con el mediaId
-        const metaMessageRes = await sendMessageToMeta(contact.phone, {
-          type: type.toLowerCase(),
-          [type.toLowerCase()]: { 
-            id: mediaId,
-            ...(caption ? { caption } : {}),
-            ...(type === 'DOCUMENT' ? { filename: file.name || 'documento' } : {})
-          }
-        });
-
-        if (metaMessageRes?.messages?.[0]?.id) {
-          metaMessageId = metaMessageRes.messages[0].id;
-        }
-      } catch (e) {
+        const sent = await sendMediaToMeta(contact.phone, buffer, file.name || 'archivo', mimeType, caption || undefined);
+        metaMessageId = sent.messageId;
+        // Si Meta no acepta el formato como foto/video/audio, viaja como documento: así se guarda y se muestra
+        if (sent.kind === 'document') type = 'DOCUMENT';
+      } catch (e: any) {
         console.error("Error enviando media a Meta:", e);
-        return { success: false, error: 'Error al enviar por WhatsApp real' };
+        return { success: false, error: e?.message ? `WhatsApp: ${e.message}` : 'Error al enviar por WhatsApp real' };
       }
     }
 
@@ -266,7 +237,7 @@ export async function sendMediaMessageAction(formData: FormData) {
         messageId: metaMessageId,
         direction,
         type,
-        content: caption ? caption : (isSimulator && type !== 'AUDIO' ? file.name : (type === 'IMAGE' ? '📷 Imagen adjunta' : type === 'AUDIO' ? '🎤 Mensaje de voz' : '📄 Archivo adjunto')),
+        content: caption ? caption : (type === 'DOCUMENT' || (isSimulator && type !== 'AUDIO') ? file.name : (type === 'IMAGE' ? '📷 Imagen adjunta' : type === 'AUDIO' ? '🎤 Mensaje de voz' : '🎬 Video')),
         mediaUrl,
         mimeType,
         status: isSimulator ? 'DELIVERED' : (process.env.WHATSAPP_TOKEN ? 'SENT' : 'SENT_LOCAL_SIMULATION')

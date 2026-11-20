@@ -271,7 +271,9 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      // Formato que WhatsApp acepta como audio: ogg/opus (Firefox) o mp4/aac (Chrome, Safari); webm solo de último recurso
+      const mime = ['audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm;codecs=opus'].find(t => MediaRecorder.isTypeSupported(t));
+      const mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -282,7 +284,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
         setRecordedAudio(audioBlob);
         stream.getTracks().forEach(track => track.stop());
       };
@@ -437,7 +439,9 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
       try {
         if (audioToSend) {
           const formData = new FormData();
-          const audioFile = new File([audioToSend], `audio_message_${Date.now()}.webm`, { type: 'audio/webm' });
+          const audioMime = (audioToSend.type || 'audio/webm').split(';')[0];
+          const audioExt = audioMime === 'audio/ogg' ? 'ogg' : audioMime === 'audio/mp4' ? 'm4a' : 'webm';
+          const audioFile = new File([audioToSend], `audio_message_${Date.now()}.${audioExt}`, { type: audioMime });
           formData.append('file', audioFile);
           formData.append('contactId', activeContact.id);
           formData.append('simulatorMode', String(simulatorMode));
@@ -552,8 +556,15 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0 || !activeContact) return;
+    const picked = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (picked.length === 0 || !activeContact) return;
+    // Límite del envío (y de WhatsApp para video); se avisa en vez de fallar al subir
+    const MAX_BYTES = 16 * 1024 * 1024;
+    const tooBig = picked.filter(f => f.size > MAX_BYTES);
+    if (tooBig.length > 0) toast.error(`${tooBig.map(f => f.name).join(', ')}: pesa más de 16 MB y no se puede enviar`);
+    const files = picked.filter(f => f.size <= MAX_BYTES);
+    if (files.length === 0) return;
 
     // Agregar nuevos archivos a los que ya estaban (si queremos permitir acumular)
     setStagedFiles(prev => [...prev, ...files]);
@@ -905,7 +916,19 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
 
       {/* ───────── Conversación ───────── */}
       {activeContact ? (
-        <section className="flex flex-col bg-[#0b141a] relative flex-1 min-w-0">
+        <section
+          className="flex flex-col bg-[#0b141a] relative flex-1 min-w-0"
+          onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }}
+          onDrop={e => {
+            // Arrastrar archivos al chat los deja listos para enviar, como en WhatsApp Web
+            if (e.dataTransfer.files.length === 0) return;
+            e.preventDefault();
+            const dropped = Array.from(e.dataTransfer.files);
+            const ok = dropped.filter(f => f.size <= 16 * 1024 * 1024);
+            if (ok.length < dropped.length) toast.error('Algunos archivos pesan más de 16 MB y no se agregaron');
+            if (ok.length) setStagedFiles(prev => [...prev, ...ok]);
+          }}
+        >
           <div className="absolute inset-0 pointer-events-none z-0 opacity-100 [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.04)_1px,transparent_0)] [background-size:22px_22px]" />
 
           {simulatorMode && (
@@ -1228,6 +1251,16 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                             </a>
                             <div className="flex gap-1.5">
                               <a href={mediaSrc} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
+                          {msg.type === 'VIDEO' && (
+                            <div className="flex flex-col gap-1.5 w-[min(300px,72vw)]">
+                              <video controls preload="metadata" src={mediaSrc} className="w-full max-h-80 rounded-xl bg-black/25" />
+                              <a href={`/api/media/${msg.id}?download=1`} download className="flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
+                                <Download size={14} /> Descargar
+                              </a>
+                              {msg.content && msg.content !== '🎬 Video' && <span className="text-[14px] leading-snug whitespace-pre-wrap break-words px-0.5">{msg.content}</span>}
+                            </div>
+                          )}
+
                                 <ExternalLink size={14} /> Abrir
                               </a>
                               <a href={`/api/media/${msg.id}?download=1`} download className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
@@ -1235,7 +1268,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                               </a>
                             </div>
                             </div>
-                          ) : (
+                          ) : msg.type === 'VIDEO' ? null : (
                             bodyText ? <p className="break-words whitespace-pre-wrap">{bodyText}<span className={cn("inline-block", alignRight ? "w-[6.2rem]" : "w-[4.6rem]")} /></p> : null
                           )}
 
@@ -1408,7 +1441,6 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                 ref={fileInputRef}
                 className="hidden"
                 onChange={handleFileUpload}
-                accept="image/*,.pdf,.doc,.docx,.dxf"
                 multiple
               />
               <Button
@@ -1468,7 +1500,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                     let hasFiles = false;
                     const newFiles: File[] = [];
                     for (let i = 0; i < items.length; i++) {
-                      if (items[i].type.indexOf('image') !== -1) {
+                      if (items[i].kind === 'file') {
                         const file = items[i].getAsFile();
                         if (file) {
                           newFiles.push(file);

@@ -67,7 +67,7 @@ async function uploadMediaToMeta(buffer: Buffer, filename: string, mimeType: str
     body: form,
   });
   const upload = await uploadRes.json();
-  if (!uploadRes.ok) throw new Error(upload.error?.message || 'Error subiendo el PDF a Meta');
+  if (!uploadRes.ok) throw new Error(upload.error?.message || 'Error subiendo el archivo a Meta');
   return upload.id as string;
 }
 
@@ -78,6 +78,52 @@ export async function sendDocumentToMeta(to: string, buffer: Buffer, filename: s
     document: { id: mediaId, filename, ...(caption ? { caption } : {}) },
   });
   return (sent?.messages?.[0]?.id as string | undefined) ?? null;
+}
+
+// Formatos que WhatsApp acepta como cada tipo de mensaje; lo demás viaja como documento (como en la app).
+const META_IMAGE = ['image/jpeg', 'image/png'];
+const META_VIDEO = ['video/mp4', 'video/3gpp'];
+const META_AUDIO = ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
+const EXT_MIME: Record<string, string> = {
+  xml: 'text/xml', csv: 'text/csv', txt: 'text/plain', json: 'application/json', zip: 'application/zip',
+  rar: 'application/vnd.rar', dxf: 'application/dxf', svg: 'image/svg+xml',
+};
+
+/** Decide cómo mandar un archivo: tipo de mensaje de Meta y mime con el que se sube (con alternativas si Meta lo rechaza). */
+function planMetaMedia(filename: string, mimeType: string) {
+  const mime = (mimeType || '').split(';')[0].trim().toLowerCase();
+  const ext = filename.includes('.') ? filename.split('.').pop()!.toLowerCase() : '';
+  if (META_IMAGE.includes(mime)) return { kind: 'image' as const, mimes: [mime] };
+  if (META_VIDEO.includes(mime)) return { kind: 'video' as const, mimes: [mime] };
+  if (META_AUDIO.includes(mime)) return { kind: 'audio' as const, mimes: [mime] };
+  const first = !mime || mime === 'application/octet-stream' ? (EXT_MIME[ext] || 'application/octet-stream') : mime;
+  // Meta rechaza algunos mimes de documento (xml, dxf, zip…): se reintenta como texto plano y como binario genérico.
+  const mimes = [...new Set([first, 'text/plain', 'application/octet-stream'])];
+  return { kind: 'document' as const, mimes };
+}
+
+/** Sube un archivo cualquiera y lo manda por WhatsApp como foto, video, audio o documento. */
+export async function sendMediaToMeta(to: string, buffer: Buffer, filename: string, mimeType: string, caption?: string) {
+  const plan = planMetaMedia(filename, mimeType);
+  let mediaId: string | null = null;
+  let lastError: unknown;
+  for (const mime of plan.mimes) {
+    try {
+      mediaId = await uploadMediaToMeta(buffer, filename, mime);
+      break;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  if (!mediaId) throw lastError instanceof Error ? lastError : new Error('Error subiendo el archivo a Meta');
+
+  const payload =
+    plan.kind === 'audio' ? { id: mediaId } // el audio no admite pie de foto
+    : plan.kind === 'document' ? { id: mediaId, filename, ...(caption ? { caption } : {}) }
+    : { id: mediaId, ...(caption ? { caption } : {}) };
+  const sent = await sendMessageToMeta(to, { type: plan.kind, [plan.kind]: payload });
+  if (!sent?.messages?.[0]?.id) throw new Error('WhatsApp no confirmó el envío');
+  return { kind: plan.kind, messageId: sent.messages[0].id as string };
 }
 
 /**

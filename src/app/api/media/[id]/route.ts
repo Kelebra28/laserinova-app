@@ -29,6 +29,10 @@ const EXTENSIONS: Record<string, string> = {
   'audio/mpeg': 'mp3',
   'text/plain': 'txt',
   'text/csv': 'csv',
+  'text/xml': 'xml',
+  'application/xml': 'xml',
+  'application/json': 'json',
+  'video/mp4': 'mp4',
 };
 
 // Nombre con el que se descarga: el que mandó el cliente (o "archivo"), siempre con extensión.
