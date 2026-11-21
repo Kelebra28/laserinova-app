@@ -517,9 +517,20 @@ export async function createQuoteService(userId: string, data: any) {
         OR: [...(email ? [{ email }] : []), ...(phone ? [{ phone }] : [])],
       },
     });
+    // Si el cliente ya existía con el nombre de perfil de WhatsApp y ahora dio su nombre real, se actualiza
+    // (en cliente y en el chat) para que todas sus cotizaciones lo muestren bien.
+    const realName = String(data.prospectName).trim();
+    const isWhatsAppName = !!existing && !!contact?.name && existing.name.trim() === contact.name.trim();
+    const patch = {
+      ...(email && !existing?.email ? { email } : {}),
+      ...(isWhatsAppName && realName && realName !== existing!.name.trim() ? { name: realName } : {}),
+    };
     const client = existing
-      ? (email && !existing.email ? await prisma.client.update({ where: { id: existing.id }, data: { email } }) : existing)
+      ? (Object.keys(patch).length ? await prisma.client.update({ where: { id: existing.id }, data: patch }) : existing)
       : await prisma.client.create({ data: { name: data.prospectName, email, phone } });
+    if (contact && patch.name && contact.name?.trim() !== patch.name) {
+      await prisma.whatsAppContact.update({ where: { id: contact.id }, data: { name: patch.name } });
+    }
     finalClientId = client.id;
     finalProspectName = null;
   } else if (data.clientId && email) {
