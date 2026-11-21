@@ -171,6 +171,15 @@ export async function toggleBotModeAction(contactId: string, botMode: boolean) {
   return { success: true };
 }
 
+/** Archiva (o recupera) un chat: al archivar se apaga el bot y deja de avisar; los mensajes se siguen guardando. */
+export async function archiveContactAction(contactId: string, archived: boolean) {
+  await requireAuth();
+  const changes = archived ? { archived: true, botMode: false } : { archived: false };
+  await prisma.whatsAppContact.update({ where: { id: contactId }, data: changes });
+  await notificationEmitter.emit('whatsapp_contact_update', { contactId, changes });
+  return { success: true };
+}
+
 export async function createDummyContactAction() {
   await requireAuth();
   

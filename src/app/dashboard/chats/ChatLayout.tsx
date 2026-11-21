@@ -5,13 +5,13 @@ import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { useWhatsAppEvents } from '@/hooks/useWhatsAppEvents';
 import { getPusherClient } from '@/lib/pusher';
-import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, simulateIncomingMessageAction, retryBotReplyAction, createDummyContactAction, sendMediaMessageAction, generateSummaryAction, deleteConversationAction, getContactsAction } from '@/server/actions/whatsapp.actions';
+import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, archiveContactAction, simulateIncomingMessageAction, retryBotReplyAction, createDummyContactAction, sendMediaMessageAction, generateSummaryAction, deleteConversationAction, getContactsAction } from '@/server/actions/whatsapp.actions';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import CalculateQuoteModal from './CalculateQuoteModal';
 import ImageViewer, { type ViewerImage } from './ImageViewer';
-import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator, Download, ExternalLink, Clock, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator, Download, ExternalLink, Clock, AlertTriangle, AlertCircle, Archive, ArchiveRestore } from 'lucide-react';
 import { windowState, formatDuration, formatDurationShort } from '@/lib/whatsapp-window';
 import { sendReengageAction, getChatLatestQuoteAction, resolveQuoteSuggestionAction } from '@/server/actions/whatsapp-notify.actions';
 import { sendQuoteViaWhatsAppAction } from '@/server/actions/quote.actions';
@@ -81,7 +81,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [messages, setMessages] = useState<Message[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [listFilter, setListFilter] = useState<'all' | 'unread' | 'bot' | 'human' | 'admin'>('all');
+  const [listFilter, setListFilter] = useState<'all' | 'unread' | 'bot' | 'human' | 'admin' | 'archived'>('all');
   const [inputText, setInputText] = useState('');
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [simulatorMode, setSimulatorMode] = useState(false);
@@ -592,6 +592,22 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
     }
   };
 
+  const toggleArchive = async () => {
+    if (!activeContact) return;
+    const archived = !activeContact.archived;
+    const updated = { ...activeContact, archived, ...(archived ? { botMode: false } : {}) };
+    setActiveContact(updated);
+    setContacts(prev => prev.map(c => c.id === updated.id ? updated : c));
+    try {
+      await archiveContactAction(activeContact.id, archived);
+      toast.success(archived ? 'Chat archivado: sin bot ni avisos' : 'Chat recuperado');
+    } catch {
+      toast.error('No se pudo archivar el chat');
+      setActiveContact(activeContact);
+      setContacts(prev => prev.map(c => c.id === activeContact.id ? activeContact : c));
+    }
+  };
+
   // Ventana de 24 h cerrada: plantilla "retomar_conversacion" para que el cliente vuelva a escribir.
   const [reengaging, setReengaging] = useState(false);
   const [confirmReengage, setConfirmReengage] = useState(false);
@@ -743,6 +759,9 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
     const q = searchQuery.toLowerCase();
     const matches = !q || (c.name && c.name.toLowerCase().includes(q)) || (c.phone && c.phone.includes(searchQuery));
     if (!matches) return false;
+    // Los archivados solo se ven en su pestaña.
+    if (listFilter === 'archived') return !!c.archived;
+    if (c.archived) return false;
     // Los chats de administradores (bot de gestión) viven en su propia pestaña, no entre los clientes.
     if (listFilter === 'admin') return !!c.isAdmin;
     if (c.isAdmin && !q) return false;
@@ -796,7 +815,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
         </div>
 
         <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto no-scrollbar">
-          {([['all', 'Todos'], ['unread', 'No leídos'], ['bot', 'Bot'], ['human', 'Humano'], ['admin', 'Admins']] as const).map(([key, label]) => (
+          {([['all', 'Todos'], ['unread', 'No leídos'], ['bot', 'Bot'], ['human', 'Humano'], ['admin', 'Admins'], ['archived', 'Archivados']] as const).map(([key, label]) => (
             <button
               key={key}
               type="button"
@@ -1012,6 +1031,15 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                   : <><UserIcon size={15} className="xl:mr-1.5" /><span className="hidden xl:inline">Modo humano</span></>}
               </Button>
 
+              <button
+                type="button"
+                onClick={toggleArchive}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-[#8696a0] hover:text-[#e9edef] hover:bg-[#202c33] transition-colors active:scale-95"
+                title={activeContact.archived ? 'Recuperar chat' : 'Archivar: sin bot, sin avisos y fuera de la bandeja'}
+              >
+                {activeContact.archived ? <ArchiveRestore size={18} /> : <Archive size={18} />}
+              </button>
+
               {activeContact.botMode && (
                 <button
                   type="button"
@@ -1223,6 +1251,16 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                             </div>
                           )}
 
+                          {msg.type === 'VIDEO' && (
+                            <div className="flex flex-col gap-1.5 w-[min(300px,72vw)]">
+                              <video controls preload="metadata" src={mediaSrc} className="w-full max-h-80 rounded-xl bg-black/25" />
+                              <a href={`/api/media/${msg.id}?download=1`} download className="flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
+                                <Download size={14} /> Descargar
+                              </a>
+                              {msg.content && msg.content !== '🎬 Video' && <span className="text-[14px] leading-snug whitespace-pre-wrap break-words px-0.5">{msg.content}</span>}
+                            </div>
+                          )}
+
                           {msg.type === 'IMAGE' ? (
                             <div className="flex flex-col gap-1.5 relative w-[min(300px,72vw)]">
                               <button type="button" onClick={() => setViewerImageId(msg.id)} className="block w-full rounded-xl overflow-hidden bg-black/25 cursor-zoom-in">
@@ -1251,16 +1289,6 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                             </a>
                             <div className="flex gap-1.5">
                               <a href={mediaSrc} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
-                          {msg.type === 'VIDEO' && (
-                            <div className="flex flex-col gap-1.5 w-[min(300px,72vw)]">
-                              <video controls preload="metadata" src={mediaSrc} className="w-full max-h-80 rounded-xl bg-black/25" />
-                              <a href={`/api/media/${msg.id}?download=1`} download className="flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
-                                <Download size={14} /> Descargar
-                              </a>
-                              {msg.content && msg.content !== '🎬 Video' && <span className="text-[14px] leading-snug whitespace-pre-wrap break-words px-0.5">{msg.content}</span>}
-                            </div>
-                          )}
-
                                 <ExternalLink size={14} /> Abrir
                               </a>
                               <a href={`/api/media/${msg.id}?download=1`} download className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">

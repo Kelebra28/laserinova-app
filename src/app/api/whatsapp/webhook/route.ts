@@ -68,7 +68,9 @@ export async function POST(request: Request) {
         
         if (result) {
           // Emitir evento al frontend
-          if (result.type === 'message') {
+          if (result.type === 'message' && result.contact?.archived) {
+            // Chat archivado: el mensaje queda guardado pero sin aviso en pantalla, sin push y sin bot (no gasta tokens).
+          } else if (result.type === 'message') {
             const pusherMessage = { ...result.message };
             if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
               pusherMessage.mediaUrl = 'FETCH_REQUIRED';

@@ -590,6 +590,7 @@ model WhatsAppContact {
   phone     String   @unique
   name      String?
   botMode   Boolean  @default(true) // Si está en true, la IA responde automáticamente
+  archived  Boolean  @default(false) // Archivado: sin bot, sin avisos y fuera de la bandeja principal
   clientId  String?
   client    Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
   messages  WhatsAppMessage[]

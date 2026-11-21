@@ -490,7 +490,7 @@ export async function processIncomingMessage(entry: any) {
   });
 
   // Push a los admins: quién escribe y qué dice (el simulador y los propios admins no avisan).
-  if (!isAdmin && !contact.name?.includes('Simulador')) {
+  if (!isAdmin && !contact.archived && !contact.name?.includes('Simulador')) {
     const label = { IMAGE: skipBot ? '' : '📷 Foto', AUDIO: '🎤 Audio', DOCUMENT: '📄 Documento' }[type as string];
     const preview = messageContent.replace(/\s*\n\s*/g, ' ').slice(0, 160);
     const body = label ? (preview ? `${label}: ${preview}` : label) : preview || 'Nuevo mensaje';
