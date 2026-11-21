@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { parseBankStatementPdf, reconcileBankStatement, registerBankPayment } from "@/server/actions/reconciliation.actions";
+import { reconcileBankStatement, registerBankPayment } from "@/server/actions/reconciliation.actions";
+import { uploadBankStatementPdf } from "@/server/actions/bank-statements.actions";
 import { RECON_MAX_FILE_BYTES } from "@/constants/reconciliation.constants";
 import { detectMapping, normalizeLines, parseBankCsv } from "@/lib/bank-csv";
 import type { ParsedStatement } from "@/types/bank-statement";
@@ -46,11 +47,12 @@ export function useReconciliation() {
       try {
         const body = new FormData();
         body.append("file", file);
-        const res = await parseBankStatementPdf(body);
+        // Se lee y se guarda (un mes de una cuenta ya guardado no se duplica): así alimenta las gráficas del panorama
+        const res = await uploadBankStatementPdf(body);
         if (!res.success) return setError(res.error);
         setFileName(file.name);
         setParsed(null);
-        setPdf(res.data);
+        setPdf(res.data.statement);
       } catch {
         setError("No se pudo leer el PDF. Intenta de nuevo.");
       } finally {
