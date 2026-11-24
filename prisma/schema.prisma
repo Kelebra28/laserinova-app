@@ -621,6 +621,17 @@ model WhatsAppMessage {
   @@index([timestamp])
 }
 
+// Respuestas rápidas del chat de WhatsApp (como las de WhatsApp Business): se escribe "/atajo" o se elige
+// de la lista y el texto se pone en la caja de mensaje para revisarlo antes de enviar.
+model QuickReply {
+  id        String   @id @default(uuid())
+  shortcut  String   @unique @db.VarChar(40) // sin "/", en minúsculas, ej. "direccion"
+  title     String   @db.VarChar(80)
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // Candado del bot de clientes: solo una respuesta a la vez por contacto (ver acquireBotLock).
 // Sin relación a propósito: una fila huérfana caduca sola con lockedUntil.
 model WhatsAppBotLock {
