@@ -87,7 +87,7 @@ export async function POST(request: Request) {
                 });
               }
             // IA: Responder si botMode está activado
-            } else if (result.contact?.botMode && !result.skipBot && ['TEXT', 'IMAGE', 'AUDIO'].includes(result.message?.type)) {
+            } else if (result.contact?.botMode && !result.skipBot && ['TEXT', 'IMAGE', 'AUDIO', 'DOCUMENT'].includes(result.message?.type)) {
               // Llamar al servicio especializado de IA de WhatsApp
               // En Vercel la función se congela al responder; after() la mantiene viva hasta terminar.
               const contactId = result.contact.id;

@@ -22,6 +22,12 @@ El panel lista **todas** las filas de `AgentRule`, activas o no. Desactivar una 
 
 Para volver a contar: sumar las filas por `active` en `AgentRule` y comparar con `describeIndexStats()` de Pinecone; deben coincidir.
 
+## Cambios del 2026-11-24
+
+**Agregadas (8, desde el análisis de la semana 17-24 nov; detalle en `docs/propuesta-reglas-bot-semana-24nov.md`):** tras transferir a humano, cliente molesto o que pide llamada, no repetir preguntas, cotización ya enviada, cierres de conversación, seguimiento de cotización pendiente (1 a 2 días en diciembre, avisar al equipo cada vez), no prometer plazos ni servicios no confirmados (urgencias van a los administradores) y acusar recibo de documentos.
+
+Conteo tras el cambio: 209 en el panel, 204 activas, 5 desactivadas (la tabla del 2026-11-13 ya no está al día).
+
 ## Cambios del 2026-11-12
 
 **Desactivadas:** meta comercial mensual (interna), viáticos históricos (`EVT-009`) y las fórmulas de margen `COT-002`, `COT-003` y `COT-016` (las fórmulas de precio viven solo en `src/lib/pricing/`; el bot no calcula precios).
