@@ -10,8 +10,12 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import CalculateQuoteModal from './CalculateQuoteModal';
+import QuickReplyPicker from '@/components/whatsapp/QuickReplyPicker';
+import QuickRepliesManagerModal from '@/components/whatsapp/QuickRepliesManagerModal';
+import { useQuickReplies } from '@/hooks/useQuickReplies';
+import { filterQuickReplies, slashQuery, type QuickReply } from '@/lib/quick-replies';
 import ImageViewer, { type ViewerImage } from './ImageViewer';
-import { Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator, Download, ExternalLink, Clock, AlertTriangle, AlertCircle, Archive, ArchiveRestore } from 'lucide-react';
+import { Zap, Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator, Download, ExternalLink, Clock, AlertTriangle, AlertCircle, Archive, ArchiveRestore } from 'lucide-react';
 import { windowState, formatDuration, formatDurationShort } from '@/lib/whatsapp-window';
 import { sendReengageAction, getChatLatestQuoteAction, resolveQuoteSuggestionAction } from '@/server/actions/whatsapp-notify.actions';
 import { sendQuoteViaWhatsAppAction } from '@/server/actions/quote.actions';
@@ -83,6 +87,25 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
   const [searchQuery, setSearchQuery] = useState('');
   const [listFilter, setListFilter] = useState<'all' | 'unread' | 'bot' | 'human' | 'admin' | 'archived'>('all');
   const [inputText, setInputText] = useState('');
+  const quickReplies = useQuickReplies();
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickManageOpen, setQuickManageOpen] = useState(false);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const slash = slashQuery(inputText);
+  const showQuickPicker = (quickOpen || slash !== null) && !quickManageOpen;
+  const quickMatches = filterQuickReplies(quickReplies.items, slash ?? '');
+  const pickQuickReply = (reply: QuickReply) => {
+    setInputText(reply.content);
+    setQuickOpen(false);
+    // La caja crece sola al escribir; al poner texto por código hay que ajustarla y devolverle el foco.
+    requestAnimationFrame(() => {
+      const el = composerRef.current;
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+      el.focus();
+    });
+  };
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [simulatorMode, setSimulatorMode] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -1411,7 +1434,15 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
           />
 
           {/* Barra de escribir */}
-          <div className="bg-[#111b21] border-t border-[#222d34] px-3 md:px-4 py-2.5 flex flex-col z-20">
+          <div className="relative bg-[#111b21] border-t border-[#222d34] px-3 md:px-4 py-2.5 flex flex-col z-20">
+            {showQuickPicker && (
+              <QuickReplyPicker
+                items={quickMatches}
+                total={quickReplies.items.length}
+                onPick={pickQuickReply}
+                onManage={() => { setQuickOpen(false); setQuickManageOpen(true); }}
+              />
+            )}
 
             {(replyingTo || stagedFiles.length > 0) && (
               <div className="flex flex-col gap-2 mb-2">
@@ -1482,6 +1513,16 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
               >
                 <Plus size={24} />
               </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={`shrink-0 rounded-full hover:bg-[#202c33] mb-0.5 ${showQuickPicker ? 'text-[#00a884]' : 'text-[#8696a0] hover:text-[#e9edef]'}`}
+                onClick={() => setQuickOpen(o => !o)}
+                title="Respuestas rápidas (escribe / para buscar)"
+              >
+                <Zap size={20} />
+              </Button>
 
               {recordedAudio ? (
                 <div className="flex-1 flex items-center justify-between bg-[#202c33] rounded-2xl px-4 py-2.5">
@@ -1510,6 +1551,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                 </div>
               ) : (
                 <textarea
+                  ref={composerRef}
                   value={inputText}
                   onChange={e => {
                     setInputText(e.target.value);
@@ -1517,8 +1559,11 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
                   }}
                   onKeyDown={e => {
+                    if (e.key === 'Escape' && (quickOpen || slash !== null)) { setQuickOpen(false); return; }
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
+                      // Con "/atajo" escrito, Enter elige la primera coincidencia en vez de enviar.
+                      if (slash !== null && quickMatches.length > 0) { pickQuickReply(quickMatches[0]); return; }
                       if (inputText.trim() || stagedFiles.length > 0) handleSendMessage();
                     }
                   }}
@@ -1576,6 +1621,15 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
           </div>
         </div>
       )}
+
+      <QuickRepliesManagerModal
+        open={quickManageOpen}
+        items={quickReplies.items}
+        onClose={() => setQuickManageOpen(false)}
+        onCreate={quickReplies.create}
+        onUpdate={quickReplies.update}
+        onRemove={quickReplies.remove}
+      />
 
       {isCalculateOpen && activeContact && (
         <CalculateQuoteModal

@@ -79,18 +79,26 @@ export async function requireAuth() {
   
   const cookieStore = await cookies();
   // Vercel usa __Secure- en producción, localhost/HTTP usa el prefijo normal
-  const tokenCookie = 
-    cookieStore.get("next-auth.session-token") || 
-    cookieStore.get("__Secure-next-auth.session-token");
-  
-  if (!tokenCookie?.value) {
+  const candidates = [
+    cookieStore.get("next-auth.session-token"),
+    cookieStore.get("__Secure-next-auth.session-token"),
+  ].filter((c): c is { name: string; value: string } => !!c?.value);
+
+  if (candidates.length === 0) {
     throw new Error("No se pudo obtener la sesión de usuario en el servidor (Posible fallo de cookies o caché).");
   }
-  
-  const decoded = await decode({
-    token: tokenCookie.value,
-    secret: process.env.NEXTAUTH_SECRET as string,
-  });
+
+  // Puede haber dos cookies de sesión (por ejemplo una vieja de otro proyecto en localhost): se usa la primera
+  // que descifre con nuestra clave. La firma se sigue verificando igual; solo no se queda con la primera que falle.
+  let decoded: Awaited<ReturnType<typeof decode>> = null;
+  for (const cookie of candidates) {
+    try {
+      decoded = await decode({ token: cookie.value, secret: process.env.NEXTAUTH_SECRET as string });
+      if (decoded) break;
+    } catch {
+      // cookie de otra clave o dañada: se prueba la siguiente
+    }
+  }
   
   if (!decoded || !decoded.id) {
     throw new Error("Token de sesión inválido o expirado.");
