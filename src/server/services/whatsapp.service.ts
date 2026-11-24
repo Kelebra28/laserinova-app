@@ -506,7 +506,7 @@ export async function processIncomingMessage(entry: any) {
 }
 
 // Mensajes del cliente que disparan al bot (los stickers se guardan como IMAGE pero no lo disparan).
-const BOT_TRIGGER_TYPES = ['TEXT', 'IMAGE', 'AUDIO'];
+const BOT_TRIGGER_TYPES = ['TEXT', 'IMAGE', 'AUDIO', 'DOCUMENT'];
 
 async function latestBotTriggerMessage(contactId: string) {
   return prisma.whatsAppMessage.findFirst({
@@ -1623,6 +1623,16 @@ async function runAIAgentResponse(contactId: string) {
       }
 
       if (!responseText) {
+        // Silencio intencional (regla "Cierres de conversación"): si el cliente solo cerró con un
+        // "gracias"/"ok"/emoji y el modelo terminó normal sin texto ni herramientas, no se manda nada.
+        // Cualquier otro texto vacío (bloqueo, corte por tokens, pregunta real) sigue con el mensaje de respaldo.
+        const finish = result.response.candidates?.[0]?.finishReason;
+        const lastClientText = recentMessages.slice().reverse().find((m) => m.direction === 'INBOUND')?.content?.trim() || '';
+        const isClosing = /^(ok(ey|i)?|vale|va|listo|perfecto|excelente|gracias|muchas gracias|de nada|igualmente|saludos|👍|🙏|😊|❤️)([\s,.!¡]+(ok(ey|i)?|vale|listo|perfecto|gracias|muchas gracias|🙏|👍|😊))*[\s.!¡]*$/i.test(lastClientText);
+        if (toolsUsed.length === 0 && String(finish) === 'STOP' && isClosing) {
+          console.log(`[BOT] Cierre del cliente sin respuesta para ${contactId}: no se manda mensaje.`);
+          return;
+        }
         responseText = "Entendido. ¿Tienes alguna otra duda o te puedo ayudar con algo más?";
       }
     } catch (error: any) {
