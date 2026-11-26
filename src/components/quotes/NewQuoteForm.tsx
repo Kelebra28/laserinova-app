@@ -15,6 +15,8 @@ import { toast } from "react-hot-toast";
 import CalculationAudit from "@/components/quotes/CalculationAudit";
 import { ProductCombobox } from "@/components/quotes/ProductCombobox";
 import { findCatalogProduct } from "@/lib/product-match";
+import { findCatalogMaterial } from "@/lib/material-match";
+import { findQuoteClient } from "@/lib/client-match";
 import { productTitle, conceptDetails, swapProductDetails } from "@/lib/quote-prefill";
 
 
@@ -25,9 +27,11 @@ interface NewQuoteFormProps {
   globalCosts: GlobalCosts;
   userId: string;
   initialData?: any;
+  /** Cliente ligado y teléfono del chat del que viene la cotización. */
+  chatContact?: { clientId: string | null; phone: string } | null;
 }
 
-export default function NewQuoteForm({ clients, materials, products = [], globalCosts, userId, initialData }: NewQuoteFormProps) {
+export default function NewQuoteForm({ clients, materials, products = [], globalCosts, userId, initialData, chatContact }: NewQuoteFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
   const router = useRouter();
@@ -81,14 +85,17 @@ export default function NewQuoteForm({ clients, materials, products = [], global
       }
       if (initialData.project) setProject(initialData.project);
       
-      if (initialData.name) {
-        const searchName = initialData.name.toLowerCase().trim();
-        const matchedClient = clients.find(c => c.name.toLowerCase().includes(searchName) || searchName.includes(c.name.toLowerCase()));
-        if (matchedClient) {
-          setClientId(matchedClient.id);
-        } else {
-          setProspectName(initialData.name);
-        }
+      // El cliente del chat manda; nunca se elige a otro solo porque el nombre se parece.
+      const matchedClient = findQuoteClient<any>(clients, {
+        linkedClientId: chatContact?.clientId,
+        phone: chatContact?.phone,
+        email: initialData.email,
+        name: initialData.name,
+      });
+      if (matchedClient) {
+        setClientId(matchedClient.id);
+      } else if (initialData.name) {
+        setProspectName(initialData.name);
       }
       
       if (initialData.email) setProspectEmail(initialData.email);
@@ -116,16 +123,9 @@ export default function NewQuoteForm({ clients, materials, products = [], global
               toast("No identifiqué el producto: elígelo en «Artículo del Catálogo».", { id: "prefill-product", duration: 8000 });
             }
           } else {
-            // Buscar en materiales
-            let bestScore = 0;
-            const searchTokens = searchName.split(/\s+/);
-            for (const m of materials) {
-              const mName = m.name.toLowerCase();
-              if (mName === searchName) { matchedMaterialId = m.id; break; }
-              let score = 0;
-              searchTokens.forEach((t: string) => { if (t.length > 1 && mName.includes(t)) score++; });
-              const penalty = Math.abs(mName.length - searchName.length) * 0.01;
-              if (score - penalty > bestScore) { bestScore = score - penalty; matchedMaterialId = m.id; }
+            matchedMaterialId = findCatalogMaterial<any>(materials, initialData.material)?.id || "";
+            if (!matchedMaterialId && (initType === "CORTE" || initType === "GRABADO")) {
+              toast(`No identifiqué el material «${initialData.material}»: elígelo en la lista.`, { id: "prefill-material", duration: 8000 });
             }
           }
         }
