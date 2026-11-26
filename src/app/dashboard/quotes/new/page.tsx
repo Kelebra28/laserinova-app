@@ -18,6 +18,12 @@ export default async function NewQuotePage({
     orderBy: { name: "asc" },
   });
 
+  // Si viene de un chat, su cliente y teléfono se leen aquí para no ponerlos en la URL.
+  const contactId = typeof resolvedParams.contactId === "string" ? resolvedParams.contactId : "";
+  const chatContact = contactId
+    ? await prisma.whatsAppContact.findUnique({ where: { id: contactId }, select: { clientId: true, phone: true } })
+    : null;
+
   const materials = await prisma.material.findMany({
     include: { category: true },
     orderBy: { name: "asc" },
@@ -61,6 +67,7 @@ export default async function NewQuotePage({
         globalCosts={safeGlobals} 
         userId={(session?.user as any)?.id}
         initialData={resolvedParams}
+        chatContact={chatContact}
       />
     </div>
   );
