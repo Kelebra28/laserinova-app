@@ -110,10 +110,12 @@ export const NO_PENDING_MESSAGE = '✅ No hay pendientes por contestar en los ú
 
 /** Texto de WhatsApp admite 4096 caracteres. */
 export const SUMMARY_MAX_CHARS = 3800;
+/** En el mensaje van solo los más antiguos de cada grupo; la lista completa está en la liga. */
+export const SUMMARY_MAX_PER_GROUP = 5;
 
 /**
  * Mensaje para los administradores. La liga va en la segunda línea para que sobreviva si WhatsApp lo manda
- * como plantilla (que se recorta). El espacio se reparte por turnos entre grupos, empezando por los urgentes.
+ * como plantilla (que se recorta). Los grupos van en orden de urgencia, con los que más llevan esperando primero.
  */
 export function buildSummaryMessage(items: PendingItem[], opts: { now: Date; link: string; maxChars?: number }): string {
   const max = opts.maxChars ?? SUMMARY_MAX_CHARS;
@@ -132,7 +134,7 @@ export function buildSummaryMessage(items: PendingItem[], opts: { now: Date; lin
 
   // Grupo por grupo en orden de urgencia: los urgentes se llenan primero.
   for (const g of groups) {
-    for (const item of g.all) {
+    for (const item of g.all.slice(0, SUMMARY_MAX_PER_GROUP)) {
       const detail = g.kind === 'quote' ? '' : ` · ${item.detail}`;
       g.shown.push(`• ${item.name} · ${formatPhone(item.phone)} · ${formatAge(item.since, opts.now)}${detail}`);
       if (render().length > max) { g.shown.pop(); break; }
