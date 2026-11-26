@@ -13,3 +13,4 @@ export * from "./dashboard.constants";
 export * from "./finance.constants";
 export * from "./reconciliation.constants";
 export * from "./bank-overview.constants";
+export * from "./chat.constants";

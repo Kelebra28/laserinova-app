@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useWhatsAppEvents } from '@/hooks/useWhatsAppEvents';
 import { getPusherClient } from '@/lib/pusher';
 import { sendManualMessageAction, getMessagesAction, toggleBotModeAction, archiveContactAction, simulateIncomingMessageAction, retryBotReplyAction, createDummyContactAction, sendMediaMessageAction, generateSummaryAction, deleteConversationAction, getContactsAction } from '@/server/actions/whatsapp.actions';
@@ -15,18 +15,22 @@ import QuickRepliesManagerModal from '@/components/whatsapp/QuickRepliesManagerM
 import { useQuickReplies } from '@/hooks/useQuickReplies';
 import { filterQuickReplies, slashQuery, type QuickReply } from '@/lib/quick-replies';
 import ImageViewer, { type ViewerImage } from './ImageViewer';
-import { Zap, Bot, User as UserIcon, Send, Image as ImageIcon, FileText, Check, CheckCheck, Plus, X, Smile, Reply, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator, Download, ExternalLink, Clock, AlertTriangle, AlertCircle, Archive, ArchiveRestore } from 'lucide-react';
+import MessageList from '@/components/whatsapp/chat/MessageList';
+import ScrollToBottomButton from '@/components/whatsapp/chat/ScrollToBottomButton';
+import StagedFileThumb from '@/components/whatsapp/chat/StagedFileThumb';
+import { useStickToBottom } from '@/hooks/useStickToBottom';
+import { compressImage } from '@/lib/image-compress';
+import { cn } from '@/lib/cn';
+import { mediaSrcOf, optimisticMediaType } from '@/lib/chat-media';
+import { CHAT_MAX_UPLOAD_BYTES, CHAT_MAX_UPLOAD_LABEL, OPTIMISTIC_ID_PREFIX } from '@/constants/chat.constants';
+import { Zap, Bot, User as UserIcon, Send, FileText, Check, CheckCheck, Plus, X, Mic, Trash2, Square, ChevronLeft, Sparkles, Loader2, RefreshCw, Search, MessageCircle, Calculator, Clock, AlertTriangle, AlertCircle, Archive, ArchiveRestore } from 'lucide-react';
 import { windowState, formatDuration, formatDurationShort } from '@/lib/whatsapp-window';
-import { sendReengageAction, getChatLatestQuoteAction, resolveQuoteSuggestionAction } from '@/server/actions/whatsapp-notify.actions';
+import { sendReengageAction, getChatLatestQuoteAction } from '@/server/actions/whatsapp-notify.actions';
 import { sendQuoteViaWhatsAppAction } from '@/server/actions/quote.actions';
 import { toast } from 'react-hot-toast';
 
 type Contact = any;
 type Message = any;
-
-function cn(...classes: (string | undefined | null | false)[]) {
-  return classes.filter(Boolean).join(' ');
-}
 
 const AVATAR_GRADIENTS = [
   'from-emerald-500 to-teal-600', 'from-sky-500 to-blue-600', 'from-violet-500 to-purple-600',
@@ -58,14 +62,6 @@ function listTime(d: Date) {
   const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
   if (d.toDateString() === yesterday.toDateString()) return 'Ayer';
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit' });
-}
-
-function dayLabel(d: Date) {
-  const now = new Date();
-  if (d.toDateString() === now.toDateString()) return 'Hoy';
-  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
-  if (d.toDateString() === yesterday.toDateString()) return 'Ayer';
-  return d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' as const } : {}) });
 }
 
 function previewOf(m: any): string {
@@ -108,10 +104,9 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
   };
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [simulatorMode, setSimulatorMode] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const [preparingFiles, setPreparingFiles] = useState(0);
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
-  const [reactionMenuFor, setReactionMenuFor] = useState<string | null>(null);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [isCalculateOpen, setIsCalculateOpen] = useState(false);
   const [viewerImageId, setViewerImageId] = useState<string | null>(null);
@@ -120,7 +115,44 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
   const [summaryCache, setSummaryCache] = useState<Record<string, { text: string; messageCount: number }>>({});
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
   const [isDeletingContact, setIsDeletingContact] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scroll = useStickToBottom(activeContact?.id ?? null, messages);
+  // Chats ya abiertos: al volver se muestran al instante mientras se actualizan por detrás.
+  const messagesCacheRef = useRef(new Map<string, Message[]>());
+  const activeContactIdRef = useRef<string | null>(null);
+  activeContactIdRef.current = activeContact?.id ?? null;
+
+  useEffect(() => {
+    const id = activeContactIdRef.current;
+    if (id && messages.length > 0 && messages.every(m => m.contactId === id)) messagesCacheRef.current.set(id, messages);
+  }, [messages]);
+
+  /** Trae los mensajes sin vaciar la pantalla; conserva los que aún se están enviando. */
+  const refreshMessages = async (contactId: string) => {
+    const res = await getMessagesAction(contactId);
+    if (!res.success || activeContactIdRef.current !== contactId) return;
+    setMessages(prev => [
+      ...res.data,
+      ...prev.filter(m => m.contactId === contactId && String(m.id).startsWith(OPTIMISTIC_ID_PREFIX)),
+    ]);
+  };
+
+  /** Cambia el mensaje provisional por el confirmado, solo si ese chat sigue abierto. */
+  const settleMessage = (optimisticId: string, message: Message) => {
+    if (activeContactIdRef.current !== message.contactId) return;
+    setMessages(prev => {
+      const rest = prev.filter(m => m.id !== optimisticId);
+      return rest.some(m => m.id === message.id) ? rest : [...rest, message];
+    });
+  };
+  const removeMessage = (id: string) => setMessages(prev => prev.filter(m => m.id !== id));
+
+  const reactToMessage = useCallback((id: string, reaction: string) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, reaction } : m));
+  }, []);
+  const changeMessageContent = useCallback((id: string, content: string) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, content } : m));
+  }, []);
+
 
   // Reloj para el aviso de la ventana de 24 h de WhatsApp (se refresca cada minuto).
   const [now, setNow] = useState(() => Date.now());
@@ -159,15 +191,11 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
 
       // If active chat, append message
       if (activeContact?.id === contact.id) {
-        if (message.mediaUrl === 'FETCH_REQUIRED') {
-          // La imagen era muy grande para Pusher, recargar historial desde DB
-          loadMessages(contact);
-        } else {
-          setMessages(prev => {
-            if (prev.find(m => m.id === message.id)) return prev;
-            return [...prev, message];
-          });
-        }
+        // Los archivos llegan sin contenido (FETCH_REQUIRED) y se piden a /api/media: no hace falta recargar el chat.
+        setMessages(prev => {
+          if (prev.find(m => m.id === message.id)) return prev;
+          return [...prev, message];
+        });
       } else if (message.direction === 'INBOUND' && !contact.isAdmin) {
         // Si el chat NO está abierto y es un mensaje entrante, incrementar contador
         setUnreadCounts(prev => ({
@@ -214,8 +242,12 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
   };
 
   const loadMessages = async (contact: Contact) => {
+    const cached = messagesCacheRef.current.get(contact.id);
+    // Se marca ya: si se cambia de chat antes de que responda el servidor, la respuesta vieja se descarta.
+    activeContactIdRef.current = contact.id;
     setActiveContact(contact);
-    setLoadingMessages(true);
+    setMessages(cached ?? []);
+    setLoadingMessages(!cached);
     // Limpiar notificaciones al abrir el chat
     setUnreadCounts(prev => ({ ...prev, [contact.id]: 0 }));
     
@@ -227,30 +259,22 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
     }
 
     try {
-      const result = await getMessagesAction(contact.id);
-      if (result.success) {
-        setMessages(result.data);
-      }
+      await refreshMessages(contact.id);
     } catch (e) {
       toast.error('Error al cargar mensajes');
     }
-    setLoadingMessages(false);
+    if (activeContactIdRef.current === contact.id) setLoadingMessages(false);
   };
 
   // Resincroniza al volver a la app o al reconectar Pusher: en la PWA el websocket se duerme en segundo plano
   // y los mensajes que llegaron mientras tanto no se verían hasta recargar.
-  const activeContactIdRef = useRef<string | null>(null);
-  activeContactIdRef.current = activeContact?.id ?? null;
   useEffect(() => {
     const resync = async () => {
       try {
         const res = await getContactsAction();
         if (res.success) setContacts(res.data);
         const activeId = activeContactIdRef.current;
-        if (activeId) {
-          const msgs = await getMessagesAction(activeId);
-          if (msgs.success) setMessages(msgs.data);
-        }
+        if (activeId) await refreshMessages(activeId);
       } catch {}
     };
     const onVisible = () => { if (document.visibilityState === 'visible') resync(); };
@@ -275,10 +299,6 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
     if (target) loadMessages(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialContactId]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
 
   useEffect(() => {
     return () => {
@@ -455,60 +475,76 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
     setStagedFiles([]);
     setRecordedAudio(null);
     setReplyingTo(null);
+    scroll.scrollToBottom();
 
     // Si hay archivos o audio, los manejamos con sendMediaMessageAction
     if (filesToSend.length > 0 || audioToSend) {
-      setIsUploading(true);
-      try {
-        if (audioToSend) {
-          const formData = new FormData();
-          const audioMime = (audioToSend.type || 'audio/webm').split(';')[0];
-          const audioExt = audioMime === 'audio/ogg' ? 'ogg' : audioMime === 'audio/mp4' ? 'm4a' : 'webm';
-          const audioFile = new File([audioToSend], `audio_message_${Date.now()}.${audioExt}`, { type: audioMime });
-          formData.append('file', audioFile);
-          formData.append('contactId', activeContact.id);
-          formData.append('simulatorMode', String(simulatorMode));
-          
+      const contactId: string = activeContact.id;
+      const uploads: { file: File; caption: string }[] = [];
+      if (audioToSend) {
+        const audioMime = (audioToSend.type || 'audio/webm').split(';')[0];
+        const audioExt = audioMime === 'audio/ogg' ? 'ogg' : audioMime === 'audio/mp4' ? 'm4a' : 'webm';
+        uploads.push({ file: new File([audioToSend], `audio_message_${Date.now()}.${audioExt}`, { type: audioMime }), caption: '' });
+      }
+      // El texto va como pie solo del primer archivo
+      filesToSend.forEach((file, i) => uploads.push({ file, caption: i === 0 ? textToSend.trim() : '' }));
+
+      // Las burbujas aparecen al instante con reloj, como en WhatsApp
+      const pending = uploads.map(({ file, caption }, i) => {
+        const id = `${OPTIMISTIC_ID_PREFIX}${Date.now()}_${i}`;
+        const type = optimisticMediaType(file.type);
+        return {
+          file,
+          caption,
+          message: {
+            id,
+            messageId: id,
+            contactId,
+            direction: simulatorMode ? 'INBOUND' : 'OUTBOUND',
+            type,
+            content: caption || (type === 'DOCUMENT' ? file.name : ''),
+            mimeType: file.type,
+            mediaUrl: URL.createObjectURL(file),
+            status: 'SENDING',
+            timestamp: new Date().toISOString(),
+          },
+        };
+      });
+      setMessages(prev => [...prev, ...pending.map(p => p.message)]);
+
+      // Subir cada archivo secuencialmente
+      for (const { file, caption, message } of pending) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('contactId', contactId);
+        formData.append('simulatorMode', String(simulatorMode));
+        if (caption) formData.append('caption', caption);
+
+        let error: string | null = null;
+        try {
           const res = await sendMediaMessageAction(formData);
           if (res.success && res.message) {
-            setMessages(prev => {
-              if (prev.some(m => m.id === res.message.id)) return prev;
-              return [...prev, res.message];
-            });
-            bumpContactPreview(res.message);
-          }
-        }
-
-        // Subir cada imagen/archivo secuencialmente
-        for (let i = 0; i < filesToSend.length; i++) {
-          const file = filesToSend[i];
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('contactId', activeContact.id);
-          formData.append('simulatorMode', String(simulatorMode));
-          
-          // Solo adjuntar el texto al primer archivo
-          if (i === 0 && textToSend.trim()) {
-            formData.append('caption', textToSend);
-          }
-
-          const res = await sendMediaMessageAction(formData);
-          if (res.success && res.message) {
-            setMessages(prev => {
-              if (prev.some(m => m.id === res.message.id)) return prev;
-              return [...prev, res.message];
-            });
+            settleMessage(message.id, res.message);
             bumpContactPreview(res.message);
           } else {
-            toast.error(res.error || `Error al subir archivo ${i+1}`);
+            error = res.error || 'No se pudo enviar';
+          }
+        } catch {
+          error = 'No se pudo subir (revisa tu conexión)';
+        }
+
+        if (error) {
+          toast.error(`${file.name}: ${error}`, { duration: 8000 });
+          removeMessage(message.id);
+          // El archivo vuelve a la caja para reintentar sin tener que buscarlo otra vez
+          if (activeContactIdRef.current === contactId && !file.name.startsWith('audio_message_')) {
+            setStagedFiles(prev => [...prev, file]);
+            if (caption) setInputText(prev => prev || caption);
           }
         }
-      } catch (err) {
-        toast.error('Error al subir archivos');
-      } finally {
-        setIsUploading(false);
+        URL.revokeObjectURL(message.mediaUrl);
       }
-      
+
       // Si no hubo primer archivo pero sí audio y texto, el texto se envía por separado
       if (filesToSend.length === 0 && textToSend.trim()) {
         await handleTextSend(textToSend, replyingToMessage);
@@ -534,7 +570,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
       direction: simulatorMode ? 'INBOUND' : 'OUTBOUND',
       type: 'TEXT',
       content: finalContent,
-      status: 'SENT',
+      status: 'SENDING',
       timestamp: new Date().toISOString(),
     };
     setMessages(prev => [...prev, optimisticMessage]);
@@ -543,11 +579,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
       if (simulatorMode) {
         const res = await simulateIncomingMessageAction(activeContact!.id, finalContent);
         if (res.success && res.message) {
-          setMessages(prev => {
-            const filtered = prev.filter(m => m.id !== optimisticMessage.id);
-            if (filtered.some(m => m.id === res.message!.id)) return filtered;
-            return [...filtered, res.message];
-          });
+          settleMessage(optimisticMessage.id, res.message);
           bumpContactPreview(res.message);
         } else {
           setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id));
@@ -556,15 +588,11 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
       } else {
         const res = await sendManualMessageAction(activeContact!.id, finalContent);
         if (res.success && res.message) {
-          setMessages(prev => {
-            const filtered = prev.filter(m => m.id !== optimisticMessage.id);
-            if (filtered.some(m => m.id === res.message!.id)) return filtered;
-            return [...filtered, res.message];
-          });
+          settleMessage(optimisticMessage.id, res.message);
           bumpContactPreview(res.message);
           if (activeContact!.botMode) {
             const updatedContact = { ...activeContact!, botMode: false };
-            setActiveContact(updatedContact);
+            setActiveContact((prev: any) => prev?.id === updatedContact.id ? updatedContact : prev);
             setContacts(prev => prev.map(c => c.id === updatedContact.id ? updatedContact : c));
           }
         } else {
@@ -578,21 +606,32 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const picked = Array.from(e.target.files || []);
-    e.target.value = '';
-    if (picked.length === 0 || !activeContact) return;
-    // Límite del envío (y de WhatsApp para video); se avisa en vez de fallar al subir
-    const MAX_BYTES = 16 * 1024 * 1024;
-    const tooBig = picked.filter(f => f.size > MAX_BYTES);
-    if (tooBig.length > 0) toast.error(`${tooBig.map(f => f.name).join(', ')}: pesa más de 16 MB y no se puede enviar`);
-    const files = picked.filter(f => f.size <= MAX_BYTES);
-    if (files.length === 0) return;
+  /** Único camino para adjuntar (botón, arrastrar o pegar): comprime fotos y avisa lo que no cabe. */
+  const stageFiles = async (picked: File[]) => {
+    if (picked.length === 0) return;
+    const contactId = activeContactIdRef.current;
+    setPreparingFiles(n => n + 1);
+    try {
+      const prepared: File[] = [];
+      const tooBig: string[] = [];
+      // De una en una: varias fotos grandes a la vez agotan la memoria del celular
+      for (const original of picked) {
+        const file = await compressImage(original).catch(() => original);
+        if (file.size <= CHAT_MAX_UPLOAD_BYTES) prepared.push(file);
+        else tooBig.push(original.name);
+      }
+      if (tooBig.length > 0) toast.error(`${tooBig.join(', ')}: pesa más de ${CHAT_MAX_UPLOAD_LABEL} y no se puede enviar desde el CRM`, { duration: 8000 });
+      if (prepared.length > 0 && activeContactIdRef.current === contactId) setStagedFiles(prev => [...prev, ...prepared]);
+    } finally {
+      setPreparingFiles(n => n - 1);
+    }
+  };
 
-    // Agregar nuevos archivos a los que ya estaban (si queremos permitir acumular)
-    setStagedFiles(prev => [...prev, ...files]);
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files || []);
     // Reset input para que pueda seleccionar el mismo archivo si lo borra
     e.target.value = '';
+    if (activeContact) stageFiles(picked);
   };
 
   const toggleBotMode = async () => {
@@ -796,78 +835,8 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
   });
 
 
-  // Ventana de 24 h del chat abierto: se toma de los mensajes cargados (lo más fresco) y si no, de la lista.
-  const activeLastInbound = (() => {
-    if (!activeContact) return null;
-    const fromMsgs = [...messages].reverse().find(m => m.direction === 'INBOUND' && m.type !== 'REACTION')?.timestamp;
-    return fromMsgs ?? activeContact.lastInboundAt ?? null;
-  })();
-  const activeWindow = !activeContact || activeContact.isAdmin || simulatorMode || activeContact.name?.includes('Simulador')
-    ? null
-    : windowState(activeLastInbound, now);
-  return (
-    <div className="flex h-full bg-[#0b141a] text-[#e9edef] border-x border-[#222d34]">
-      {/* ───────── Lista de chats ───────── */}
-      <aside className={cn("flex flex-col bg-[#111b21] overflow-hidden border-r border-[#222d34]", activeContact ? "hidden md:flex md:w-[290px] xl:w-[380px] md:shrink-0" : "w-full md:w-[290px] xl:w-[380px] md:shrink-0")}>
-        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-          <h1 className="text-xl font-semibold tracking-tight text-[#e9edef]">Chats</h1>
-          <div className="flex items-center gap-1">
-            <button type="button" onClick={() => window.location.reload()} title="Recargar App" className="p-2 rounded-full text-[#8696a0] hover:text-[#e9edef] hover:bg-[#202c33] transition-colors">
-              <RefreshCw size={18} />
-            </button>
-            <button type="button" onClick={createDummyContact} title="Crear contacto de prueba" className="p-2 rounded-full text-[#8696a0] hover:text-[#e9edef] hover:bg-[#202c33] transition-colors">
-              <Plus size={20} />
-            </button>
-          </div>
-        </div>
-
-        <div className="px-3 pb-2">
-          <div className="flex items-center gap-2 bg-[#202c33] rounded-xl px-3 h-10 focus-within:ring-1 focus-within:ring-[#00a884]/60 transition-shadow">
-            <Search size={16} className="text-[#8696a0] shrink-0" />
-            <input
-              placeholder="Buscar por nombre o teléfono"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 bg-transparent border-none outline-none text-sm !text-[#e9edef] placeholder:text-[#8696a0]"
-            />
-            {searchQuery && (
-              <button type="button" onClick={() => setSearchQuery('')} className="text-[#8696a0] hover:text-[#e9edef]">
-                <X size={14} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto no-scrollbar">
-          {([['all', 'Todos'], ['unread', 'No leídos'], ['bot', 'Bot'], ['human', 'Humano'], ['admin', 'Admins'], ['archived', 'Archivados']] as const).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setListFilter(key)}
-              className={cn(
-                "shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors",
-                listFilter === key ? "bg-[#00a884]/20 text-[#35d6b5]" : "bg-[#202c33] text-[#8696a0] hover:text-[#e9edef]"
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {contacts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-[#8696a0] p-8 text-center space-y-4">
-              <MessageCircle size={40} className="opacity-40" />
-              <p className="text-sm">No hay chats recientes</p>
-              <Button type="button" onClick={createDummyContact} className="bg-[#202c33] hover:bg-[#2a3942] text-[#e9edef] border-none">
-                <Plus size={16} className="mr-2" />
-                Crear chat de prueba
-              </Button>
-            </div>
-          ) : visibleContacts.length === 0 ? (
-            <div className="p-8 text-center text-sm text-[#8696a0]">Ningún chat coincide con tu búsqueda.</div>
-          ) : (
-            visibleContacts.map(contact => {
+  // Memoizada: sin esto, cada tecla en la caja de texto volvía a dibujar toda la lista de chats.
+  const contactRows = useMemo(() => visibleContacts.map(contact => {
               const last = contact.messages?.[0];
               const unread = unreadCounts[contact.id] || 0;
               const isActive = activeContact?.id === contact.id;
@@ -952,7 +921,82 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                   </div>
                 </div>
               );
-            })
+            }),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [contacts, searchQuery, listFilter, unreadCounts, activeContact, now]);
+
+  // Ventana de 24 h del chat abierto: se toma de los mensajes cargados (lo más fresco) y si no, de la lista.
+  const activeLastInbound = (() => {
+    if (!activeContact) return null;
+    const fromMsgs = [...messages].reverse().find(m => m.direction === 'INBOUND' && m.type !== 'REACTION')?.timestamp;
+    return fromMsgs ?? activeContact.lastInboundAt ?? null;
+  })();
+  const activeWindow = !activeContact || activeContact.isAdmin || simulatorMode || activeContact.name?.includes('Simulador')
+    ? null
+    : windowState(activeLastInbound, now);
+  return (
+    <div className="flex h-full bg-[#0b141a] text-[#e9edef] border-x border-[#222d34]">
+      {/* ───────── Lista de chats ───────── */}
+      <aside className={cn("flex flex-col bg-[#111b21] overflow-hidden border-r border-[#222d34]", activeContact ? "hidden md:flex md:w-[290px] xl:w-[380px] md:shrink-0" : "w-full md:w-[290px] xl:w-[380px] md:shrink-0")}>
+        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+          <h1 className="text-xl font-semibold tracking-tight text-[#e9edef]">Chats</h1>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => window.location.reload()} title="Recargar App" className="p-2 rounded-full text-[#8696a0] hover:text-[#e9edef] hover:bg-[#202c33] transition-colors">
+              <RefreshCw size={18} />
+            </button>
+            <button type="button" onClick={createDummyContact} title="Crear contacto de prueba" className="p-2 rounded-full text-[#8696a0] hover:text-[#e9edef] hover:bg-[#202c33] transition-colors">
+              <Plus size={20} />
+            </button>
+          </div>
+        </div>
+
+        <div className="px-3 pb-2">
+          <div className="flex items-center gap-2 bg-[#202c33] rounded-xl px-3 h-10 focus-within:ring-1 focus-within:ring-[#00a884]/60 transition-shadow">
+            <Search size={16} className="text-[#8696a0] shrink-0" />
+            <input
+              placeholder="Buscar por nombre o teléfono"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 bg-transparent border-none outline-none text-sm !text-[#e9edef] placeholder:text-[#8696a0]"
+            />
+            {searchQuery && (
+              <button type="button" onClick={() => setSearchQuery('')} className="text-[#8696a0] hover:text-[#e9edef]">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto no-scrollbar">
+          {([['all', 'Todos'], ['unread', 'No leídos'], ['bot', 'Bot'], ['human', 'Humano'], ['admin', 'Admins'], ['archived', 'Archivados']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setListFilter(key)}
+              className={cn(
+                "shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors",
+                listFilter === key ? "bg-[#00a884]/20 text-[#35d6b5]" : "bg-[#202c33] text-[#8696a0] hover:text-[#e9edef]"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {contacts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-[#8696a0] p-8 text-center space-y-4">
+              <MessageCircle size={40} className="opacity-40" />
+              <p className="text-sm">No hay chats recientes</p>
+              <Button type="button" onClick={createDummyContact} className="bg-[#202c33] hover:bg-[#2a3942] text-[#e9edef] border-none">
+                <Plus size={16} className="mr-2" />
+                Crear chat de prueba
+              </Button>
+            </div>
+          ) : visibleContacts.length === 0 ? (
+            <div className="p-8 text-center text-sm text-[#8696a0]">Ningún chat coincide con tu búsqueda.</div>
+          ) : (
+            contactRows
           )}
         </div>
       </aside>
@@ -966,10 +1010,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
             // Arrastrar archivos al chat los deja listos para enviar, como en WhatsApp Web
             if (e.dataTransfer.files.length === 0) return;
             e.preventDefault();
-            const dropped = Array.from(e.dataTransfer.files);
-            const ok = dropped.filter(f => f.size <= 16 * 1024 * 1024);
-            if (ok.length < dropped.length) toast.error('Algunos archivos pesan más de 16 MB y no se agregaron');
-            if (ok.length) setStagedFiles(prev => [...prev, ...ok]);
+            stageFiles(Array.from(e.dataTransfer.files));
           }}
         >
           <div className="absolute inset-0 pointer-events-none z-0 opacity-100 [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.04)_1px,transparent_0)] [background-size:22px_22px]" />
@@ -1098,271 +1139,28 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
           </header>
 
           {/* Mensajes */}
-          <div className="flex-1 overflow-y-auto px-3 md:px-[6%] py-4 z-10 relative">
-            {loadingMessages ? (
-              <div className="flex items-center justify-center gap-2 text-[#8696a0] my-8 text-sm">
-                <Loader2 size={16} className="animate-spin" /> Cargando mensajes...
-              </div>
-            ) : (
-              messages.map((msg, idx) => {
-                const prev = messages[idx - 1];
-                const date = new Date(msg.timestamp);
-                const showDay = !prev || new Date(prev.timestamp).toDateString() !== date.toDateString();
-                const dayChip = showDay && (
-                  <div className="flex justify-center my-3">
-                    <span className="bg-[#182229] text-[#8696a0] text-xs font-medium px-3 py-1 rounded-lg shadow-sm capitalize">{dayLabel(date)}</span>
+          <div className="relative flex-1 min-h-0 z-10 flex flex-col">
+            <div ref={scroll.containerRef} onScroll={scroll.onScroll} className="flex-1 overflow-y-auto overscroll-contain px-3 md:px-[6%] py-4">
+              <div ref={scroll.contentRef}>
+                {loadingMessages ? (
+                  <div className="flex items-center justify-center gap-2 text-[#8696a0] my-8 text-sm">
+                    <Loader2 size={16} className="animate-spin" /> Cargando mensajes...
                   </div>
-                );
-
-                const isInternal = msg.direction === 'INTERNAL';
-                const isSimulatorChat = simulatorMode;
-                const alignRight = isInternal ? false : isSimulatorChat ? (msg.direction === 'INBOUND') : (msg.direction === 'OUTBOUND');
-
-                if (isInternal) {
-                  const parts = msg.content?.split('|||') || [];
-                  const displayContent = parts[0];
-                  let buttonLink = null;
-                  let buttonText = "";
-
-                  const suggestion = parts[1]?.startsWith('SUGGEST:') ? parts[1] : null;
-                  const suggestionDone = parts[1]?.startsWith('SUGGEST_DONE:') ? parts[1].replace('SUGGEST_DONE:', '') : null;
-
-                  if (parts[1] && !suggestion && !suggestionDone) {
-                    if (parts[1].startsWith('QUOTE:')) {
-                      const quoteId = parts[1].replace('QUOTE:', '');
-                      buttonLink = `/dashboard/quotes/${quoteId}`;
-                      buttonText = "Ver Cotización";
-                    } else {
-                      try {
-                        const data = JSON.parse(decodeURIComponent(parts[1]));
-                        let queryParams = `?contactId=${activeContact.id}`;
-                        if (data.project) queryParams += `&project=${encodeURIComponent(data.project)}`;
-                        if (data.material) queryParams += `&material=${encodeURIComponent(data.material)}`;
-                        if (data.width) queryParams += `&w=${data.width}`;
-                        if (data.height) queryParams += `&h=${data.height}`;
-                        if (data.qty) queryParams += `&qty=${data.qty}`;
-                        if (data.estimatedTimeMin) queryParams += `&t=${data.estimatedTimeMin}`;
-                        if (data.name) queryParams += `&name=${encodeURIComponent(data.name)}`;
-                        if (data.email) queryParams += `&email=${encodeURIComponent(data.email)}`;
-                        if (data.type) queryParams += `&type=${encodeURIComponent(data.type)}`;
-                        if (data.description) queryParams += `&desc=${encodeURIComponent(data.description)}`;
-                        if (data.productId) queryParams += `&productId=${encodeURIComponent(data.productId)}`;
-                        queryParams += `&msgId=${msg.id}`;
-                        buttonLink = `/dashboard/quotes/new${queryParams}`;
-                        buttonText = "Generar Cotización";
-                      } catch(e) {}
-                    }
-                  }
-
-                  return (
-                    <div key={msg.id}>
-                      {dayChip}
-                      <div className="flex justify-center w-full my-2">
-                        <div className="bg-amber-400/[0.07] border border-amber-400/20 text-amber-100/90 px-4 py-2.5 rounded-xl text-[13px] max-w-[90%] md:max-w-[75%] shadow-sm">
-                          <div className="font-semibold mb-1 flex items-center gap-1.5 text-amber-300 text-xs uppercase tracking-wide">
-                            <Bot size={13} /> Nota interna · Sistema
-                          </div>
-                          <p className="whitespace-pre-wrap text-left break-words">{displayContent}</p>
-                          {suggestion && (
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              <button
-                                onClick={async () => {
-                                  const r = await resolveQuoteSuggestionAction(msg.id, 'CONFIRM');
-                                  if (r.success) { setMessages(prev => prev.map(x => x.id === msg.id ? { ...x, content: r.content } : x)); toast.success(r.outcome); }
-                                  else toast.error(r.error);
-                                }}
-                                className="inline-flex items-center gap-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
-                              >
-                                <Check size={14} /> {suggestion.startsWith('SUGGEST:ACCEPT') ? 'Confirmar aceptada' : 'Confirmar rechazada'}
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  const r = await resolveQuoteSuggestionAction(msg.id, 'DISMISS');
-                                  if (r.success) setMessages(prev => prev.map(x => x.id === msg.id ? { ...x, content: r.content } : x));
-                                  else toast.error(r.error);
-                                }}
-                                className="inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 text-amber-100/80 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
-                              >
-                                <X size={14} /> Ignorar
-                              </button>
-                            </div>
-                          )}
-                          {suggestionDone && <p className="mt-1.5 text-xs font-semibold text-amber-300/90">✔ {suggestionDone}</p>}
-                          {buttonLink && buttonText !== "Generar Cotización" && (
-                            <Link
-                              href={buttonLink}
-                              className="mt-2 inline-flex items-center gap-1.5 bg-amber-400/15 hover:bg-amber-400/25 text-amber-200 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
-                            >
-                              <FileText size={14} /> {buttonText}
-                            </Link>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                // Las reacciones se muestran pegadas al mensaje, nunca como aviso aparte
-                if (msg.type === 'REACTION') return null;
-
-                const sameAsPrev = !!prev && !showDay && prev.direction === msg.direction && prev.direction !== 'INTERNAL' && prev.type !== 'REACTION'
-                  && date.getTime() - new Date(prev.timestamp).getTime() < 5 * 60 * 1000;
-                const isSticker = msg.type === 'IMAGE' && msg.content === '🎭 Sticker';
-                const quoted = typeof msg.content === 'string' && msg.type === 'TEXT' ? msg.content.match(/^↪️ En respuesta a «([\s\S]*?)»\n([\s\S]*)$/) : null;
-                const bodyText = quoted ? quoted[2] : msg.content;
-                const mediaSrc = msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : `/api/media/${msg.id}`;
-                const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const ticks = alignRight && (msg.status === 'FAILED' ? (
-                  <span className="inline-flex text-red-400" title="WhatsApp no entregó este mensaje (posiblemente pasaron más de 24 h desde que escribió el cliente)">
-                    <AlertCircle size={15} />
-                  </span>
                 ) : (
-                  <span className={cn("inline-flex", msg.status === 'READ' ? "text-[#53bdeb]" : "text-white/50")}>
-                    {msg.status === 'SENT' ? <Check size={15} /> : <CheckCheck size={15} />}
-                  </span>
-                ));
-
-                return (
-                  <div key={msg.id}>
-                    {dayChip}
-                    <div className={cn("flex group items-center", alignRight ? "justify-end" : "justify-start", sameAsPrev ? "mt-0.5" : "mt-2")}>
-
-                      {/* Acciones al pasar el mouse (reaccionar / responder) */}
-                      <div className={cn("hidden group-hover:flex items-center gap-1 mx-2", alignRight ? "order-1" : "order-2")}>
-                        <button type="button" onClick={() => setReactionMenuFor(reactionMenuFor === msg.id ? null : msg.id)} className="p-1.5 rounded-full bg-[#1f2c34] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#2a3942] transition-colors relative shadow-sm border border-[#2a3942]">
-                          <Smile size={15} />
-                          {reactionMenuFor === msg.id && (
-                            <div className="absolute bottom-full mb-2 -translate-x-1/2 left-1/2 bg-[#233138] p-2 rounded-full shadow-xl border border-[#2a3942] flex gap-2 z-50">
-                              {['👍','❤️','😂','😮','😢','🙏'].map(emoji => (
-                                <div key={emoji} onClick={(e) => { e.stopPropagation(); setMessages(prev => prev.map(m => m.id === msg.id ? {...m, reaction: emoji} : m)); setReactionMenuFor(null); }} className="hover:scale-125 cursor-pointer transition-transform text-lg px-1">{emoji}</div>
-                              ))}
-                            </div>
-                          )}
-                        </button>
-                        <button type="button" onClick={() => setReplyingTo(msg)} className="p-1.5 rounded-full bg-[#1f2c34] text-[#8696a0] hover:text-[#e9edef] hover:bg-[#2a3942] transition-colors shadow-sm border border-[#2a3942]">
-                          <Reply size={15} />
-                        </button>
-                      </div>
-
-                      {isSticker ? (
-                        <div className={cn("relative", alignRight ? "order-2" : "order-1", msg.reaction && "mb-3")}>
-                          <img src={mediaSrc} alt="Sticker" className="max-w-[160px] max-h-[160px] object-contain drop-shadow-lg" />
-                          <span className="absolute bottom-1 right-1 text-[10px] text-white/80 bg-black/45 rounded-full px-1.5 py-0.5 flex items-center gap-1">{time}{ticks}</span>
-                          {msg.reaction && (
-                            <div className={cn("absolute -bottom-3 bg-[#233138] rounded-full px-1.5 py-0.5 text-sm shadow ring-2 ring-[#0b141a] z-10", alignRight ? "right-3" : "left-3")}>{msg.reaction}</div>
-                          )}
-                        </div>
-                      ) : (
-                        <div
-                          className={cn(
-                            "relative max-w-[85%] md:max-w-[68%] px-2.5 pt-1.5 pb-1 text-[14.5px] leading-[1.4] shadow-[0_1px_1px_rgba(0,0,0,0.3)] rounded-2xl",
-                            msg.type === 'IMAGE' && "p-1.5",
-                            alignRight
-                              ? cn("bg-[#005c4b] text-[#e9edef] order-2", !sameAsPrev && "rounded-tr-md")
-                              : cn("bg-[#1f2c34] text-[#e9edef] order-1", !sameAsPrev && "rounded-tl-md"),
-                            msg.reaction && "mb-3"
-                          )}
-                        >
-                          {quoted && (
-                            <div className={cn("mb-1.5 rounded-lg border-l-4 px-2.5 py-1.5 text-[13px]", alignRight ? "bg-black/20 border-[#35d6b5]" : "bg-black/20 border-[#00a884]")}>
-                              <div className="text-[11px] font-semibold text-[#35d6b5] mb-0.5">Respuesta a</div>
-                              <div className="text-[#c7d0d5] line-clamp-2">{quoted[1]}</div>
-                            </div>
-                          )}
-
-                          {msg.type === 'AUDIO' && (
-                            <div className="mb-1 min-w-[230px]">
-                              <audio controls src={mediaSrc} className="w-full h-10 filter invert opacity-90" />
-                            </div>
-                          )}
-
-                          {msg.type === 'VIDEO' && (
-                            <div className="flex flex-col gap-1.5 w-[min(300px,72vw)]">
-                              <video controls preload="metadata" src={mediaSrc} className="w-full max-h-80 rounded-xl bg-black/25" />
-                              <a href={`/api/media/${msg.id}?download=1`} download className="flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
-                                <Download size={14} /> Descargar
-                              </a>
-                              {msg.content && msg.content !== '🎬 Video' && <span className="text-[14px] leading-snug whitespace-pre-wrap break-words px-0.5">{msg.content}</span>}
-                            </div>
-                          )}
-
-                          {msg.type === 'IMAGE' ? (
-                            <div className="flex flex-col gap-1.5 relative w-[min(300px,72vw)]">
-                              <button type="button" onClick={() => setViewerImageId(msg.id)} className="block w-full rounded-xl overflow-hidden bg-black/25 cursor-zoom-in">
-                                <img src={mediaSrc} alt="Adjunto" className="w-full max-h-80 object-contain" />
-                              </button>
-                              <div className="flex gap-1.5">
-                                <button type="button" onClick={() => setViewerImageId(msg.id)} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
-                                  <ExternalLink size={14} /> Abrir
-                                </button>
-                                <a href={`/api/media/${msg.id}?download=1`} download className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
-                                  <Download size={14} /> Descargar
-                                </a>
-                              </div>
-                              {msg.content && msg.content !== '📷 Imagen adjunta' && <span className="text-[14px] leading-snug whitespace-pre-wrap break-words px-0.5">{msg.content}</span>}
-                            </div>
-                          ) : msg.type === 'DOCUMENT' ? (
-                            <div className="flex flex-col gap-1.5 min-w-[220px]">
-                            <a href={mediaSrc} target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-black/20 hover:bg-black/30 transition-colors p-2.5 rounded-xl">
-                              <div className="w-10 h-10 rounded-lg bg-red-500/20 text-red-300 flex items-center justify-center shrink-0">
-                                <FileText size={20} />
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium truncate max-w-[220px]">{msg.content || 'Documento adjunto'}</div>
-                                <div className="text-[11px] text-white/50">{msg.mimeType === 'application/pdf' ? 'PDF · ' : ''}Toca para abrir</div>
-                              </div>
-                            </a>
-                            <div className="flex gap-1.5">
-                              <a href={mediaSrc} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
-                                <ExternalLink size={14} /> Abrir
-                              </a>
-                              <a href={`/api/media/${msg.id}?download=1`} download className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-black/20 hover:bg-black/30 transition-colors py-1.5 text-[12px] font-medium">
-                                <Download size={14} /> Descargar
-                              </a>
-                            </div>
-                            </div>
-                          ) : msg.type === 'VIDEO' ? null : (
-                            bodyText ? <p className="break-words whitespace-pre-wrap">{bodyText}<span className={cn("inline-block", alignRight ? "w-[6.2rem]" : "w-[4.6rem]")} /></p> : null
-                          )}
-
-                          <div className={cn("flex items-center justify-end gap-1 text-[11px] text-white/50 select-none", (msg.type === 'TEXT' && bodyText) ? "absolute right-2.5 bottom-1" : "mt-0.5")}>
-                            <span>{time}</span>
-                            {ticks}
-                          </div>
-
-                          {msg.aiTrace && (() => {
-                            try {
-                              const t = JSON.parse(msg.aiTrace) as { rules?: string[]; tools?: string[] };
-                              const rules = t.rules ?? [];
-                              const tools = t.tools ?? [];
-                              return (
-                                <details className="mt-1.5 text-[11px] text-[#8696a0] border-t border-white/10 pt-1">
-                                  <summary className="cursor-pointer select-none hover:text-[#c7d0d5]">
-                                    🧠 {rules.length ? `${rules.length} regla(s) RAG` : 'Sin reglas RAG (prompt)'}{tools.length ? ` · ${tools.join(', ')}` : ''}
-                                  </summary>
-                                  <ul className="mt-1 space-y-1 text-left">
-                                    {rules.map((r, i) => <li key={i}>• {r}</li>)}
-                                    {tools.map((n, i) => <li key={`t${i}`}>🔧 Herramienta: {n}</li>)}
-                                    {!rules.length && !tools.length && <li>Respondió solo con el prompt base.</li>}
-                                  </ul>
-                                </details>
-                              );
-                            } catch { return null; }
-                          })()}
-
-                          {msg.reaction && (
-                            <div className={cn("absolute -bottom-3.5 bg-[#233138] rounded-full px-1.5 py-0.5 text-sm shadow ring-2 ring-[#0b141a] z-10", alignRight ? "right-3" : "left-3")}>
-                              {msg.reaction}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-            <div ref={messagesEndRef} />
+                  <MessageList
+                    key={activeContact.id}
+                    messages={messages}
+                    contactId={activeContact.id}
+                    simulatorMode={simulatorMode}
+                    onOpenImage={setViewerImageId}
+                    onReply={setReplyingTo}
+                    onReact={reactToMessage}
+                    onContentChange={changeMessageContent}
+                  />
+                )}
+              </div>
+            </div>
+            {!scroll.atBottom && <ScrollToBottomButton unseen={scroll.unseen} onClick={scroll.scrollToBottom} />}
           </div>
 
           {/* Aviso de la ventana de 24 h de WhatsApp */}
@@ -1470,25 +1268,11 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                     </div>
                     <div className="flex overflow-x-auto p-2 gap-2 custom-scrollbar">
                       {stagedFiles.map((file, idx) => (
-                        <div key={idx} className="relative group shrink-0">
-                          {file.type.startsWith('image/') ? (
-                            <div className="w-24 h-24 bg-[#111b21] rounded-lg overflow-hidden relative border border-[#2a3942]">
-                              <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
-                            </div>
-                          ) : (
-                            <div className="w-24 h-24 bg-[#111b21] rounded-lg flex flex-col items-center justify-center p-2 border border-[#2a3942]">
-                              <FileText size={24} className="text-[#8696a0] mb-1"/>
-                              <span className="text-[10px] font-medium text-[#e9edef] truncate w-full text-center">{file.name}</span>
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))}
-                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
+                        <StagedFileThumb
+                          key={`${file.name}-${file.lastModified}-${idx}`}
+                          file={file}
+                          onRemove={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))}
+                        />
                       ))}
                     </div>
                   </div>
@@ -1510,10 +1294,10 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                 size="icon"
                 className="shrink-0 text-[#8696a0] hover:text-[#e9edef] rounded-full hover:bg-[#202c33] mb-0.5"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
+                disabled={preparingFiles > 0}
                 title="Adjuntar archivo"
               >
-                <Plus size={24} />
+                {preparingFiles > 0 ? <Loader2 size={22} className="animate-spin" /> : <Plus size={24} />}
               </Button>
               <Button
                 type="button"
@@ -1566,7 +1350,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                       e.preventDefault();
                       // Con "/atajo" escrito, Enter elige la primera coincidencia en vez de enviar.
                       if (slash !== null && quickMatches.length > 0) { pickQuickReply(quickMatches[0]); return; }
-                      if (inputText.trim() || stagedFiles.length > 0) handleSendMessage();
+                      if (preparingFiles === 0 && (inputText.trim() || stagedFiles.length > 0)) handleSendMessage();
                     }
                   }}
                   onPaste={e => {
@@ -1584,19 +1368,18 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                       }
                     }
                     if (hasFiles) {
-                      setStagedFiles(prev => [...prev, ...newFiles]);
                       e.preventDefault();
+                      stageFiles(newFiles);
                     }
                   }}
                   rows={1}
-                  placeholder={isUploading ? "Enviando..." : (simulatorMode ? "Escribe un mensaje como cliente..." : "Escribe un mensaje")}
+                  placeholder={preparingFiles > 0 ? "Preparando archivos..." : (simulatorMode ? "Escribe un mensaje como cliente..." : "Escribe un mensaje")}
                   className="flex-1 bg-[#202c33] border-none focus:outline-none focus:ring-1 focus:ring-[#00a884]/50 !text-white placeholder-[#8696a0] px-4 py-2.5 max-h-[120px] resize-none overflow-y-auto rounded-2xl text-[15px]"
-                  disabled={isUploading}
                 />
               )}
 
               {inputText.trim() || stagedFiles.length > 0 || recordedAudio ? (
-                <Button type="submit" size="icon" className="shrink-0 rounded-full bg-[#00a884] hover:bg-[#00c298] text-[#06211b] w-10 h-10 mb-0.5 shadow-sm transition-transform active:scale-95" disabled={isUploading} title="Enviar">
+                <Button type="submit" size="icon" className="shrink-0 rounded-full bg-[#00a884] hover:bg-[#00c298] text-[#06211b] w-10 h-10 mb-0.5 shadow-sm transition-transform active:scale-95" disabled={preparingFiles > 0} title="Enviar">
                   <Send size={18} className="transition-transform translate-x-0.5 -translate-y-0.5" />
                 </Button>
               ) : isRecording ? (
@@ -1696,10 +1479,10 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
 
       {viewerImageId && (() => {
         const viewerImages: ViewerImage[] = messages
-          .filter((m: Message) => m.type === 'IMAGE' && m.content !== '🎭 Sticker')
+          .filter((m: Message) => m.type === 'IMAGE' && m.content !== '🎭 Sticker' && m.status !== 'SENDING')
           .map((m: Message) => ({
             id: m.id,
-            src: m.mediaUrl?.startsWith('http') ? m.mediaUrl : `/api/media/${m.id}`,
+            src: mediaSrcOf(m),
             caption: m.content,
             sender: m.direction === 'INBOUND' ? (activeContact?.name || `+${activeContact?.phone ?? ''}`) : 'Tú',
             timestamp: m.timestamp,
