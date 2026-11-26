@@ -772,6 +772,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
           if (data.email) queryParams += `&email=${encodeURIComponent(data.email)}`;
           if (data.type) queryParams += `&type=${encodeURIComponent(data.type)}`;
           if (data.description) queryParams += `&desc=${encodeURIComponent(data.description)}`;
+          if (data.productId) queryParams += `&productId=${encodeURIComponent(data.productId)}`;
           pendingQuoteUrl = `/dashboard/quotes/new${queryParams}`;
         } catch(e) {}
       }
@@ -1145,6 +1146,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
                         if (data.email) queryParams += `&email=${encodeURIComponent(data.email)}`;
                         if (data.type) queryParams += `&type=${encodeURIComponent(data.type)}`;
                         if (data.description) queryParams += `&desc=${encodeURIComponent(data.description)}`;
+                        if (data.productId) queryParams += `&productId=${encodeURIComponent(data.productId)}`;
                         queryParams += `&msgId=${msg.id}`;
                         buttonLink = `/dashboard/quotes/new${queryParams}`;
                         buttonText = "Generar Cotización";

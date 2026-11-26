@@ -1,7 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
 import { calculateConcept, GlobalCosts, pickProductPricing, resolveProductUnitPrice, modelCostKey } from "@/lib/calculations";
-import { getModelMaxCostMap } from "@/lib/product-pricing";
+import { getModelMaxCostMap, getProductPricingGlobals } from "@/lib/product-pricing";
+import { findCatalogProduct } from "@/lib/product-match";
 import { ChalanEstimateInput, ChalanContext, getChalanPrompt } from "./prompt";
 import { getWorkshopRulesFromPinecone } from "./knowledge-base";
 
@@ -54,6 +55,24 @@ function buildGlobals(configs: { key: string; value: number }[]): GlobalCosts {
     porcentaje_merma_corte: g["porcentaje_merma_corte"] || 20,
     ...pickProductPricing(g),
   };
+}
+
+/** Busca en el catálogo el producto pedido y su precio para esa cantidad. Si algo falla, se cotiza a mano. */
+async function findRequestedProduct(input: ChalanEstimateInput) {
+  try {
+    const products = await prisma.product.findMany({
+      where: { active: true },
+      select: { id: true, name: true, model: true, sku: true, color: true, provider: true, unitPrice: true, unitCost: true },
+    });
+    const product = findCatalogProduct(products, `${input.material} ${input.project_name}`, input.descripcion_concepto);
+    if (!product) return null;
+    const [globals, maxCosts] = await Promise.all([getProductPricingGlobals(), getModelMaxCostMap()]);
+    const { unitPrice } = resolveProductUnitPrice(product, Math.max(1, input.cantidad || 1), globals, maxCosts[modelCostKey(product)]);
+    return unitPrice > 0 ? { id: product.id, name: product.name, unitPrice } : null;
+  } catch (err) {
+    console.error("[El Chalán] Error buscando el producto en el catálogo:", err);
+    return null;
+  }
 }
 
 export async function executeChalanEstimate(
@@ -162,7 +181,18 @@ export async function executeChalanEstimate(
   if (note) lines.push(note);
   let pricing: ChalanPricing | undefined;
 
-  if (canCalculate && material) {
+  // Producto de catálogo: el precio sale del catálogo. No arma borrador automático porque falta sumar el grabado.
+  const catalogProduct = tipo === "RESALE" ? await findRequestedProduct(input) : null;
+
+  if (catalogProduct) {
+    const qty = Math.max(1, Math.round(input.cantidad || 1));
+    lines.push(
+      "",
+      `Producto del catálogo: ${catalogProduct.name} (revisa el color)`,
+      `Precio del producto: ${qty} pzas × ${money(catalogProduct.unitPrice)} = ${money(qty * catalogProduct.unitPrice)}`,
+      "⚠️ Es solo el producto: suma el grabado o la impresión.",
+    );
+  } else if (canCalculate && material) {
     const r = calculateConcept({
       type: tipo as "CORTE" | "GRABADO",
       quantity: input.cantidad,
@@ -235,6 +265,7 @@ export async function executeChalanEstimate(
     email: input.correo_cliente || "",
     type: tipo,
     description: input.descripcion_concepto || "",
+    productId: catalogProduct?.id || "",
   };
   const quotePayload = `|||${encodeURIComponent(JSON.stringify(quoteData))}|||`;
 

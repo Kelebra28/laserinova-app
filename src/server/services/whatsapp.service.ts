@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
-import { WINDOW_MS } from '@/lib/whatsapp-window';
+import { WINDOW_MS, windowState } from '@/lib/whatsapp-window';
+import { toTemplateVariable } from '@/lib/admin-alert';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
@@ -233,11 +234,30 @@ async function quickConversationSummary(contactId: string): Promise<string | nul
   }
 }
 
+/** Se da por cerrada la ventana un poco antes: un texto libre mandado al filo se puede perder. */
+const ADMIN_WINDOW_MARGIN_MS = 10 * 60 * 1000;
+
+/** ¿El administrador escribió al bot en las últimas 24 h? Si no se puede consultar, se asume que sí. */
+async function isAdminWindowOpen(phone: string): Promise<boolean> {
+  try {
+    const last = await prisma.whatsAppMessage.findFirst({
+      where: { direction: 'INBOUND', type: { not: 'REACTION' }, contact: { phone: { endsWith: phone.replace(/\D/g, '').slice(-10) } } },
+      orderBy: { timestamp: 'desc' },
+      select: { timestamp: true },
+    });
+    return windowState(last?.timestamp, Date.now() + ADMIN_WINDOW_MARGIN_MS).kind === 'open';
+  } catch (e) {
+    console.warn('No se pudo revisar la ventana de 24 h del administrador:', e);
+    return true;
+  }
+}
+
 /**
  * Avisa al administrador por push (PWA) y por WhatsApp (alertas de cotización y transferencias a humano).
  * Los números van en ADMIN_ALERT_PHONE separados por coma (ej. 52XXXXXXXXXX,52XXXXXXXXXX). Meta solo entrega texto libre si el administrador
- * escribió al número del bot en las últimas 24 h; fuera de esa ventana se usa la plantilla aprobada
- * WHATSAPP_ADMIN_TEMPLATE (una sola variable en el cuerpo, ej. "Aviso Laser Inova: {{1}}").
+ * escribió al número del bot en las últimas 24 h. Fuera de esa ventana puede aceptar el envío y descartarlo después, así que
+ * no basta con esperar el error: se revisa la ventana antes y se usa la plantilla aprobada WHATSAPP_ADMIN_TEMPLATE
+ * (una sola variable en el cuerpo, ej. "Aviso Laser Inova: {{1}}"). Si el primer formato se rechaza, se intenta el otro.
  */
 export async function notifyAdmin(text: string, url?: string) {
   const [title, ...rest] = text.split('\n').filter(Boolean);
@@ -249,28 +269,27 @@ export async function notifyAdmin(text: string, url?: string) {
     return;
   }
   const template = process.env.WHATSAPP_ADMIN_TEMPLATE;
-  // Las variables de plantilla no admiten saltos de línea ni más de 3 espacios seguidos.
-  const flat = text.replace(/\s*\n+\s*/g, ' | ').replace(/ {2,}/g, ' ').slice(0, 900);
+  const freeText = { type: 'text', text: { body: text } };
+  const templated = template ? {
+    type: 'template',
+    template: {
+      name: template,
+      language: { code: process.env.WHATSAPP_ADMIN_TEMPLATE_LANG || 'es_MX' },
+      components: [{ type: 'body', parameters: [{ type: 'text', text: toTemplateVariable(text) }] }],
+    },
+  } : null;
 
   await Promise.all(phones.map(async (adminPhone) => {
-    try {
-      await sendMessageToMeta(adminPhone, { type: 'text', text: { body: text } });
-      return;
-    } catch (e) {
-      console.warn(`Texto libre a ${adminPhone} falló (¿fuera de la ventana de 24 h?):`, e);
-    }
-    if (!template) return;
-    try {
-      await sendMessageToMeta(adminPhone, {
-        type: 'template',
-        template: {
-          name: template,
-          language: { code: process.env.WHATSAPP_ADMIN_TEMPLATE_LANG || 'es_MX' },
-          components: [{ type: 'body', parameters: [{ type: 'text', text: flat }] }],
-        },
-      });
-    } catch (e) {
-      console.warn(`Tampoco se pudo enviar la plantilla a ${adminPhone}:`, e);
+    const windowOpen = await isAdminWindowOpen(adminPhone);
+    if (!windowOpen && !templated) console.warn('WHATSAPP_ADMIN_TEMPLATE no configurada: el aviso fuera de las 24 h puede no llegar.');
+    const attempts = !templated ? [freeText] : windowOpen ? [freeText, templated] : [templated, freeText];
+    for (const message of attempts) {
+      try {
+        await sendMessageToMeta(adminPhone, message);
+        return;
+      } catch (e) {
+        console.warn(`Aviso a administrador (${message.type}) falló:`, e);
+      }
     }
   }));
 }
@@ -956,7 +975,7 @@ async function runAIAgentResponse(contactId: string) {
           tipo_concepto: { type: SchemaType.STRING, description: 'Si el proyecto es un producto del catálogo (ej. Termos, libretas) manda "REVENTA". Si es material suelto manda "CORTE" o "GRABADO".' },
           descripcion_concepto: { type: SchemaType.STRING, description: 'Descripción detallada del concepto (ej. "Termo Space de 550ml con grabado láser")' },
         },
-        required: ['project_name', 'material', 'ancho_cm', 'alto_cm', 'cantidad', 'tipo_concepto'],
+        required: ['project_name', 'material', 'ancho_cm', 'alto_cm', 'cantidad', 'tipo_concepto', 'descripcion_concepto'],
       }
     };
 
