@@ -14,6 +14,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import CalculationAudit from "@/components/quotes/CalculationAudit";
 import { ProductCombobox } from "@/components/quotes/ProductCombobox";
+import { findCatalogProduct } from "@/lib/product-match";
+import { productTitle, conceptDetails, swapProductDetails } from "@/lib/quote-prefill";
 
 
 interface NewQuoteFormProps {
@@ -90,7 +92,6 @@ export default function NewQuoteForm({ clients, materials, products = [], global
       }
       
       if (initialData.email) setProspectEmail(initialData.email);
-      if (initialData.desc) setDescription(initialData.desc);
       
       // If there's width, height, or qty, create a default concept
       if ((initialData.w || initialData.h || initialData.qty) && concepts.length === 0) {
@@ -98,17 +99,22 @@ export default function NewQuoteForm({ clients, materials, products = [], global
         let matchedMaterialId = "";
         let matchedProduct = null;
 
+        const isCatalogItem = initType === "RESALE" || initType === "PRODUCTO";
+
         if (initialData.material) {
           const searchName = initialData.material.toLowerCase().trim();
           
-          if (initType === "RESALE" || initType === "PRODUCTO") {
-            // Buscar en productos: SOLO coincidencias exactas por nombre, modelo o clave
-            matchedProduct = products.find(p => {
-              const pName = (p.name || "").toLowerCase().trim();
-              const pModel = (p.model || "").toLowerCase().trim();
-              const pSku = (p.sku || "").toLowerCase().trim();
-              return pName === searchName || (pModel && pModel === searchName) || (pSku && pSku === searchName);
-            }) || null;
+          if (isCatalogItem) {
+            // El que ya identificó el bot; si no, se busca por clave o nombre de modelo (ante la duda, ninguno)
+            matchedProduct =
+              products.find((p: any) => p.id === initialData.productId) ||
+              products.find((p: any) => (p.name || "").toLowerCase().trim() === searchName) ||
+              findCatalogProduct<any>(products, `${initialData.material} ${initialData.project || ""}`, initialData.desc || "");
+            if (matchedProduct) {
+              toast("Revisa el color. El precio es el del producto en catálogo: suma el grabado si no está incluido.", { id: "prefill-product", duration: 8000 });
+            } else {
+              toast("No identifiqué el producto: elígelo en «Artículo del Catálogo».", { id: "prefill-product", duration: 8000 });
+            }
           } else {
             // Buscar en materiales
             let bestScore = 0;
@@ -180,7 +186,8 @@ export default function NewQuoteForm({ clients, materials, products = [], global
           {
             id: crypto.randomUUID(),
             type: initType,
-            description: initialData.desc || initialData.project || "",
+            // "description" es el nombre en el PDF; lo largo va en "details"
+            description: matchedProduct ? productTitle(matchedProduct) : initialData.project || initialData.desc || "",
             quantity: initQuantity,
             materialId: matchedMaterialId,
             productId: matchedProduct ? matchedProduct.id : "",
@@ -196,9 +203,10 @@ export default function NewQuoteForm({ clients, materials, products = [], global
             realCost: calculated ? calculated.realCost : (Number(mUnitCost) * initQuantity),
             suggestedPrice: calculated ? calculated.suggestedPrice : totalAmount,
             totalAmount: totalAmount,
-            calculated: calculated,
+            // La tarjeta lee el importe desde "calculated"
+            calculated: calculated && { ...calculated, totalAmount: Math.round(totalAmount * 100) / 100, finalUnitPrice },
             finalUnitPrice: finalUnitPrice,
-            details: "",
+            details: conceptDetails(initialData.desc, matchedProduct),
             serviceDays: "",
             serviceHours: "",
             operatorCost: "",
@@ -307,6 +315,7 @@ export default function NewQuoteForm({ clients, materials, products = [], global
           productId: product.id,
           productImage: newProductImage,
           description: cleanDesc,
+          details: swapProductDetails(c.details, products.find((p: any) => p.id === c.productId), product),
           manualUnitPrice: suggestedSalePrice,
           manualUnitCost: unitCost,
           finalUnitPrice: finalUnitPrice,

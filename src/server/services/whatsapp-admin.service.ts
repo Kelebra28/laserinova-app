@@ -346,11 +346,11 @@ export async function proposeAutoDraft(params: {
     clientId: contact.clientId || null,
     client: { name: clientName },
     project: params.project || 'Cotización',
-    description: conceptDescription,
+    description: '',
     subtotal,
     tax,
     total,
-    concepts: [{ description: conceptDescription, quantity: qty, unitPrice: unit, totalAmount: subtotal, margin: marginPct }],
+    concepts: [{ description: params.project || 'Cotización', details: conceptDescription, quantity: qty, unitPrice: unit, totalAmount: subtotal, margin: marginPct }],
   });
   const quote = await prisma.quote.update({
     where: { id: quoteId },

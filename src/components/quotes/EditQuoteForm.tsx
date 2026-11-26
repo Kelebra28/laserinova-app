@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import CalculationAudit from "@/components/quotes/CalculationAudit";
 import { ProductCombobox } from "@/components/quotes/ProductCombobox";
+import { swapProductDetails } from "@/lib/quote-prefill";
 
 
 interface EditQuoteFormProps {
@@ -320,6 +321,7 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
           productId: product.id,
           productImage: newProductImage,
           description: cleanDesc,
+          details: swapProductDetails(c.details, products.find((p: any) => p.id === c.productId), product),
           manualUnitPrice: suggestedSalePrice,
           manualUnitCost: unitCost,
           finalUnitPrice: finalUnitPrice,
