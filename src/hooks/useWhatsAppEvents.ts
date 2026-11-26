@@ -37,7 +37,8 @@ export function useWhatsAppEvents({ onNewMessage, onStatusUpdate, onContactUpdat
       // Reproducir sonido para:
       // 1. Clientes reales: Solo cuando el cliente nos escribe (INBOUND)
       // 2. Simulador: Solo cuando la IA nos responde (OUTBOUND)
-      const shouldPlaySound = (!isSimulator && isIncoming) || (isSimulator && isOutbound);
+      // Los mensajes de los administradores al bot no son avisos.
+      const shouldPlaySound = !data?.contact?.isAdmin && ((!isSimulator && isIncoming) || (isSimulator && isOutbound));
 
       if (shouldPlaySound) {
         playNotificationSound();

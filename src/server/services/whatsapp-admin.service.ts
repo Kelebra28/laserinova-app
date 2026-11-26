@@ -12,6 +12,9 @@ import {
 } from '@/server/services/whatsapp.service';
 import { getPendingSummary } from '@/server/services/pending-summary.service';
 import { isSummaryCommand, NO_PENDING_MESSAGE } from '@/lib/pending-summary';
+import { findDoubtRef } from '@/server/services/doubt-ref.service';
+import { relayDoubtAnswer } from '@/server/services/doubt-reply.service';
+import { stripQuotedPrefix } from '@/lib/doubt-reply';
 import type { ChalanPricing } from '@/lib/agents/chalan';
 
 /**
@@ -24,6 +27,7 @@ import type { ChalanPricing } from '@/lib/agents/chalan';
  * un precio confiable, proposeAutoDraft crea el borrador y se lo manda a los administradores.
  * Puede haber varios pendientes a la vez; con más de uno se autoriza por folio (AUTORIZAR 0123).
  * Con RESUMEN o PENDIENTES recibe, solo quien lo pide, la lista de chats por atender.
+ * Si cita el aviso de una duda (o de atención humana), su respuesta se le manda a ese cliente.
  *
  * Estado del flujo, guardado como mensajes INTERNAL en el chat del administrador:
  *   [PENDIENTE] <quoteId>  borrador esperando autorización
@@ -158,7 +162,8 @@ Reglas:
 - Si falta cantidad, precio o descripción del producto, pregúntalo. No inventes precios.
 - Después de crear el borrador no digas nada más: el sistema le mostrará el resumen y le pedirá autorizar.
 - NUNCA envías nada al cliente; eso solo pasa cuando el administrador responde AUTORIZAR.
-- Si te pide algo fuera de cotizaciones, dile brevemente que por ahora solo cotizas.`;
+- Si su mensaje parece una respuesta para un cliente, dile que NO mandaste nada y que cite (deslice) el aviso de la duda de ese cliente y escriba ahí la respuesta.
+- Si te pide algo más, dile brevemente que aquí puedes cotizar, mandarle el RESUMEN de pendientes y pasar respuestas citando el aviso. Nunca digas que mandaste algo a un cliente.`;
 
 async function runAdminAgent(admin: AdminContact, text: string) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -430,11 +435,16 @@ async function authorizePending(admin: AdminContact, quoteId: string) {
 }
 
 /** Atiende un mensaje de texto de un administrador. Nunca lanza: cualquier falla se le avisa al propio administrador. */
-export async function handleAdminMessage(admin: AdminContact, text: string) {
+export async function handleAdminMessage(admin: AdminContact, text: string, replyToId?: string | null) {
   try {
     if (isSummaryCommand(text)) {
       const summary = await getPendingSummary();
       return await replyToAdmin(admin, summary.text || NO_PENDING_MESSAGE);
+    }
+
+    const doubtRef = replyToId ? await findDoubtRef(admin.id, replyToId) : null;
+    if (doubtRef) {
+      return await replyToAdmin(admin, await relayDoubtAnswer(admin, doubtRef, stripQuotedPrefix(text)));
     }
 
     const pending = await getPendingQuotes(admin.id);

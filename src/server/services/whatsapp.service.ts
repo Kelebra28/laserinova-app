@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { WINDOW_MS, windowState } from '@/lib/whatsapp-window';
 import { toTemplateVariable } from '@/lib/admin-alert';
+import { REPLY_HINT } from '@/lib/doubt-reply';
+import { saveDoubtRefs } from '@/server/services/doubt-ref.service';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
@@ -201,7 +203,7 @@ function conversationPath(contactId: string) {
 }
 
 /** Enlace que abre la conversación dentro del CRM (la PWA instalada lo captura en Android). */
-function conversationLink(contactId: string) {
+export function conversationLink(contactId: string) {
   const base = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://app.laserinova.com').replace(/\/$/, '');
   return `${base}/dashboard/chats?c=${contactId}`;
 }
@@ -259,14 +261,15 @@ async function isAdminWindowOpen(phone: string): Promise<boolean> {
  * no basta con esperar el error: se revisa la ventana antes y se usa la plantilla aprobada WHATSAPP_ADMIN_TEMPLATE
  * (una sola variable en el cuerpo, ej. "Aviso Laser Inova: {{1}}"). Si el primer formato se rechaza, se intenta el otro.
  */
-export async function notifyAdmin(text: string, url?: string) {
+export async function notifyAdmin(text: string, url?: string): Promise<{ phone: string; messageId: string }[]> {
+  const sent: { phone: string; messageId: string }[] = [];
   const [title, ...rest] = text.split('\n').filter(Boolean);
   await sendPushToAdmins({ title: title.slice(0, 80), body: rest.join(' · ').slice(0, 180), url, tag: 'admin-alert' });
 
   const phones = (process.env.ADMIN_ALERT_PHONE || '').split(',').map(p => p.trim()).filter(Boolean);
   if (phones.length === 0) {
     console.warn("ADMIN_ALERT_PHONE no configurado: no se envió el aviso por WhatsApp al administrador.");
-    return;
+    return sent;
   }
   const template = process.env.WHATSAPP_ADMIN_TEMPLATE;
   const freeText = { type: 'text', text: { body: text } };
@@ -285,13 +288,16 @@ export async function notifyAdmin(text: string, url?: string) {
     const attempts = !templated ? [freeText] : windowOpen ? [freeText, templated] : [templated, freeText];
     for (const message of attempts) {
       try {
-        await sendMessageToMeta(adminPhone, message);
+        const res = await sendMessageToMeta(adminPhone, message);
+        const messageId = res?.messages?.[0]?.id;
+        if (messageId) sent.push({ phone: adminPhone, messageId });
         return;
       } catch (e) {
         console.warn(`Aviso a administrador (${message.type}) falló:`, e);
       }
     }
   }));
+  return sent;
 }
 
 export async function downloadAndCompressMedia(mediaId: string): Promise<string | null> {
@@ -521,7 +527,8 @@ export async function processIncomingMessage(entry: any) {
     });
   }
 
-  return { type: 'message', message: savedMessage, contact, skipBot, isAdmin };
+  // replyToId: mensaje que se citó (así el administrador contesta la duda de un cliente).
+  return { type: 'message', message: savedMessage, contact, skipBot, isAdmin, replyToId: (msg.context?.id as string | undefined) || null };
 }
 
 // Mensajes del cliente que disparan al bot (los stickers se guardan como IMAGE pero no lo disparan).
@@ -1153,16 +1160,18 @@ async function runAIAgentResponse(contactId: string) {
 
       if (!contact.name?.includes("Simulador")) {
         const summary = await quickConversationSummary(contact.id);
-        await notifyAdmin(
+        const sent = await notifyAdmin(
           [
             `❓ ${contact.name || 'Un cliente'} tiene una duda que el bot no pudo resolver`,
+            REPLY_HINT,
             `Tel: +${contact.phone}`,
             `Duda: ${duda}`,
             summary ? `\nResumen:\n${summary}` : '',
             `\nResponder en el chat: ${conversationLink(contact.id)}`,
           ].filter(Boolean).join('\n'),
           conversationPath(contact.id)
-        ).catch((e) => console.error('Error avisando duda al equipo:', e));
+        ).catch((e) => { console.error('Error avisando duda al equipo:', e); return []; });
+        await saveDoubtRefs(sent, { doubtId: `${contact.id.slice(0, 8)}-${Date.now()}`, clientContactId: contact.id, doubt: String(duda) });
       }
     };
 
@@ -1245,9 +1254,10 @@ async function runAIAgentResponse(contactId: string) {
 
             if (!contact.name?.includes("Simulador")) {
               const summary = await quickConversationSummary(contact.id);
-              await notifyAdmin(
+              const sent = await notifyAdmin(
                 [
                   `🔔 ${contact.name || 'Un cliente'} necesita atención humana`,
+                  REPLY_HINT,
                   `Tel: +${contact.phone}`,
                   `Motivo: ${args.motivo}`,
                   summary ? `\nResumen:\n${summary}` : '',
@@ -1255,6 +1265,7 @@ async function runAIAgentResponse(contactId: string) {
                 ].filter(Boolean).join('\n'),
                 conversationPath(contact.id)
               );
+              await saveDoubtRefs(sent, { doubtId: `${contact.id.slice(0, 8)}-${Date.now()}`, clientContactId: contact.id, doubt: String(args.motivo || '') });
             }
 
             // El motivo es interno (va solo en el aviso al administrador), no se le muestra al cliente.
