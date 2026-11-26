@@ -10,6 +10,8 @@ import {
   quoteLink,
   notifyAdmin,
 } from '@/server/services/whatsapp.service';
+import { getPendingSummary } from '@/server/services/pending-summary.service';
+import { isSummaryCommand, NO_PENDING_MESSAGE } from '@/lib/pending-summary';
 import type { ChalanPricing } from '@/lib/agents/chalan';
 
 /**
@@ -21,6 +23,7 @@ import type { ChalanPricing } from '@/lib/agents/chalan';
  * Los borradores también nacen solos: cuando el bot de clientes junta los datos y el Chalán saca
  * un precio confiable, proposeAutoDraft crea el borrador y se lo manda a los administradores.
  * Puede haber varios pendientes a la vez; con más de uno se autoriza por folio (AUTORIZAR 0123).
+ * Con RESUMEN o PENDIENTES recibe, solo quien lo pide, la lista de chats por atender.
  *
  * Estado del flujo, guardado como mensajes INTERNAL en el chat del administrador:
  *   [PENDIENTE] <quoteId>  borrador esperando autorización
@@ -429,6 +432,11 @@ async function authorizePending(admin: AdminContact, quoteId: string) {
 /** Atiende un mensaje de texto de un administrador. Nunca lanza: cualquier falla se le avisa al propio administrador. */
 export async function handleAdminMessage(admin: AdminContact, text: string) {
   try {
+    if (isSummaryCommand(text)) {
+      const summary = await getPendingSummary();
+      return await replyToAdmin(admin, summary.text || NO_PENDING_MESSAGE);
+    }
+
     const pending = await getPendingQuotes(admin.id);
 
     // El folio es opcional con un solo borrador y obligatorio con varios: "autorizar LI-2026-0123" o "autorizar 123".
