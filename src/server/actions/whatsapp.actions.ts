@@ -53,24 +53,34 @@ export async function simulateIncomingMessageAction(contactId: string, content: 
 export async function getMessagesAction(contactId: string) {
   await requireAuth();
   
-  const messages = await prisma.whatsAppMessage.findMany({
-    where: { contactId },
-    orderBy: { timestamp: 'asc' },
-    select: {
-      id: true,
-      messageId: true,
-      contactId: true,
-      direction: true,
-      type: true,
-      content: true,
-      status: true,
-      timestamp: true,
-      mimeType: true,
-      mediaUrl: true,
-      reaction: true,
-      aiTrace: true,
-    }
-  });
+  // Los archivos viven en base64 dentro de mediaUrl: leerlos solo para descartarlos hacía lento abrir cada chat.
+  // De la base solo salen las URLs externas; del resto basta saber que hay archivo (se piden a /api/media).
+  const [rows, media] = await Promise.all([
+    prisma.whatsAppMessage.findMany({
+      where: { contactId },
+      orderBy: { timestamp: 'asc' },
+      select: {
+          id: true,
+          messageId: true,
+          contactId: true,
+          direction: true,
+          type: true,
+          content: true,
+          status: true,
+          timestamp: true,
+          mimeType: true,
+          reaction: true,
+          aiTrace: true,
+      }
+    }),
+    prisma.$queryRaw<{ id: string; mediaUrl: string }[]>`
+      SELECT id, CASE WHEN mediaUrl LIKE 'http%' THEN mediaUrl ELSE 'FETCH_REQUIRED' END AS mediaUrl
+      FROM WhatsAppMessage
+      WHERE contactId = ${contactId} AND mediaUrl IS NOT NULL AND mediaUrl <> ''
+    `,
+  ]);
+  const mediaById = new Map(media.map(m => [m.id, String(m.mediaUrl)]));
+  const messages = rows.map(row => ({ ...row, mediaUrl: mediaById.get(row.id) ?? null }));
 
   // Reacciones antiguas que se guardaron como mensaje aparte («👍 reaccionó a «…»»): se pegan al mensaje original
   // y se ocultan, para que se vean como en WhatsApp.
@@ -87,13 +97,7 @@ export async function getMessagesAction(contactId: string) {
   }
   const visible = messages.filter(m => m.type !== 'REACTION');
 
-  // Strip Base64 data to avoid massive JSON payloads, but keep external HTTP URLs
-  const cleanedData = visible.map(msg => ({
-    ...msg,
-    mediaUrl: msg.mediaUrl?.startsWith('http') ? msg.mediaUrl : (msg.mediaUrl ? 'FETCH_REQUIRED' : null)
-  }));
-
-  return { success: true, data: cleanedData };
+  return { success: true, data: visible };
 }
 
 

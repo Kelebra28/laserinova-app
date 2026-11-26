@@ -52,3 +52,13 @@ export function formatShortDate(ymd: string): string {
   const [, m, d] = ymd.split("-");
   return `${d} ${SHORT_MONTHS[Number(m) - 1] ?? m}`;
 }
+
+/** Separador de día en el chat: "Hoy", "Ayer" o la fecha completa (con año si no es el actual). */
+export function chatDayLabel(d: Date): string {
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return 'Hoy';
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return 'Ayer';
+  return d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' as const } : {}) });
+}
