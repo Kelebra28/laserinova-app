@@ -4,7 +4,7 @@
 export const TEMPLATE_VAR_MAX_CHARS = 900;
 
 /** Lo que no se puede perder al recortar: las ligas y cómo autorizar un borrador. */
-const KEY_LINE = /https?:\/\/|AUTORIZAR/;
+const KEY_LINE = /https?:\/\/|AUTORIZAR|Cita este mensaje/;
 
 /**
  * Convierte un aviso en la variable de la plantilla: las variables no admiten saltos de línea ni más de

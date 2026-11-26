@@ -75,15 +75,17 @@ export async function POST(request: Request) {
             if (pusherMessage.mediaUrl && pusherMessage.mediaUrl.length > 5000) {
               pusherMessage.mediaUrl = 'FETCH_REQUIRED';
             }
-            await notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact: result.contact });
+            // isAdmin: la pantalla de chats no suena ni cuenta como no leídos los mensajes de los administradores.
+            await notificationEmitter.emit('whatsapp_message', { message: pusherMessage, contact: { ...result.contact, isAdmin: result.isAdmin } });
             
             // Mensajes de un administrador: los atiende el bot de gestión (cotizar con autorización), nunca el bot de clientes.
             if (result.isAdmin) {
               if (result.message?.type === 'TEXT' && result.message.content) {
                 const admin = { id: result.contact.id, phone: result.contact.phone, name: result.contact.name };
                 const text = result.message.content;
+                const replyToId = result.replyToId;
                 after(async () => {
-                  await handleAdminMessage(admin, text);
+                  await handleAdminMessage(admin, text, replyToId);
                 });
               }
             // IA: Responder si botMode está activado

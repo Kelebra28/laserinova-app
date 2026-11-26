@@ -168,7 +168,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
             return [...prev, message];
           });
         }
-      } else if (message.direction === 'INBOUND') {
+      } else if (message.direction === 'INBOUND' && !contact.isAdmin) {
         // Si el chat NO está abierto y es un mensaje entrante, incrementar contador
         setUnreadCounts(prev => ({
           ...prev,
