@@ -25,12 +25,18 @@ export async function getPendingItems(): Promise<PendingItem[]> {
   return sortByOldest(items.filter((i): i is PendingItem => i !== null));
 }
 
+/** Arma el texto del resumen sin mandarlo. Sin pendientes, el texto viene vacío. */
+export async function getPendingSummary() {
+  const items = await getPendingItems();
+  if (items.length === 0) return { total: 0, text: '' };
+  const base = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://app.laserinova.com').replace(/\/$/, '');
+  return { total: items.length, text: buildSummaryMessage(items, { now: new Date(), link: `${base}${PENDING_PATH}` }) };
+}
+
 /** Arma el resumen y, salvo en modo prueba, lo manda a los administradores (WhatsApp y push). */
 export async function sendPendingSummary({ dryRun = false }: { dryRun?: boolean } = {}) {
-  const items = await getPendingItems();
-  if (items.length === 0) return { sent: false, total: 0, text: '' };
-  const base = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://app.laserinova.com').replace(/\/$/, '');
-  const text = buildSummaryMessage(items, { now: new Date(), link: `${base}${PENDING_PATH}` });
-  if (!dryRun) await notifyAdmin(text, PENDING_PATH);
-  return { sent: !dryRun, total: items.length, text };
+  const { total, text } = await getPendingSummary();
+  const sent = total > 0 && !dryRun;
+  if (sent) await notifyAdmin(text, PENDING_PATH);
+  return { sent, total, text };
 }

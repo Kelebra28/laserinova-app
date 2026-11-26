@@ -98,6 +98,16 @@ export function formatAge(since: Date, now: Date): string {
 /** Del más viejo al más nuevo: primero quien lleva más tiempo esperando. */
 export const sortByOldest = (items: PendingItem[]) => [...items].sort((a, b) => a.since.getTime() - b.since.getTime());
 
+/** "resumen" o "pendientes" solos (con "porfa", signos o mayúsculas). Una frase más larga no es el comando. */
+const SUMMARY_COMMAND = /^(dame |m[aá]nda(me)? |p[aá]sa(me)? )?(el |los )?(resumen( de (los )?pendientes)?|pendientes)( por ?fa(vor)?)?$/;
+
+export function isSummaryCommand(text: string): boolean {
+  const clean = text.toLowerCase().replace(/[^a-záéíóúñ\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  return SUMMARY_COMMAND.test(clean);
+}
+
+export const NO_PENDING_MESSAGE = '✅ No hay pendientes por contestar en los últimos 14 días.';
+
 /** Texto de WhatsApp admite 4096 caracteres. */
 export const SUMMARY_MAX_CHARS = 3800;
 
