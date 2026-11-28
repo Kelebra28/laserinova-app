@@ -1,5 +1,7 @@
 "use server";
 
+import { getErrorMessage } from '@/lib/error-message';
+
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { z } from "zod";
@@ -44,7 +46,7 @@ export async function testPromoOpcionConnectionAction() {
   } catch (error: any) {
     return {
       success: false,
-      error: error.message || "Error al conectar con Promo Opción.",
+      error: getErrorMessage(error, "Error al conectar con Promo Opción."),
     };
   }
 }
@@ -68,7 +70,7 @@ export async function syncPromoOpcionCatalogAction(input?: { page?: number }) {
   } catch (error: any) {
     return {
       success: false,
-      error: error.message || "Error al sincronizar el catálogo de Promo Opción.",
+      error: getErrorMessage(error, "Error al sincronizar el catálogo de Promo Opción."),
     };
   }
 }
@@ -91,7 +93,7 @@ export async function syncPromoOpcionStockAction() {
   } catch (error: any) {
     return {
       success: false,
-      error: error.message || "Error al actualizar las existencias de Promo Opción.",
+      error: getErrorMessage(error, "Error al actualizar las existencias de Promo Opción."),
     };
   }
 }

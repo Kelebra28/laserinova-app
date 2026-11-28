@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Calculator, Save, Plus, Trash2, Info, DollarSign, Check, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -994,7 +995,7 @@ export default function EditQuoteForm({ quote, clients, materials, products = []
           }
         } catch (error: any) {
           if (error.message === 'NEXT_REDIRECT') throw error;
-          toast.error(error.message || "Error inesperado al conectarse al servidor");
+          toast.error(getErrorMessage(error, "Error inesperado al conectarse al servidor"));
           setIsSubmitting(false);
         }
       }}

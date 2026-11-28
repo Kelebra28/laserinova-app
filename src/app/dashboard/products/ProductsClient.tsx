@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { useRouter, usePathname } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Search, Loader2, ChevronLeft, ChevronRight, RefreshCw, Box } from "lucide-react";
@@ -89,7 +90,7 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
         });
       }
     } catch (err: any) {
-      toast.error(err.message || "Error al conectar con el servidor", { id: toastId });
+      toast.error(getErrorMessage(err, "Error al conectar con el servidor"), { id: toastId });
     } finally {
       setIsSyncing(false);
     }
@@ -113,7 +114,7 @@ export function ProductsClient({ initialProducts, currentProvider, currentSearch
         });
       }
     } catch (err: any) {
-      toast.error(err.message || "Error al conectar con el servidor", { id: toastId });
+      toast.error(getErrorMessage(err, "Error al conectar con el servidor"), { id: toastId });
     } finally {
       setIsSyncingStock(false);
     }

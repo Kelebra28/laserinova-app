@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { useState, useTransition, useRef } from "react";
 import {
   X, Flag, CalendarDays, Clock, User, Pencil, AlertTriangle,
@@ -163,7 +164,7 @@ export function TaskDetailModal({
         if (res && res.success === false) throw new Error("La tarea ya no existe");
         onStatusChange(task.id, status);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "No se pudo cambiar el estatus");
+        toast.error(getErrorMessage(err, "No se pudo cambiar el estatus"));
       }
     });
   };
@@ -179,7 +180,7 @@ export function TaskDetailModal({
         setBlockerReason("");
         setPendingStatus(null);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "No se pudo bloquear la tarea");
+        toast.error(getErrorMessage(err, "No se pudo bloquear la tarea"));
       }
     });
   };
@@ -195,7 +196,7 @@ export function TaskDetailModal({
         try {
           await updateTaskProgressAction(task.id, val);
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : "No se pudo guardar el avance");
+          toast.error(getErrorMessage(err, "No se pudo guardar el avance"));
         }
       });
     }, 600);
@@ -214,7 +215,7 @@ export function TaskDetailModal({
       setSubtasks((prev) => prev.map((s) => (s.id === tempId ? { ...created } : s)));
     } catch (err) {
       setSubtasks((prev) => prev.filter((s) => s.id !== tempId));
-      toast.error(err instanceof Error ? err.message : "No se pudo crear la subtarea");
+      toast.error(getErrorMessage(err, "No se pudo crear la subtarea"));
     }
   };
 
@@ -225,7 +226,7 @@ export function TaskDetailModal({
       await toggleSubTaskAction(subId, done);
     } catch (err) {
       setSubtasks((prev) => prev.map((s) => (s.id === subId ? { ...s, done: !done } : s)));
-      toast.error(err instanceof Error ? err.message : "No se pudo actualizar la subtarea");
+      toast.error(getErrorMessage(err, "No se pudo actualizar la subtarea"));
     }
   };
 
@@ -237,7 +238,7 @@ export function TaskDetailModal({
       await deleteSubTaskAction(subId);
     } catch (err) {
       setSubtasks(previous);
-      toast.error(err instanceof Error ? err.message : "No se pudo eliminar la subtarea");
+      toast.error(getErrorMessage(err, "No se pudo eliminar la subtarea"));
     }
   };
 

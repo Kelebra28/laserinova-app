@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { deleteQuoteAction } from "@/server/actions/quote.actions";
@@ -29,7 +30,7 @@ export default function DeleteQuoteButton({ quoteId }: DeleteQuoteButtonProps) {
         setIsDeleting(false);
       }
     } catch (err: any) {
-      toast.error(err.message || "Error al eliminar la cotización");
+      toast.error(getErrorMessage(err, "Error al eliminar la cotización"));
       setIsDeleting(false);
     }
   };

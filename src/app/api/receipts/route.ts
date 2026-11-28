@@ -1,3 +1,4 @@
+import { getErrorMessage } from '@/lib/error-message';
 export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -82,7 +83,7 @@ export async function GET(request: Request) {
   } catch (error: any) {
     console.error("[RECEIPTS_GET]", error);
     return NextResponse.json(
-      { error: error?.message || "Error interno del servidor" },
+      { error: getErrorMessage(error, "Error interno del servidor") },
       { status: 500 }
     );
   }
@@ -193,7 +194,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("[RECEIPTS_POST]", error);
     return NextResponse.json(
-      { error: error?.message || "Error interno del servidor" },
+      { error: getErrorMessage(error, "Error interno del servidor") },
       { status: 500 }
     );
   }

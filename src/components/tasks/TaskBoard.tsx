@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -109,10 +110,6 @@ function progressAfterMove(prevStatus: TaskStatus, prevProgress: number, next: T
 }
 
 const makeTempId = () => `tmp-${Date.now()}`;
-
-function errMsg(err: unknown, fallback: string) {
-  return err instanceof Error && err.message ? err.message : fallback;
-}
 
 function formatDate(iso: string | null) {
   if (!iso) return null;
@@ -436,7 +433,7 @@ export function TaskBoard({ initialTasks, olderDoneCount, users, tags, currentUs
       });
       setArchivedIds((prev) => new Set([...prev, ...older.map((t) => t.id)]));
     } catch (err) {
-      toast.error(errMsg(err, "No se pudieron cargar las tareas anteriores"));
+      toast.error(getErrorMessage(err, "No se pudieron cargar las tareas anteriores"));
     } finally {
       setLoadingOlder(false);
     }
@@ -576,7 +573,7 @@ export function TaskBoard({ initialTasks, olderDoneCount, users, tags, currentUs
       if (res && res.success === false) throw new Error("La tarea ya no existe");
     } catch (err) {
       setTasks(snapshot);
-      toast.error(errMsg(err, "No se pudo mover la tarea"));
+      toast.error(getErrorMessage(err, "No se pudo mover la tarea"));
     }
   };
 
@@ -640,7 +637,7 @@ export function TaskBoard({ initialTasks, olderDoneCount, users, tags, currentUs
       await track(() => deleteTaskAction(id)); // si ya no existía, el resultado es el mismo
     } catch (err) {
       setTasks(snapshot);
-      toast.error(errMsg(err, "No se pudo eliminar la tarea"));
+      toast.error(getErrorMessage(err, "No se pudo eliminar la tarea"));
     }
   };
 
@@ -692,7 +689,7 @@ export function TaskBoard({ initialTasks, olderDoneCount, users, tags, currentUs
         if (res && res.success === false) throw new Error("La tarea ya no existe");
       } catch (err) {
         setTasks(snapshot);
-        toast.error(errMsg(err, "No se pudieron guardar los cambios"));
+        toast.error(getErrorMessage(err, "No se pudieron guardar los cambios"));
       }
     } else {
       const tempId = makeTempId();
@@ -719,7 +716,7 @@ export function TaskBoard({ initialTasks, olderDoneCount, users, tags, currentUs
         }
       } catch (err) {
         setTasks((prev) => prev.filter((t) => t.id !== tempId));
-        toast.error(errMsg(err, "No se pudo crear la tarea"));
+        toast.error(getErrorMessage(err, "No se pudo crear la tarea"));
       }
     }
   };

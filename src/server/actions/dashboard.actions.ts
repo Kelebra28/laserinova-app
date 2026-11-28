@@ -1,5 +1,7 @@
 "use server";
 
+import { getErrorMessage } from '@/lib/error-message';
+
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { getDashboardStatsService } from "../services/dashboard.service";
@@ -20,7 +22,7 @@ export async function getDashboardStats() {
     return { success: true, data };
   } catch (error: any) {
     console.error("Error fetching dashboard stats:", error);
-    return { success: false, error: error.message || "Error al obtener estadísticas del dashboard" };
+    return { success: false, error: getErrorMessage(error, "Error al obtener estadísticas del dashboard") };
   }
 }
 
@@ -32,6 +34,6 @@ export async function getDashboardOverview(range: DashboardRange) {
     return { success: true, data };
   } catch (error: any) {
     console.error("Error fetching dashboard overview:", error);
-    return { success: false, error: error.message || "Error al obtener el resumen del dashboard" };
+    return { success: false, error: getErrorMessage(error, "Error al obtener el resumen del dashboard") };
   }
 }

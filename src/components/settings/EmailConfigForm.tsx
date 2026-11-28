@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import React, { useState, useTransition } from "react";
 import { Mail, Save, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { updateUserEmailConfigAction } from "@/app/dashboard/settings/actions";
@@ -34,7 +35,7 @@ export function EmailConfigForm({ incomingServer, outgoingServer }: EmailConfigF
       } catch (error: any) {
         setStatus({
           type: "error",
-          message: error.message || "Hubo un error al intentar guardar.",
+          message: getErrorMessage(error, "Hubo un error al intentar guardar."),
         });
       }
     });

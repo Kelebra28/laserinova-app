@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { useState } from "react";
 import { toast } from "react-hot-toast";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
@@ -121,7 +122,7 @@ export default function KanbanBoard({
       if (kind) setNotice({ quoteId, kind });
     } catch (err: any) {
       setQuotes(previous);
-      toast.error(err?.message || "No se pudo cambiar el estatus");
+      toast.error(getErrorMessage(err, "No se pudo cambiar el estatus"));
     }
   };
 

@@ -1,4 +1,6 @@
 'use server';
+
+import { getErrorMessage } from '@/lib/error-message';
 import fs from 'fs';
 import path from 'path';
 
@@ -45,7 +47,7 @@ export async function simulateIncomingMessageAction(contactId: string, content: 
 
     return { success: true, message: savedMessage };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Error desconocido' };
+    return { success: false, error: getErrorMessage(error, 'Error desconocido') };
   }
 }
 
@@ -274,7 +276,7 @@ export async function sendMediaMessageAction(formData: FormData) {
     return { success: true, message: savedMessage };
   } catch (error: any) {
     console.error("🚨 Error FATAL en sendMediaMessageAction:", error);
-    return { success: false, error: error.message || 'Error al procesar archivo' };
+    return { success: false, error: getErrorMessage(error, 'Error al procesar archivo') };
   }
 }
 
@@ -519,7 +521,7 @@ export async function deleteConversationAction(contactId: string) {
     return { success: true, data: { id: contactId } };
   } catch (error: any) {
     console.error("Error al eliminar conversación:", error);
-    return { success: false, error: error.message || 'Error al eliminar conversación' };
+    return { success: false, error: getErrorMessage(error, 'Error al eliminar conversación') };
   }
 }
 
@@ -535,7 +537,7 @@ export async function clearConversationMessagesAction(contactId: string) {
     return { success: true, data: { id: contactId } };
   } catch (error: any) {
     console.error("Error al vaciar conversación:", error);
-    return { success: false, error: error.message || 'Error al vaciar conversación' };
+    return { success: false, error: getErrorMessage(error, 'Error al vaciar conversación') };
   }
 }
 

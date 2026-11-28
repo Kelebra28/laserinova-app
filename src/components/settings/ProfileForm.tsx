@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { useState, useTransition } from "react";
 import { User, Mail, Lock, Save, CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { updateProfileAction } from "@/app/dashboard/settings/actions";
@@ -42,7 +43,7 @@ export function ProfileForm({ user }: Props) {
           showToast("ok", "Perfil actualizado correctamente");
         }
       } catch (err: any) {
-        showToast("err", err.message ?? "Error al actualizar el perfil");
+        showToast("err", getErrorMessage(err, "Error al actualizar el perfil"));
       }
     });
   };

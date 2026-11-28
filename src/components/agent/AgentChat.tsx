@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { useState } from "react";
 import { processAgentCommand } from "@/server/actions/agent.actions";
 import { Sparkles, Loader2, Send, FileText } from "lucide-react";
@@ -20,7 +21,7 @@ export function AgentChat() {
       const result = await processAgentCommand(prompt);
       setResponse(result);
     } catch (error: any) {
-      setResponse({ success: false, message: error?.message || "Error al procesar el comando" });
+      setResponse({ success: false, message: getErrorMessage(error, "Error al procesar el comando") });
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,7 @@
 "use server";
 
+import { getErrorMessage } from '@/lib/error-message';
+
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { z } from "zod";
@@ -59,7 +61,7 @@ export async function getPendingQuotesByClient(clientId: string) {
     return { success: true, quotes };
   } catch (error: any) {
     console.error("Error fetching pending quotes:", error);
-    return { success: false, error: error.message || "Error al obtener cotizaciones" };
+    return { success: false, error: getErrorMessage(error, "Error al obtener cotizaciones") };
   }
 }
 
@@ -70,7 +72,7 @@ export async function getClientsForPayments() {
     return { success: true, data: clients };
   } catch (error: any) {
     console.error("Error fetching clients:", error);
-    return { success: false, error: error.message || "Error al obtener clientes" };
+    return { success: false, error: getErrorMessage(error, "Error al obtener clientes") };
   }
 }
 
@@ -95,7 +97,7 @@ export async function createPaymentRequest(rawData: {
     return { success: true, paymentRequest: pr };
   } catch (error: any) {
     console.error("Error creating payment request:", error);
-    return { success: false, error: error.issues ? error.issues[0].message : error.message };
+    return { success: false, error: error.issues ? error.issues[0].message : getErrorMessage(error, "No se pudo completar la operación") };
   }
 }
 
@@ -106,7 +108,7 @@ export async function getPaymentRequests() {
     return { success: true, data: requests };
   } catch (error: any) {
     console.error("Error fetching payment requests:", error);
-    return { success: false, error: error.message || "Error al obtener solicitudes" };
+    return { success: false, error: getErrorMessage(error, "Error al obtener solicitudes") };
   }
 }
 
@@ -119,7 +121,7 @@ export async function updatePaymentRequestStatus(id: string, newStatus: string) 
     revalidatePath("/dashboard/payment-requests");
     return { success: true, data: pr };
   } catch (error: any) {
-    return { success: false, error: error.issues ? error.issues[0].message : error.message };
+    return { success: false, error: error.issues ? error.issues[0].message : getErrorMessage(error, "No se pudo completar la operación") };
   }
 }
 
@@ -132,7 +134,7 @@ export async function deletePaymentRequest(id: string) {
     revalidatePath("/dashboard/payment-requests");
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.issues ? error.issues[0].message : error.message };
+    return { success: false, error: error.issues ? error.issues[0].message : getErrorMessage(error, "No se pudo completar la operación") };
   }
 }
 
@@ -145,6 +147,6 @@ export async function updatePaymentRequest(id: string, data: { amountRequested: 
     revalidatePath("/dashboard/payment-requests");
     return { success: true, data: pr };
   } catch (error: any) {
-    return { success: false, error: error.issues ? error.issues[0].message : error.message };
+    return { success: false, error: error.issues ? error.issues[0].message : getErrorMessage(error, "No se pudo completar la operación") };
   }
 }
