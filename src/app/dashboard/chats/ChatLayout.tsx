@@ -1,5 +1,6 @@
 'use client';
 
+import { getErrorMessage } from "@/lib/error-message";
 import Link from 'next/link';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -786,7 +787,7 @@ export default function ChatLayout({ initialContacts, initialContactId }: { init
         toast.error(res.error || "Error al eliminar conversación");
       }
     } catch (err: any) {
-      toast.error(err.message || "Error al eliminar conversación");
+      toast.error(getErrorMessage(err, "Error al eliminar conversación"));
     } finally {
       setIsDeletingContact(false);
     }

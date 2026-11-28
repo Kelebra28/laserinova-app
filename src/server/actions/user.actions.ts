@@ -1,5 +1,7 @@
 "use server";
 
+import { getErrorMessage } from '@/lib/error-message';
+
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import bcrypt from "bcryptjs";
@@ -22,7 +24,7 @@ export async function getUsers() {
     });
     return { success: true, data: users };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: getErrorMessage(error, "No se pudo completar la operación") };
   }
 }
 
@@ -56,7 +58,7 @@ export async function createUser(data: { name: string; email: string; password?:
 
     return { success: true, data: user };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: getErrorMessage(error, "No se pudo completar la operación") };
   }
 }
 
@@ -71,6 +73,6 @@ export async function updateUser(id: string, data: { name?: string; role?: strin
     });
     return { success: true, data: user };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: getErrorMessage(error, "No se pudo completar la operación") };
   }
 }

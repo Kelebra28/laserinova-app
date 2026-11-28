@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { DashboardSkeleton } from "@/components/ui/Skeleton";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { exportOverviewCsv } from "@/lib/dashboard-export";
@@ -17,7 +18,7 @@ export default function DashboardClient() {
   const { range, setRange, stats, overview } = useDashboardData();
 
   if (stats.isLoading) return <DashboardSkeleton />;
-  if (stats.error) return <div className="p-8 text-red-500">Error cargando dashboard: {stats.error.message}</div>;
+  if (stats.error) return <div className="p-8 text-red-500">Error cargando dashboard: {getErrorMessage(stats.error, "intenta de nuevo")}</div>;
   if (!stats.data) return null;
 
   const data = overview.data;

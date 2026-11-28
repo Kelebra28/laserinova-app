@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { useState } from "react";
 import { Copy, Loader2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -52,7 +53,7 @@ export default function CloneQuoteButton({ quoteId, clients }: CloneQuoteButtonP
       }
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "Ocurrió un error al copiar la cotización.");
+      setErrorMsg(getErrorMessage(err, "Ocurrió un error al copiar la cotización."));
       setIsLoading(false);
     }
   };

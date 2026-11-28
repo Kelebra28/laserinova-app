@@ -1,5 +1,7 @@
 "use server";
 
+import { getErrorMessage } from '@/lib/error-message';
+
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireAdminUser } from "@/lib/auth-guards";
@@ -12,7 +14,7 @@ import { deleteStatementService, listStatementsService, registerExpensesService,
 const IdsSchema = z.array(z.string().min(1).max(64)).min(1).max(MOVEMENTS_BATCH_MAX);
 const fail = (label: string, error: unknown, fallback: string) => {
   console.error(label);
-  return { success: false as const, error: error instanceof Error ? error.message : fallback };
+  return { success: false as const, error: getErrorMessage(error, fallback) };
 };
 const refresh = () => {
   revalidatePath("/dashboard/finance");

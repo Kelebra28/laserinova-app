@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "react-hot-toast";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
@@ -168,8 +169,8 @@ export default function QuotesClient() {
   }, [listData, urlPage, setParams]);
 
   useEffect(() => {
-    if (listError) toast.error(`Error cargando lista: ${(listError as Error).message}`);
-    if (kanbanError) toast.error(`Error cargando tablero: ${(kanbanError as Error).message}`);
+    if (listError) toast.error(`Error cargando lista: ${getErrorMessage(listError, "intenta de nuevo")}`);
+    if (kanbanError) toast.error(`Error cargando tablero: ${getErrorMessage(kanbanError, "intenta de nuevo")}`);
   }, [listError, kanbanError]);
 
   const refreshAll = () => {
@@ -192,7 +193,7 @@ export default function QuotesClient() {
         toast.error(res.error || "Error al eliminar cotización");
       }
     } catch (err: any) {
-      toast.error(err.message || "Error al eliminar cotización");
+      toast.error(getErrorMessage(err, "Error al eliminar cotización"));
     } finally {
       setIsDeleting(false);
     }

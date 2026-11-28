@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { DEFAULT_SIGNATURE_PHONE } from '@/lib/email-signature';
 import React, { useState, useEffect } from 'react';
 import { Mail, X, Loader2, Check, FileText } from 'lucide-react';
@@ -147,7 +148,7 @@ export function SendQuoteMailModal({
       }, 2000);
     } catch (err: any) {
       console.error(err);
-      setErrorMessage(err.message || 'Error de conexión al enviar el correo');
+      setErrorMessage(getErrorMessage(err, 'Error de conexión al enviar el correo'));
     } finally {
       setIsLoading(false);
     }

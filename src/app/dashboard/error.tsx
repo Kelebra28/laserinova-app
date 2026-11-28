@@ -2,13 +2,14 @@
 
 import { useEffect } from "react";
 import { AlertTriangle, RefreshCcw } from "lucide-react";
+import { getErrorMessage } from "@/lib/error-message";
 
 export default function DashboardError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error("Dashboard caught error:", error);
@@ -22,17 +23,18 @@ export default function DashboardError({
         </div>
         <h2 className="text-2xl font-black uppercase tracking-tight mb-2">Error de Servidor</h2>
         <p className="text-red-700 font-medium mb-6">
-          Hubo un problema de conexión. Es probable que la base de datos esté saturada en este momento.
+          No se pudo cargar esta pantalla. Puede ser un corte momentáneo con la base de datos; intenta de nuevo.
         </p>
         <div className="bg-white/50 p-4 rounded-xl w-full text-left text-xs font-mono text-red-800 mb-6 overflow-auto">
-          {error.message || "Error interno del servidor"}
+          {getErrorMessage(error, "Error interno del servidor")}
+          {error.digest && <p className="mt-2 opacity-70">Código: {error.digest}</p>}
         </div>
         <button
-          onClick={() => reset()}
+          onClick={() => retry()}
           className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20 active:scale-95"
         >
           <RefreshCcw className="h-4 w-4" />
-          Reintentar conexión
+          Reintentar
         </button>
       </div>
     </div>

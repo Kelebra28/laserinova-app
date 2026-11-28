@@ -1,5 +1,7 @@
 "use server";
 
+import { getErrorMessage } from '@/lib/error-message';
+
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { z } from "zod";
@@ -51,7 +53,7 @@ export async function getQuotesList(params: GetQuotesParams) {
     return { success: true, data };
   } catch (error: any) {
     console.error("Error fetching quotes list:", error);
-    return { success: false, error: error.message || "Error al obtener lista de cotizaciones" };
+    return { success: false, error: getErrorMessage(error, "Error al obtener lista de cotizaciones") };
   }
 }
 
@@ -62,7 +64,7 @@ export async function getQuotesSummary() {
     return { success: true, data };
   } catch (error: any) {
     console.error("Error fetching quotes summary:", error);
-    return { success: false, error: error.message || "Error al obtener el resumen" };
+    return { success: false, error: getErrorMessage(error, "Error al obtener el resumen") };
   }
 }
 
@@ -73,7 +75,7 @@ export async function getActiveQuotesKanban() {
     return { success: true, data };
   } catch (error: any) {
     console.error("Error fetching active quotes:", error);
-    return { success: false, error: error.message || "Error al obtener cotizaciones activas" };
+    return { success: false, error: getErrorMessage(error, "Error al obtener cotizaciones activas") };
   }
 }
 
@@ -84,7 +86,7 @@ export async function getClientsForFilters() {
     return { success: true, data };
   } catch (error: any) {
     console.error("Error fetching clients for filters:", error);
-    return { success: false, error: error.message || "Error al obtener clientes para filtros" };
+    return { success: false, error: getErrorMessage(error, "Error al obtener clientes para filtros") };
   }
 }
 
@@ -150,7 +152,7 @@ export async function deleteQuoteAction(quoteId: string) {
     return { success: true, data: { id: quoteId } };
   } catch (error: any) {
     console.error("Error al eliminar cotización:", error);
-    return { success: false, error: error.message || "Error al eliminar la cotización" };
+    return { success: false, error: getErrorMessage(error, "Error al eliminar la cotización") };
   }
 }
 
@@ -163,7 +165,7 @@ export async function duplicateQuoteAsVersion(quoteId: string) {
     revalidatePath(`/dashboard/quotes`);
     return { success: true, redirectUrl: `/dashboard/quotes/${newId}/edit` };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: getErrorMessage(error, "No se pudo completar la operación") };
   }
 }
 
@@ -273,7 +275,7 @@ export async function createQuoteAction(formData: FormData) {
     return { success: true, quoteId };
   } catch (error: any) {
     if (error.message === 'NEXT_REDIRECT') throw error;
-    return { success: false, error: error.message || "Error al crear la cotización" };
+    return { success: false, error: getErrorMessage(error, "Error al crear la cotización") };
   }
 }
 
@@ -324,7 +326,7 @@ export async function updateQuoteAction(formData: FormData) {
     return { success: true, quoteId };
   } catch (error: any) {
     if (error.message === 'NEXT_REDIRECT') throw error;
-    return { success: false, error: error.message || "Error al actualizar la cotización" };
+    return { success: false, error: getErrorMessage(error, "Error al actualizar la cotización") };
   }
 }
 
@@ -336,7 +338,7 @@ export async function saveQuickQuoteAction(mockQuote: any, saveAsClient: boolean
     return { success: true, quoteId };
   } catch (error: any) {
     if (error.message === 'NEXT_REDIRECT') throw error;
-    return { success: false, error: error.message };
+    return { success: false, error: getErrorMessage(error, "No se pudo completar la operación") };
   }
 }
 
@@ -348,7 +350,7 @@ export async function cloneQuoteAction(originalQuoteId: string, clientId: string
     return { success: true, quoteId };
   } catch (error: any) {
     if (error.message === 'NEXT_REDIRECT') throw error;
-    return { success: false, error: error.message };
+    return { success: false, error: getErrorMessage(error, "No se pudo completar la operación") };
   }
 }
 
@@ -406,7 +408,7 @@ export async function sendQuoteViaWhatsAppAction(quoteId: string) {
     return { success: true, viaTemplate };
   } catch (error: any) {
     console.error("Error enviando cotización por WA:", error);
-    return { success: false, error: error.message || "Error interno al enviar por WhatsApp" };
+    return { success: false, error: getErrorMessage(error, "Error interno al enviar por WhatsApp") };
   }
 }
 
@@ -483,7 +485,7 @@ export async function getQuickQuoteDataAction() {
     };
   } catch (error: any) {
     console.error("Error fetching quick quote data:", error);
-    return { success: false, error: error.message || "Error al cargar datos del cotizador rápido" };
+    return { success: false, error: getErrorMessage(error, "Error al cargar datos del cotizador rápido") };
   }
 }
 

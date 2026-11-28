@@ -1,5 +1,7 @@
 'use server';
 
+import { getErrorMessage } from '@/lib/error-message';
+
 import { requireAuth } from '@/lib/auth';
 import { getQuoteNoticeContext, sendQuoteNotice, sendReengage, latestQuoteForContact } from '@/server/services/whatsapp-notify.service';
 import { resolveQuoteSuggestion } from '@/server/services/quote-suggestion.service';
@@ -13,7 +15,7 @@ export async function getQuoteNoticeContextAction(quoteId: string) {
   try {
     return { success: true as const, data: await getQuoteNoticeContext(quoteId) };
   } catch (e) {
-    return { success: false as const, error: (e instanceof Error && e.message) || 'No se pudo cargar la cotización.' };
+    return { success: false as const, error: getErrorMessage(e, 'No se pudo cargar la cotización.') };
   }
 }
 
@@ -24,7 +26,7 @@ export async function sendQuoteNoticeAction(quoteId: string, kind: QuoteNoticeKi
     await sendQuoteNotice(quoteId, kind, extra);
     return { success: true as const };
   } catch (e) {
-    return { success: false as const, error: (e instanceof Error && e.message) || 'No se pudo mandar el aviso.' };
+    return { success: false as const, error: getErrorMessage(e, 'No se pudo mandar el aviso.') };
   }
 }
 
@@ -45,7 +47,7 @@ export async function sendReengageAction(contactId: string) {
     const { text } = await sendReengage(contactId);
     return { success: true as const, text };
   } catch (e) {
-    return { success: false as const, error: (e instanceof Error && e.message) || 'No se pudo mandar el mensaje.' };
+    return { success: false as const, error: getErrorMessage(e, 'No se pudo mandar el mensaje.') };
   }
 }
 
@@ -58,6 +60,6 @@ export async function resolveQuoteSuggestionAction(messageId: string, action: 'C
     revalidatePath('/dashboard/quotes');
     return { success: true as const, content: r.content, outcome: r.outcome };
   } catch (e) {
-    return { success: false as const, error: (e instanceof Error && e.message) || 'No se pudo aplicar la sugerencia.' };
+    return { success: false as const, error: getErrorMessage(e, 'No se pudo aplicar la sugerencia.') };
   }
 }

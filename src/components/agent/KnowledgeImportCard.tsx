@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { UploadCloud } from "lucide-react";
@@ -43,7 +44,7 @@ export function KnowledgeImportCard() {
         setFiles([]);
       }
     } catch (error: any) {
-      toast.error("Error de conexión: " + error.message);
+      toast.error("Error de conexión: " + getErrorMessage(error, "intenta de nuevo"));
     } finally {
       setLoading(false);
     }

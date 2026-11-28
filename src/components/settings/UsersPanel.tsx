@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { useState, useTransition } from "react";
 import {
   Users, UserPlus, Pencil, Power, X, Save, Eye, EyeOff,
@@ -65,7 +66,7 @@ function EditUserModal({
         onSaved();
         onClose();
       } catch (err: any) {
-        setError(err.message ?? "Error al actualizar");
+        setError(getErrorMessage(err, "Error al actualizar"));
       }
     });
   };
@@ -210,7 +211,7 @@ function CreateUserModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
         onSaved();
         onClose();
       } catch (err: any) {
-        setError(err.message ?? "Error al crear usuario");
+        setError(getErrorMessage(err, "Error al crear usuario"));
       }
     });
   };

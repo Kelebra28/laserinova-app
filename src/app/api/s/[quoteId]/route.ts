@@ -34,7 +34,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ quoteId:
     });
   } catch (error: any) {
     console.error('Error fetching survey data:', error);
-    return NextResponse.json({ success: false, error: error.message, stack: error.stack }, { status: 500 });
+    // Ruta pública: el detalle técnico se queda en los logs.
+    return NextResponse.json({ success: false, error: 'Error interno del servidor.' }, { status: 500 });
   }
 }
 

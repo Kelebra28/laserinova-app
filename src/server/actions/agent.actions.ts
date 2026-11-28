@@ -1,5 +1,7 @@
 "use server";
 
+import { getErrorMessage } from '@/lib/error-message';
+
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { 
@@ -173,7 +175,7 @@ export async function processAgentCommand(userInput: string) {
     console.error("Error en el agente:", error);
     return {
       success: false,
-      message: error?.message || "Ocurrió un error inesperado al procesar la instrucción."
+      message: getErrorMessage(error, "Ocurrió un error inesperado al procesar la instrucción.")
     };
   }
 }

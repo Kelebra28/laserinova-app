@@ -1,5 +1,7 @@
 "use server";
 
+import { getErrorMessage } from '@/lib/error-message';
+
 import { z } from "zod";
 import { requireAdminUser } from "@/lib/auth-guards";
 import { PDF_MAX_FILE_BYTES, RECON_MAX_LINES, SUGGEST_MAX_COMBO } from "@/constants/reconciliation.constants";
@@ -35,7 +37,7 @@ export async function reconcileBankStatement(lines: unknown, period?: unknown) {
     return { success: true as const, data: await reconcileStatementService(parsed.data, undefined, range.success ? range.data : undefined) };
   } catch (error) {
     console.error("Error en la conciliación bancaria");
-    return { success: false as const, error: error instanceof Error ? error.message : "No se pudo conciliar el estado de cuenta" };
+    return { success: false as const, error: getErrorMessage(error, "No se pudo conciliar el estado de cuenta") };
   }
 }
 
@@ -62,7 +64,7 @@ export async function registerBankPayment(input: unknown) {
     return { success: true as const, data: done };
   } catch (error) {
     console.error("Error al registrar un cobro desde la conciliación");
-    return { success: false as const, error: error instanceof Error ? error.message : "No se pudo registrar el cobro" };
+    return { success: false as const, error: getErrorMessage(error, "No se pudo registrar el cobro") };
   }
 }
 
@@ -89,6 +91,6 @@ export async function parseBankStatementPdf(formData: FormData) {
     return { success: true as const, data: parseStatementPages(pages) };
   } catch (error) {
     console.error("Error al leer el estado de cuenta en PDF");
-    return { success: false as const, error: error instanceof Error ? error.message : "No se pudo leer el PDF" };
+    return { success: false as const, error: getErrorMessage(error, "No se pudo leer el PDF") };
   }
 }
