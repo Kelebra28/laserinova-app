@@ -15,7 +15,6 @@ export interface ChalanEstimateInput {
 }
 
 export interface ChalanContext {
-  productListContext: string;
   /** Catálogo de materiales SIN precios: una línea por material con su id numérico. */
   materialListContext: string;
 }
@@ -47,9 +46,6 @@ ${input.descripcion_concepto ? `Descripción: ${input.descripcion_concepto}` : "
 
 [CATÁLOGO DE MATERIALES (id | nombre | espesor)]
 ${context.materialListContext || "No hay materiales registrados en DB."}
-
-[CATÁLOGO DE PRODUCTOS]
-${context.productListContext || "No hay productos predefinidos."}
 
 [REGLAS TÉCNICAS DEL TALLER (RAG)]
 ${workshopRules || "No se encontraron reglas específicas para este material."}

@@ -80,28 +80,13 @@ export async function executeChalanEstimate(
   contact: { id: string; name?: string | null; phone: string },
   genAI: GoogleGenerativeAI
 ): Promise<ChalanExecutionResult> {
-  // 1. Catálogo real de materiales, productos y configuración de costos
-  let productListContext = "";
+  // 1. Catálogo real de materiales y configuración de costos. Los productos NO van al modelo (eran miles
+  // y no los usa): el producto de reventa lo busca el código en findRequestedProduct.
   let materialListContext = "";
   let materials: Awaited<ReturnType<typeof prisma.material.findMany>> = [];
   let globals: GlobalCosts = buildGlobals([]);
 
   try {
-    const products = await prisma.product.findMany({
-      where: { active: true },
-      select: { name: true, unitPrice: true, unitCost: true, provider: true, model: true },
-    });
-    if (products.length > 0) {
-      // Precio de catálogo (escala de pocas piezas) con los costos globales de la configuración.
-      const pricingConfigs = await prisma.costConfiguration.findMany({ where: { active: true } });
-      const pricingGlobals: Record<string, number> = {};
-      pricingConfigs.forEach((c) => { pricingGlobals[c.key] = c.value; });
-      const modelMaxCosts = await getModelMaxCostMap();
-      productListContext = products
-        .map((p) => `- ${p.name}: $${resolveProductUnitPrice(p, 1, pricingGlobals, modelMaxCosts[modelCostKey(p)]).unitPrice} MXN`)
-        .join("\n");
-    }
-
     materials = await prisma.material.findMany({ orderBy: { name: "asc" } });
     // El id del prompt es la posición en esta lista: así el modelo no puede inventar nombres.
     materialListContext = materials
@@ -111,10 +96,10 @@ export async function executeChalanEstimate(
     const costConfigs = await prisma.costConfiguration.findMany({ where: { active: true } });
     globals = buildGlobals(costConfigs);
   } catch (err) {
-    console.error("[El Chalán] Error obteniendo catálogos de base de datos:", err);
+    console.error("[El Chalán] Error obteniendo materiales y costos de base de datos:", err);
   }
 
-  const context: ChalanContext = { productListContext, materialListContext };
+  const context: ChalanContext = { materialListContext };
 
   // 2. Reglas específicas de taller desde Pinecone para este material y proyecto
   const searchKeywords = `${input.project_name} ${input.material} ${input.grosor || ""}`;
